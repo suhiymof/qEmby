@@ -4742,7 +4742,8 @@ QCoro::Task<void> PlayerView::resolveDanmakuPlaybackContext(
 QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
                                                          QString title,
                                                          QString streamUrl,
-                                                         long long startPositionTicks)
+                                                         long long startPositionTicks,
+                                                         MediaSourceInfo currentSource)
 {
     QPointer<PlayerView> safeThis(this);
     QPointer<MediaService> mediaService(m_core ? m_core->mediaService() : nullptr);
@@ -4753,26 +4754,51 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
         co_return;
     }
 
-    QVariant sourceVar;
+    MediaSourceInfo source = currentSource;
     try
     {
-        MediaItem detail = co_await mediaService->getItemDetail(mediaId);
-        if (!safeThis || !mediaService)
-            co_return;
-        if (!detail.mediaSources.isEmpty())
+        // Stage 1: no source at all -> lightweight item-detail API.
+        if (source.id.isEmpty())
         {
-            sourceVar = QVariant::fromValue(detail.mediaSources.first());
+            MediaItem detail = co_await mediaService->getItemDetail(mediaId);
+            if (!safeThis || !mediaService)
+                co_return;
+            if (!detail.mediaSources.isEmpty())
+            {
+                source = detail.mediaSources.first();
+            }
+        }
+
+        // Stage 2: source present but DirectStreamUrl missing and the path is
+        // not a direct URL (non-strm item). DirectStreamUrl is a *negotiated*
+        // field only filled by the PlaybackInfo endpoint, and servers behind
+        // emby2Alist-style proxies disable the /stream fallback endpoint, so
+        // without the negotiated URL playback cannot start at all.
+        if (!source.id.isEmpty() && source.directStreamUrl.isEmpty()
+            && !source.path.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)
+            && !source.path.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive))
+        {
+            PlaybackInfo pb = co_await mediaService->getPlaybackInfo(mediaId);
+            if (!safeThis || !mediaService)
+                co_return;
+            if (!pb.mediaSources.isEmpty()
+                && !pb.mediaSources.first().directStreamUrl.isEmpty())
+            {
+                source = pb.mediaSources.first();
+            }
         }
     }
     catch (const std::exception &e)
     {
-        qWarning() << "[PlayerView] item detail fetch for playback source fallback failed:"
+        qWarning() << "[PlayerView] playback source negotiation failed:"
                    << e.what();
     }
 
     if (safeThis)
     {
-        safeThis->playMedia(mediaId, title, streamUrl, startPositionTicks, sourceVar, false);
+        safeThis->playMedia(mediaId, title, streamUrl, startPositionTicks,
+                            source.id.isEmpty() ? QVariant() : QVariant::fromValue(source),
+                            false);
     }
 }
 
@@ -4794,17 +4820,30 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
         resolvedSourceInfo = sourceInfoVar.value<MediaSourceInfo>();
     }
 
-    // SourceInfo missing (e.g. PlaybackInfo still probing a remote strm item):
-    // fetch MediaSources via the lightweight item-detail API (pure DB query that
-    // returns immediately even while the server is still probing the remote
-    // media), then restart playback with a usable source so STRM direct play
-    // (which requires sourceInfo.path) can apply instead of silently falling
-    // back to server relay.
-    if (allowSourceFetch && resolvedSourceInfo.id.isEmpty() && !mediaId.isEmpty() && m_core)
+    // Playback source needs preparation when either:
+    //  a) sourceInfo is missing entirely (strm item still probing etc.) ->
+    //     fetch via the lightweight item-detail API; or
+    //  b) sourceInfo exists but has no DirectStreamUrl while the path is not a
+    //     direct URL -> negotiate via PlaybackInfo (POST + DeviceProfile);
+    //     servers behind emby2Alist-style proxies only serve the negotiated
+    //     URL and disable the /stream fallback endpoint.
+    if (allowSourceFetch && !mediaId.isEmpty() && m_core)
     {
-        QCoro::connect(ensureMediaSourcesThenPlay(mediaId, title, streamUrl, startPositionTicks),
-                       this, []() {});
-        return;
+        const bool needSourceFetch = resolvedSourceInfo.id.isEmpty();
+        const bool pathIsDirectUrl =
+            resolvedSourceInfo.path.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)
+            || resolvedSourceInfo.path.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive);
+        const bool needPlaybackNegotiation =
+            !needSourceFetch
+            && resolvedSourceInfo.directStreamUrl.isEmpty()
+            && !pathIsDirectUrl;
+        if (needSourceFetch || needPlaybackNegotiation)
+        {
+            QCoro::connect(ensureMediaSourcesThenPlay(mediaId, title, streamUrl,
+                                                      startPositionTicks, resolvedSourceInfo),
+                           this, []() {});
+            return;
+        }
     }
 
     connect(m_mpvWidget, &MpvWidget::positionChanged, this, &PlayerView::onPositionChanged, Qt::UniqueConnection);

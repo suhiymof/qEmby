@@ -141,7 +141,8 @@ private:
     QCoro::Task<void> ensureMediaSourcesThenPlay(QString mediaId,
                                                  QString title,
                                                  QString streamUrl,
-                                                 long long startPositionTicks);
+                                                 long long startPositionTicks,
+                                                 MediaSourceInfo currentSource);
 
     void hideRightSidebar(bool immediate = false);
     void setEffectivePlaybackSpeed(double speed);
