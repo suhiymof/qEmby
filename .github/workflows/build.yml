@@ -24,7 +24,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
 
@@ -72,26 +72,23 @@ jobs:
       - name: Build (Release)
         run: cmake --build build --config Release --parallel
 
+      # 输出目录由根 CMakeLists.txt:16 CMAKE_RUNTIME_OUTPUT_DIRECTORY 统一定为
+      # ${CMAKE_BINARY_DIR}/bin，VS 多配置生成器再追加 Release/ 子目录。
       # POST_BUILD 已自动执行 windeployqt + 拷贝 libmpv-2.dll，
-      # Release 目录即为完整绿色包
+      # build/bin/Release 即完整绿色包（exe + Qt DLL + 插件 + libmpv）。
+      # 注意：不使用 CPack——install() 只装 exe + 自家 DLL，Qt DLL 不进 install 树，
+      # CPack zip 无法独立运行。
       - name: Upload portable build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: qEmby-windows-x64
-          path: build/src/qEmbyApp/Release/
-
-      # 可选: CPack ZIP 安装包（基于重建版 QEmbyPackaging.cmake，允许失败）
-      - name: Package (CPack ZIP)
-        shell: bash
-        continue-on-error: true
-        run: |
-          cpack --config build/CPackConfig.cmake -G ZIP -B build/dist
-          ls build/dist || true
+          path: build/bin/Release/
+          if-no-files-found: error
 
   build-macos:
     runs-on: macos-latest # arm64 runner
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
 
@@ -114,32 +111,35 @@ jobs:
       - name: Build (Release)
         run: cmake --build build --parallel
 
+      # app bundle 由根 CMakeLists.txt:16 CMAKE_RUNTIME_OUTPUT_DIRECTORY 落在
+      # build/bin/qEmbyApp.app（单配置生成器无 Release 子目录）
       - name: Bundle Qt frameworks (macdeployqt)
         run: |
-          "$QT_ROOT_DIR/bin/macdeployqt" build/src/qEmbyApp/qEmbyApp.app
+          "$QT_ROOT_DIR/bin/macdeployqt" build/bin/qEmbyApp.app
 
       # macdeployqt 只收 Qt 库; libmpv 及其 brew 依赖链（ffmpeg 等）由
       # dylibbundler 递归收进 Contents/Frameworks 并修正 install_name
       - name: Bundle libmpv & brew deps (dylibbundler)
         run: |
           dylibbundler -b \
-            -x build/src/qEmbyApp/qEmbyApp.app/Contents/MacOS/qEmbyApp \
-            -d build/src/qEmbyApp/qEmbyApp.app/Contents/Frameworks \
+            -x build/bin/qEmbyApp.app/Contents/MacOS/qEmbyApp \
+            -d build/bin/qEmbyApp.app/Contents/Frameworks \
             -p @executable_path/../Frameworks \
             --overwrite-files
 
       # arm64 上未签名 bundle 无法运行，ad-hoc 签名即可
       - name: Ad-hoc codesign
         run: |
-          codesign --force --deep --sign - build/src/qEmbyApp/qEmbyApp.app
+          codesign --force --deep --sign - build/bin/qEmbyApp.app
 
       - name: Zip app bundle
         run: |
-          cd build/src/qEmbyApp
+          cd build/bin
           ditto -c -k --sequesterRsrc --keepParent qEmbyApp.app qEmbyApp-macos-arm64.zip
 
       - name: Upload app bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: qEmby-macos-arm64
-          path: build/src/qEmbyApp/qEmbyApp-macos-arm64.zip
+          path: build/bin/qEmbyApp-macos-arm64.zip
+          if-no-files-found: error
