@@ -131,6 +131,7 @@ constexpr const char* PlayerSelectedAudioStream = "player/selected_audio_stream"
 constexpr const char* PlayerSelectedSubtitleStream = "player/selected_subtitle_stream";
 constexpr const char* PlayerVolNormal = "player/vol_normalization";
 constexpr const char* PlayerContinuousPlay = "player/continuous_play";
+constexpr const char* PlayerFastStart = "player/fast_start";
 constexpr const char* PlayerSeekStep = "player/seek_step";
 constexpr const char* PlayerLongPressSeek = "player/long_press_seek";
 constexpr const char* PlayerLongPressMode = "player/long_press_mode";

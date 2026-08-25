@@ -136,12 +136,22 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       tr("Choose keyword or sort rules in order; type custom keywords and press Enter"),
       versionInput, ConfigKeys::PlayerPreferredVersion, this));
 
-  
+
   m_mainLayout->addWidget(new SettingsCard(
       ":/svg/dark/player-continuous-play.svg", tr("Continuous Playback"),
       tr("Automatically play the next episode or media when playback ends"),
       new ModernSwitch(this), ConfigKeys::PlayerContinuousPlay, this,
       QVariant(true)));
+
+  // Faster start: lower the initial buffered-data threshold mpv waits for
+  // before playback begins (cache-pause-wait). Trade-off: on flaky
+  // connections playback may pause briefly earlier than with the default.
+  m_mainLayout->addWidget(new SettingsCard(
+      ":/svg/dark/hw-decode.svg", tr("Fast Start"),
+      tr("Start playback sooner by lowering the initial buffering "
+         "requirement; may pause briefly on slow connections"),
+      new ModernSwitch(this), ConfigKeys::PlayerFastStart, this,
+      QVariant(false)));
 
   
   auto *longPressSwitch = new ModernSwitch(this);

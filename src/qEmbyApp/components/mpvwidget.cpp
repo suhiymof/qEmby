@@ -4,6 +4,7 @@
 #include <QOpenGLContext>
 #include <QMetaObject>
 #include <QCoreApplication>
+#include <QSettings>
 #include <QSurfaceFormat>
 #include <QUrl>
 #include <QVariantMap>
@@ -247,6 +248,18 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     const QString effectiveUa =
         m_customUserAgent.isEmpty() ? QStringLiteral("libmpv") : m_customUserAgent;
     m_controller->setProperty(QStringLiteral("user-agent"), effectiveUa);
+
+    // Fast Start: lower the buffered-data threshold mpv waits for before
+    // playback begins (cache-pause-wait). Default 1.0s; fast start uses 0.2s
+    // so remote streams begin rendering sooner, at the cost of possible
+    // early pauses on slow links.
+    {
+        QSettings playerSettings(QStringLiteral("qEmby"), QStringLiteral("Player"));
+        const bool fastStart =
+            playerSettings.value(QStringLiteral("FastStart"), false).toBool();
+        m_controller->setProperty(QStringLiteral("cache-pause-wait"),
+                                  fastStart ? 0.2 : 1.0);
+    }
 
     const QString mpvProxyValue =
         usingRelay ? QString() : ProxyManager::toMpvHttpProxy(proxy);

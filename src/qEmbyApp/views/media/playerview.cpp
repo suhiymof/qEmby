@@ -4757,6 +4757,17 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
     MediaSourceInfo source = currentSource;
     try
     {
+        // Stage 0: background-prefetched source (continuous play) is richer
+        // than the item-detail payload — it already carries the negotiated
+        // DirectStreamUrl — so prefer it whenever the current source lacks
+        // a negotiated URL.
+        const auto cached = m_prefetchedSources.constFind(mediaId);
+        if (cached != m_prefetchedSources.constEnd()
+            && (source.id.isEmpty() || source.directStreamUrl.isEmpty()))
+        {
+            source = cached.value();
+        }
+
         // Stage 1: no source at all -> lightweight item-detail API.
         if (source.id.isEmpty())
         {
@@ -4799,6 +4810,72 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
         safeThis->playMedia(mediaId, title, streamUrl, startPositionTicks,
                             source.id.isEmpty() ? QVariant() : QVariant::fromValue(source),
                             false);
+    }
+}
+
+QCoro::Task<void> PlayerView::prefetchNextEpisodeSource()
+{
+    QPointer<PlayerView> safeThis(this);
+    QPointer<MediaService> mediaService(m_core ? m_core->mediaService() : nullptr);
+    if (!mediaService)
+    {
+        co_return;
+    }
+
+    // Only worthwhile when continuous playback is enabled.
+    if (!ConfigStore::instance()->get<bool>(ConfigKeys::PlayerContinuousPlay, true))
+    {
+        co_return;
+    }
+
+    // Need the switcher cache to know what the next episode is.
+    if (!m_switcherCacheReady)
+    {
+        co_await ensureMediaSwitcherDataLoaded();
+        if (!safeThis || !mediaService)
+        {
+            co_return;
+        }
+    }
+
+    QString nextId;
+    QString nextTitle;
+    long long startTicks = 0;
+    if (!findAdjacentMediaFromCache(1, nextId, nextTitle, startTicks))
+    {
+        co_return;
+    }
+    if (nextId.isEmpty() || m_prefetchedSources.contains(nextId))
+    {
+        co_return;
+    }
+
+    // Keep the cache tiny: episodes are consumed in order, so dropping old
+    // entries when it grows is safe.
+    if (m_prefetchedSources.size() > 4)
+    {
+        m_prefetchedSources.clear();
+    }
+
+    try
+    {
+        PlaybackInfo pb = co_await mediaService->getPlaybackInfo(nextId);
+        if (!safeThis || !mediaService)
+        {
+            co_return;
+        }
+        if (!pb.mediaSources.isEmpty())
+        {
+            safeThis->m_prefetchedSources.insert(nextId, pb.mediaSources.first());
+            qDebug().noquote() << "[PlayerView] prefetched playback source for next episode"
+                               << "| mediaId:" << nextId;
+        }
+    }
+    catch (const std::exception &e)
+    {
+        // Best-effort prefetch: silent failure, the normal negotiation path
+        // still runs when the next episode actually starts.
+        qDebug() << "[PlayerView] next-episode source prefetch failed:" << e.what();
     }
 }
 
@@ -5030,8 +5107,13 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
             }
         };
         detectSeriesMode(QPointer<PlayerView>(this), m_core, mediaId);
-        
+
         ensureMediaSwitcherDataLoaded();
+
+        // Background-negotiate the next episode's playback source so the
+        // auto-advance (continuous play) starts without another
+        // PlaybackInfo round trip.
+        QCoro::connect(prefetchNextEpisodeSource(), this, []() {});
     }
 
     

@@ -143,6 +143,10 @@ private:
                                                  QString streamUrl,
                                                  long long startPositionTicks,
                                                  MediaSourceInfo currentSource);
+    // Continuous-play optimization: negotiate the next episode's playback
+    // source in the background while the current one plays, so the
+    // auto-advance starts without waiting for another PlaybackInfo round trip.
+    QCoro::Task<void> prefetchNextEpisodeSource();
 
     void hideRightSidebar(bool immediate = false);
     void setEffectivePlaybackSpeed(double speed);
@@ -339,6 +343,11 @@ private:
     QList<MediaItem> m_switcherResumeItems;
     QList<MediaItem> m_switcherSeriesSeasons;
     QHash<QString, QList<MediaItem>> m_switcherSeasonEpisodes;
+
+    // Playback sources negotiated ahead of time for the upcoming episode
+    // (continuous play); keyed by itemId. Bounded: cleared when it grows
+    // beyond a few entries.
+    QHash<QString, MediaSourceInfo> m_prefetchedSources;
 
     QString m_fullTitle;
     
