@@ -83,6 +83,7 @@ private:
 
     QLineEdit* m_usernameInput;
     QLineEdit* m_passwordInput;
+    QLineEdit* m_userAgentInput = nullptr;
     QPushButton* m_loginButton;
     QPushButton* m_testConnButton;
     QLabel* m_testResultLabel;

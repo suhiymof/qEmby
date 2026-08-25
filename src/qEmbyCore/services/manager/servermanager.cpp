@@ -178,6 +178,7 @@ void ServerManager::saveSettings() {
         obj["iconBase64"] = p.iconBase64;
         obj["useGlobalProxy"] = p.useGlobalProxy;
         obj["proxy"] = p.proxy.toJson();
+        obj["customUserAgent"] = p.customUserAgent;
         array.append(obj);
     }
 
@@ -213,6 +214,7 @@ void ServerManager::loadSettings() {
         p.iconBase64 = obj["iconBase64"].toString();
         p.useGlobalProxy = obj["useGlobalProxy"].toBool(false);
         p.proxy = ProxyConfig::fromJson(obj["proxy"].toObject());
+        p.customUserAgent = obj["customUserAgent"].toString();
         m_servers.append(p);
     }
 

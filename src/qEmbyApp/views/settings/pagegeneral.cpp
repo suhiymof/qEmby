@@ -18,6 +18,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QUrl>
 
@@ -146,6 +147,28 @@ PageGeneral::PageGeneral(QEmbyCore *core, QWidget *parent)
     refreshProxyDesc();
     dlg->deleteLater();
   });
+
+  // Global default User-Agent: applied to servers that have no per-server
+  // UA override (login form). Empty = keep qEmby defaults.
+  {
+    auto *uaEdit = new QLineEdit(this);
+    uaEdit->setPlaceholderText(
+        tr("e.g. RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)"));
+    uaEdit->setMinimumWidth(280);
+    uaEdit->setClearButtonEnabled(true);
+    uaEdit->setText(ConfigStore::instance()->get<QString>(
+        ConfigKeys::CustomUserAgent, QString()));
+    connect(uaEdit, &QLineEdit::editingFinished, this, [uaEdit]() {
+      ConfigStore::instance()->set(ConfigKeys::CustomUserAgent,
+                                   uaEdit->text().trimmed());
+    });
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/proxy.svg", tr("Custom User-Agent"),
+        tr("Global default UA for API and streaming requests. Servers with "
+           "strict client whitelists may reject the default UA; per-server "
+           "UA set in the login form takes precedence."),
+        uaEdit, QString(), this));
+  }
 
   
   auto *logSwitch = new ModernSwitch(this);

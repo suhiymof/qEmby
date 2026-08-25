@@ -591,6 +591,19 @@ void LoginView::setupAddPage() {
 
   layout->addWidget(m_passwordInput);
 
+  // Custom User-Agent (optional): servers with strict UA whitelists hang
+  // connections from unrecognized clients. Leave empty to keep defaults.
+  m_userAgentInput = new QLineEdit(this);
+  m_userAgentInput->setPlaceholderText(
+      tr("Custom User-Agent (optional, for strict servers)"));
+  m_userAgentInput->setToolTip(tr(
+      "Present this User-Agent to this server for API and streaming "
+      "requests. Useful when the server only allows specific players, "
+      "e.g. \"RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)\""));
+  connect(m_userAgentInput, &QLineEdit::returnPressed, this,
+          &LoginView::onLoginClicked);
+  layout->addWidget(m_userAgentInput);
+
   auto *btnLayout = new QHBoxLayout();
   btnLayout->setSpacing(8);
 
@@ -899,6 +912,9 @@ void LoginView::showAddPage() {
   }
   m_usernameInput->clear();
   m_passwordInput->clear();
+  if (m_userAgentInput) {
+    m_userAgentInput->clear();
+  }
   if (m_ignoreSslSwitch) {
     m_ignoreSslSwitch->setChecked(false);
   }
@@ -954,6 +970,9 @@ void LoginView::onEditServerClicked(const QString &serverId) {
 
       m_usernameInput->setText(server.userName);
       m_passwordInput->clear();
+      if (m_userAgentInput) {
+        m_userAgentInput->setText(server.customUserAgent);
+      }
 
       m_passwordInput->setEchoMode(QLineEdit::Password);
       if (m_togglePwdAction) {
@@ -1053,6 +1072,8 @@ QCoro::Task<void> LoginView::onLoginClicked() {
 
   const QString user = m_usernameInput->text().trimmed();
   const QString pass = m_passwordInput->text();
+  const QString userAgent =
+      m_userAgentInput ? m_userAgentInput->text().trimmed() : QString();
 
   const bool ignoreSslVerification =
       normalizedUrl.scheme().compare("https", Qt::CaseInsensitive) == 0 &&
@@ -1073,7 +1094,8 @@ QCoro::Task<void> LoginView::onLoginClicked() {
   try {
     ServerProfile profile =
         co_await m_core->authService()->login(fullUrl, user, pass,
-                                              ignoreSslVerification);
+                                              ignoreSslVerification,
+                                              userAgent);
 
     if (!guard)
       co_return;
@@ -1139,6 +1161,8 @@ QCoro::Task<void> LoginView::onTestConnectionClicked() {
 
   const QString user = m_usernameInput->text().trimmed();
   const QString pass = m_passwordInput->text();
+  const QString userAgent =
+      m_userAgentInput ? m_userAgentInput->text().trimmed() : QString();
   const bool ignoreSsl =
       normalizedUrl.scheme().compare("https", Qt::CaseInsensitive) == 0 &&
       m_ignoreSslSwitch != nullptr && m_ignoreSslSwitch->isChecked();
@@ -1150,7 +1174,7 @@ QCoro::Task<void> LoginView::onTestConnectionClicked() {
 
   try {
     const QString serverName = co_await m_core->authService()->testConnection(
-        fullUrl, user, pass, ignoreSsl);
+        fullUrl, user, pass, ignoreSsl, userAgent);
 
     if (!guard)
       co_return;

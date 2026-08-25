@@ -1123,7 +1123,9 @@ void PlayerView::restoreAfterWindowShow(bool shouldResumePlaying)
         m_danmakuController->prepareForMediaReload();
     }
 
-    const QString activeServerId = m_core->serverManager()->activeProfile().id;
+    const ServerProfile activeProfile = m_core->serverManager()->activeProfile();
+    const QString activeServerId = activeProfile.id;
+    m_mpvWidget->setCustomUserAgent(activeProfile.effectiveUserAgent());
     m_mpvWidget->loadMedia(streamUrl, activeServerId);
 }
 
@@ -5000,7 +5002,11 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
 
     
     
-    const QString activeServerId = m_core->serverManager()->activeProfile().id;
+    const ServerProfile activeProfile = m_core->serverManager()->activeProfile();
+    const QString activeServerId = activeProfile.id;
+    // Strict-UA servers reject the default libmpv UA on stream requests;
+    // push the resolved UA (per-server > global > none) before loading.
+    m_mpvWidget->setCustomUserAgent(activeProfile.effectiveUserAgent());
     m_mpvWidget->loadMedia(actualStreamUrl, activeServerId);
 
     const bool hasCompleteDanmakuContext =

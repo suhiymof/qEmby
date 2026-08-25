@@ -19,7 +19,8 @@ public:
     ~MpvHttpStreamRelay() override;
 
     QUrl prepare(const QUrl &targetUrl, const QString &serverId,
-                 const QNetworkProxy &proxy);
+                 const QNetworkProxy &proxy,
+                 const QString &userAgent = QString());
     void stop();
 
 Q_SIGNALS:
@@ -54,6 +55,7 @@ private:
     QUrl m_targetUrl;
     QString m_serverId;
     QString m_streamToken;
+    QString m_upstreamUserAgent;
     qint64 m_bytesRelayedSinceLastTick = 0;
 };
 

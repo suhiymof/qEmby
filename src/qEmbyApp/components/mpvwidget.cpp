@@ -208,10 +208,14 @@ void MpvWidget::resizeGL(int w, int h) {
 
 
 
+void MpvWidget::setCustomUserAgent(const QString &userAgent) {
+    m_customUserAgent = userAgent.trimmed();
+}
+
 void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool wasPending) {
-    
-    
-    
+
+
+
     const QUrl loadQUrl(url);
     const QNetworkProxy proxy =
         serverId.isEmpty()
@@ -226,7 +230,7 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     QString playbackUrl = url;
     bool usingRelay = false;
     if (shouldRelay && m_streamRelay) {
-        const QUrl localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy);
+        const QUrl localUrl = m_streamRelay->prepare(loadQUrl, serverId, proxy, m_customUserAgent);
         if (localUrl.isValid()) {
             playbackUrl = localUrl.toString(QUrl::FullyEncoded);
             usingRelay = true;
@@ -239,6 +243,11 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
         Q_EMIT relayActiveChanged(usingRelay);
     }
 
+    // Strict-UA servers reject the default libmpv UA on stream requests too.
+    const QString effectiveUa =
+        m_customUserAgent.isEmpty() ? QStringLiteral("libmpv") : m_customUserAgent;
+    m_controller->setProperty(QStringLiteral("user-agent"), effectiveUa);
+
     const QString mpvProxyValue =
         usingRelay ? QString() : ProxyManager::toMpvHttpProxy(proxy);
     const bool forceSeekable =
@@ -250,6 +259,9 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     QVariantMap loadOptions;
     if (!mpvProxyValue.isEmpty()) {
         loadOptions.insert(QStringLiteral("http-proxy"), mpvProxyValue);
+    }
+    if (!m_customUserAgent.isEmpty()) {
+        loadOptions.insert(QStringLiteral("user-agent"), m_customUserAgent);
     }
     if (forceSeekable) {
         loadOptions.insert(QStringLiteral("force-seekable"), QStringLiteral("yes"));

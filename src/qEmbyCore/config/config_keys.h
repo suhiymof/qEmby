@@ -56,6 +56,10 @@ constexpr const char* ProxyUsername         = "network/proxy_username";
 constexpr const char* ProxyPassword         = "network/proxy_password";
 constexpr const char* ProxyBypassLocalhost  = "network/proxy_bypass_local";
 
+// Global default User-Agent for Emby API/streaming requests.
+// Per-server ServerProfile::customUserAgent takes precedence over this.
+constexpr const char* CustomUserAgent = "network/custom_user_agent";
+
 
 
 

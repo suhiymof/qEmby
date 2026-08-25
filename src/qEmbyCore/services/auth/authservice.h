@@ -24,14 +24,16 @@ public:
     QCoro::Task<ServerProfile> login(const QString& serverUrl,
                                      const QString& username,
                                      const QString& password,
-                                     bool ignoreSslVerification);
+                                     bool ignoreSslVerification,
+                                     const QString& userAgent = QString());
 
     // 验证服务器可达 + 可选地验证凭据; 不写 server manager, 不下载 icon.
     // 成功返回服务端 ServerName; 失败抛 std::runtime_error.
     QCoro::Task<QString> testConnection(const QString& serverUrl,
                                         const QString& username,
                                         const QString& password,
-                                        bool ignoreSslVerification);
+                                        bool ignoreSslVerification,
+                                        const QString& userAgent = QString());
 
     QCoro::Task<ServerProfile> validateSession(const QString& serverId);
 

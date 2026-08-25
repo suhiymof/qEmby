@@ -23,7 +23,8 @@ AuthService::AuthService(NetworkManager* networkManager, ServerManager* serverMa
 QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
                                               const QString& username,
                                               const QString& password,
-                                              bool ignoreSslVerification)
+                                              bool ignoreSslVerification,
+                                              const QString& userAgent)
 {
     QString cleanUrl = serverUrl;
     if (cleanUrl.endsWith('/')) {
@@ -37,17 +38,24 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
              << "| url:" << cleanUrl
              << "| ignoreSslVerification:" << ignoreSslVerification;
 
-    
-    
+    // Strict-UA servers reject the very first request, so the public info
+    // probe must already carry the custom UA.
+    QMap<QString, QString> infoHeaders;
+    const QString effectiveUa = userAgent.trimmed();
+    if (!effectiveUa.isEmpty()) {
+        infoHeaders.insert("User-Agent", effectiveUa);
+    }
+
     QJsonObject infoResp = co_await m_networkManager->get(
-        cleanUrl + "/System/Info/Public", QMap<QString, QString>(),
+        cleanUrl + "/System/Info/Public", infoHeaders,
         requestOptions);
 
-    
+
     ServerProfile tempProfile;
     tempProfile.url = cleanUrl;
     tempProfile.deviceId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     tempProfile.ignoreSslVerification = ignoreSslVerification;
+    tempProfile.customUserAgent = effectiveUa;
 
     
     QString productName = infoResp["ProductName"].toString();
@@ -115,7 +123,7 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
         for (const QString &iconPath : iconCandidates) {
             try {
                 const QByteArray iconBytes = co_await m_networkManager->getBytes(
-                    tempProfile.url + iconPath, QMap<QString, QString>(),
+                    tempProfile.url + iconPath, infoHeaders,
                     requestOptions);
                 if (!iconBytes.isEmpty()) {
                     tempProfile.iconBase64 =
@@ -153,7 +161,8 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
 QCoro::Task<QString> AuthService::testConnection(const QString& serverUrl,
                                                  const QString& username,
                                                  const QString& password,
-                                                 bool ignoreSslVerification)
+                                                 bool ignoreSslVerification,
+                                                 const QString& userAgent)
 {
     // 测试连接 = 复用 login 的可达性 + 凭据校验两步, 但跳过 server manager
     // 写入与 icon 下载. 调用方负责不发生副作用, 用户可放心试用不保存.
@@ -167,9 +176,15 @@ QCoro::Task<QString> AuthService::testConnection(const QString& serverUrl,
 
     try {
         // Step 1: 不需要鉴权的服务端公开信息, 验证 URL/SSL/端口可达.
+        // 严格 UA 白名单的服务器连首个探测请求都会拦, 所以这里就要带自定义 UA.
+        QMap<QString, QString> infoHeaders;
+        const QString effectiveUa = userAgent.trimmed();
+        if (!effectiveUa.isEmpty()) {
+            infoHeaders.insert("User-Agent", effectiveUa);
+        }
         const QJsonObject infoResp = co_await m_networkManager->get(
             cleanUrl + QStringLiteral("/System/Info/Public"),
-            QMap<QString, QString>(), requestOptions);
+            infoHeaders, requestOptions);
 
         QString serverName = infoResp.value(QStringLiteral("ServerName")).toString();
         if (serverName.isEmpty()) {
@@ -190,6 +205,7 @@ QCoro::Task<QString> AuthService::testConnection(const QString& serverUrl,
             tempProfile.ignoreSslVerification = ignoreSslVerification;
             tempProfile.deviceId =
                 QUuid::createUuid().toString(QUuid::WithoutBraces);
+            tempProfile.customUserAgent = effectiveUa;
 
             ApiClient tempClient(tempProfile, m_networkManager);
             QJsonObject payload;

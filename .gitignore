@@ -50,3 +50,6 @@ linuxdo_post.md
 # ´ò°üÊä³ö
 dist/
 release/
+
+# ops/debug artifacts (nginx config copies etc.)
+emby.conf

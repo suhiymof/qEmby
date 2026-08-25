@@ -48,7 +48,8 @@ MpvHttpStreamRelay::~MpvHttpStreamRelay()
     stop();
 }
 
-QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId, const QNetworkProxy &proxy)
+QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
+                                 const QNetworkProxy &proxy, const QString &userAgent)
 {
     if (!targetUrl.isValid() || targetUrl.scheme().isEmpty())
     {
@@ -66,6 +67,7 @@ QUrl MpvHttpStreamRelay::prepare(const QUrl &targetUrl, const QString &serverId,
     m_targetUrl = targetUrl;
     m_serverId = serverId;
     m_streamToken = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    m_upstreamUserAgent = userAgent.trimmed();
     m_network->setProxy(proxy);
     m_bytesRelayedSinceLastTick = 0;
     m_speedTimer->start();
@@ -232,6 +234,13 @@ void MpvHttpStreamRelay::processRequest(QTcpSocket *socket, const QByteArray &re
         {
             request.setRawHeader(name, value);
         }
+    }
+
+    // Strict-UA servers reject the default UA: the custom UA (when set)
+    // overrides whatever mpv sent, otherwise mpv's UA passes through.
+    if (!m_upstreamUserAgent.isEmpty())
+    {
+        request.setHeader(QNetworkRequest::UserAgentHeader, m_upstreamUserAgent);
     }
 
     auto it = m_connections.find(socket);

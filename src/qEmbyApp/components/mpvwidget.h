@@ -25,6 +25,10 @@ public:
     void stop();
     void seek(double positionInSeconds);
 
+    // Custom User-Agent for HTTP(S) streams (servers with strict UA
+    // whitelists). Empty = keep libmpv default ("libmpv").
+    void setCustomUserAgent(const QString &userAgent);
+
     MpvController* controller() const { return m_controller; }
 
 signals:
@@ -58,7 +62,8 @@ private:
 
     
     QString m_pendingUrl;
-    QString m_pendingServerId;  
+    QString m_pendingServerId;
+    QString m_customUserAgent;
 };
 
 #endif 
