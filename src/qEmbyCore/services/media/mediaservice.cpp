@@ -2459,18 +2459,23 @@ QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo 
         {
             return sourceInfo.path;
         }
+    }
 
-        if (!sourceInfo.directStreamUrl.isEmpty())
+    // DirectStreamUrl is the server-negotiated playback URL (returned by
+    // PlaybackInfo) — the standard path official clients take. It must apply
+    // regardless of the STRM direct-play toggle: servers behind split
+    // panel/stream reverse proxies disable the /stream fallback endpoint and
+    // only serve this negotiated URL.
+    if (!sourceInfo.directStreamUrl.isEmpty())
+    {
+        if (sourceInfo.directStreamUrl.startsWith("http://", Qt::CaseInsensitive) ||
+            sourceInfo.directStreamUrl.startsWith("https://", Qt::CaseInsensitive))
         {
-            if (sourceInfo.directStreamUrl.startsWith("http://", Qt::CaseInsensitive) ||
-                sourceInfo.directStreamUrl.startsWith("https://", Qt::CaseInsensitive))
-            {
-                return sourceInfo.directStreamUrl;
-            }
-            else
-            {
-                return profile.url + sourceInfo.directStreamUrl;
-            }
+            return sourceInfo.directStreamUrl;
+        }
+        else
+        {
+            return profile.url + sourceInfo.directStreamUrl;
         }
     }
 
