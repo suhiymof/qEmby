@@ -42,18 +42,25 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p /tmp/mpv-main /tmp/mpv-dev libs/libmpv/bin libs/libmpv/lib
-          # 主包: 提供 bin/libmpv-2.dll;  dev 包: 提供 include/ + 导入库
+          # pattern 限定 '2*' 开头（日期 2026xx），排除 x86-64-v3 指令集变体包
           gh release download --repo shinchiro/mpv-winbuild-cmake \
-            --pattern 'mpv-x86_64-*.7z' --dir /tmp/mpv-main --clobber
+            --pattern 'mpv-x86_64-2*.7z' --dir /tmp/mpv-main --clobber
           gh release download --repo shinchiro/mpv-winbuild-cmake \
-            --pattern 'mpv-dev-x86_64-*.7z' --dir /tmp/mpv-dev --clobber
-          7z x -y /tmp/mpv-dev/*.7z -o/tmp/mpv-dev/x >/dev/null
+            --pattern 'mpv-dev-x86_64-2*.7z' --dir /tmp/mpv-dev --clobber
           7z x -y /tmp/mpv-main/*.7z -o/tmp/mpv-main/x >/dev/null
-          # 按 README 布局归位: bin/libmpv-2.dll, include/mpv/*.h, lib/libmpv.dll.a
-          cp /tmp/mpv-main/x/libmpv-2.dll libs/libmpv/bin/
-          cp -r /tmp/mpv-dev/x/include libs/libmpv/
-          cp /tmp/mpv-dev/x/libmpv.dll.a libs/libmpv/lib/
-          ls -R libs/libmpv | head -30
+          7z x -y /tmp/mpv-dev/*.7z -o/tmp/mpv-dev/x >/dev/null
+          # 用 find 定位实际位置（不依赖包内目录布局假设）
+          MPV_DLL="$(find /tmp/mpv-main/x /tmp/mpv-dev/x -name 'libmpv-2.dll' | head -1)"
+          MPV_IMPLIB="$(find /tmp/mpv-dev/x \( -name 'libmpv.dll.a' -o -name 'mpv.dll.a' \) | head -1)"
+          MPV_CLIENT_H="$(find /tmp/mpv-dev/x -name 'client.h' -path '*mpv*' | head -1)"
+          MPV_INCLUDE="$(dirname "$(dirname "$MPV_CLIENT_H")")"
+          test -n "$MPV_DLL"
+          test -n "$MPV_IMPLIB"
+          test -n "$MPV_CLIENT_H"
+          cp "$MPV_DLL" libs/libmpv/bin/
+          cp -r "$MPV_INCLUDE" libs/libmpv/
+          cp "$MPV_IMPLIB" libs/libmpv/lib/
+          find libs/libmpv -maxdepth 3
 
       - name: Configure
         shell: bash
