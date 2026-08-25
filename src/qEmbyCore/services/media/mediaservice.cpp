@@ -2440,6 +2440,24 @@ QString MediaService::getStreamUrl(const QString &itemId, const QString &mediaSo
         .arg(profile.url, itemId, mediaSourceId, profile.accessToken);
 }
 
+bool MediaService::isDirectPlayablePath(const QString& path)
+{
+    if (!path.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)
+        && !path.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive))
+    {
+        return false;
+    }
+    // Loopback hosts (e.g. alist at http://127.0.0.1:5244/d/...) only
+    // resolve for clients co-located with the service, and direct-playing
+    // them gains nothing — fall back to the negotiated URL instead.
+    const QUrl pathUrl(path);
+    const QString host = pathUrl.host().toLower();
+    const bool isLoopback = host == QStringLiteral("127.0.0.1")
+                            || host == QStringLiteral("localhost")
+                            || host == QStringLiteral("::1");
+    return !isLoopback;
+}
+
 QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo &sourceInfo) const
 {
     ServerProfile profile = m_serverManager->activeProfile();
@@ -2454,23 +2472,9 @@ QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo 
 
     if (enableStrmDirect)
     {
-        if (sourceInfo.path.startsWith("http://", Qt::CaseInsensitive) ||
-            sourceInfo.path.startsWith("https://", Qt::CaseInsensitive))
+        if (isDirectPlayablePath(sourceInfo.path))
         {
-            // Skip path-based direct play when the path points at a loopback
-            // address this client cannot reach: alist-backed servers expose
-            // media paths like http://127.0.0.1:5244/d/... which only work
-            // for clients co-located with the alist instance. Fall through
-            // to the negotiated DirectStreamUrl below instead.
-            const QUrl pathUrl(sourceInfo.path);
-            const QString pathHost = pathUrl.host().toLower();
-            const bool pathIsLoopback = pathHost == QStringLiteral("127.0.0.1")
-                                        || pathHost == QStringLiteral("localhost")
-                                        || pathHost == QStringLiteral("::1");
-            if (!pathIsLoopback)
-            {
-                return sourceInfo.path;
-            }
+            return sourceInfo.path;
         }
     }
 
@@ -2489,6 +2493,23 @@ QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo 
         else
         {
             return profile.url + sourceInfo.directStreamUrl;
+        }
+    }
+
+    // TranscodingUrl: the server decided this client must transcode (codec
+    // not declared as directly playable). Official clients honor it as the
+    // last negotiated option before falling back to the raw stream endpoint;
+    // mpv plays HLS master playlists natively.
+    if (!sourceInfo.transcodingUrl.isEmpty())
+    {
+        if (sourceInfo.transcodingUrl.startsWith("http://", Qt::CaseInsensitive) ||
+            sourceInfo.transcodingUrl.startsWith("https://", Qt::CaseInsensitive))
+        {
+            return sourceInfo.transcodingUrl;
+        }
+        else
+        {
+            return profile.url + sourceInfo.transcodingUrl;
         }
     }
 

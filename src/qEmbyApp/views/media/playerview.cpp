@@ -4780,22 +4780,30 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
             }
         }
 
-        // Stage 2: source present but DirectStreamUrl missing and the path is
-        // not a direct URL (non-strm item). DirectStreamUrl is a *negotiated*
-        // field only filled by the PlaybackInfo endpoint, and servers behind
-        // emby2Alist-style proxies disable the /stream fallback endpoint, so
-        // without the negotiated URL playback cannot start at all.
+        // Stage 2: source present but DirectStreamUrl missing and the path
+        // cannot be direct-played from this client. DirectStreamUrl is a
+        // *negotiated* field only filled by the PlaybackInfo endpoint, and
+        // servers behind emby2Alist-style proxies disable the /stream
+        // fallback endpoint, so without the negotiated URL playback cannot
+        // start at all. Same playability rule as getStreamUrl(): loopback
+        // http paths (alist 127.0.0.1:5244) do not count as playable.
         if (!source.id.isEmpty() && source.directStreamUrl.isEmpty()
-            && !source.path.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)
-            && !source.path.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive))
+            && !MediaService::isDirectPlayablePath(source.path))
         {
             PlaybackInfo pb = co_await mediaService->getPlaybackInfo(mediaId);
             if (!safeThis || !mediaService)
                 co_return;
-            if (!pb.mediaSources.isEmpty()
-                && !pb.mediaSources.first().directStreamUrl.isEmpty())
+            if (!pb.mediaSources.isEmpty())
             {
-                source = pb.mediaSources.first();
+                const MediaSourceInfo &negotiated = pb.mediaSources.first();
+                // Adopt the negotiated source when it carries any playable
+                // URL: DirectStreamUrl (direct stream) or TranscodingUrl
+                // (server-mandated transcode).
+                if (!negotiated.directStreamUrl.isEmpty()
+                    || !negotiated.transcodingUrl.isEmpty())
+                {
+                    source = negotiated;
+                }
             }
         }
     }
@@ -4900,20 +4908,22 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     // Playback source needs preparation when either:
     //  a) sourceInfo is missing entirely (strm item still probing etc.) ->
     //     fetch via the lightweight item-detail API; or
-    //  b) sourceInfo exists but has no DirectStreamUrl while the path is not a
-    //     direct URL -> negotiate via PlaybackInfo (POST + DeviceProfile);
-    //     servers behind emby2Alist-style proxies only serve the negotiated
-    //     URL and disable the /stream fallback endpoint.
+    //  b) sourceInfo exists but has no DirectStreamUrl while the path cannot
+    //     be direct-played from this client -> negotiate via PlaybackInfo
+    //     (POST + DeviceProfile); servers behind emby2Alist-style proxies
+    //     only serve the negotiated URL and disable the /stream fallback.
+    //     Path "direct playability" must use the same rule as getStreamUrl()
+    //     (loopback http paths are NOT playable), otherwise negotiation is
+    //     skipped for paths that getStreamUrl will refuse to use.
     if (allowSourceFetch && !mediaId.isEmpty() && m_core)
     {
         const bool needSourceFetch = resolvedSourceInfo.id.isEmpty();
-        const bool pathIsDirectUrl =
-            resolvedSourceInfo.path.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)
-            || resolvedSourceInfo.path.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive);
+        const bool pathIsDirectPlayable =
+            MediaService::isDirectPlayablePath(resolvedSourceInfo.path);
         const bool needPlaybackNegotiation =
             !needSourceFetch
             && resolvedSourceInfo.directStreamUrl.isEmpty()
-            && !pathIsDirectUrl;
+            && !pathIsDirectPlayable;
         if (needSourceFetch || needPlaybackNegotiation)
         {
             QCoro::connect(ensureMediaSourcesThenPlay(mediaId, title, streamUrl,

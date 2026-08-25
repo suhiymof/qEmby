@@ -81,6 +81,7 @@ MediaSourceInfo MediaSourceInfo::fromJson(const QJsonObject& json) {
     info.path = json["Path"].toString();
     info.container = json["Container"].toString();
     info.directStreamUrl = json["DirectStreamUrl"].toString();
+    info.transcodingUrl = json["TranscodingUrl"].toString();
 
     if (json.contains("Size")) {
         info.size = json["Size"].toVariant().toLongLong();

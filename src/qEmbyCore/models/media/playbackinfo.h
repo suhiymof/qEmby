@@ -104,17 +104,19 @@ struct QEMBYCORE_EXPORT MediaSourceInfo {
     Q_PROPERTY(QString container MEMBER container)
     Q_PROPERTY(long long size MEMBER size)
     Q_PROPERTY(QString directStreamUrl MEMBER directStreamUrl)
+    Q_PROPERTY(QString transcodingUrl MEMBER transcodingUrl)
     Q_PROPERTY(long long runTimeTicks MEMBER runTimeTicks)
     Q_PROPERTY(QDateTime dateCreated MEMBER dateCreated)
     Q_PROPERTY(QDateTime dateModified MEMBER dateModified)
 
 public:
     QString id;
-    QString name;           
+    QString name;
     QString path;
-    QString container;      
-    long long size = 0;     
+    QString container;
+    long long size = 0;
     QString directStreamUrl;
+    QString transcodingUrl;
     long long runTimeTicks = 0;
     QDateTime dateCreated;
     QDateTime dateModified;

@@ -145,6 +145,13 @@ public:
     // and to emit a usable DirectStreamUrl.
     static QJsonObject buildDeviceProfile();
 
+    // True when a media path can be direct-played from this client: it is an
+    // http(s) URL whose host is reachable and routes traffic outside the
+    // media server (loopback hosts like alist's 127.0.0.1:5244 fail both).
+    // Used consistently by the playback-negotiation trigger and getStreamUrl
+    // so the two never disagree.
+    static bool isDirectPlayablePath(const QString& path);
+
     
     
     
