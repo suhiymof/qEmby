@@ -4,6 +4,7 @@
 #include <QOpenGLContext>
 #include <QMetaObject>
 #include <QCoreApplication>
+#include <QDir>
 #include <QSettings>
 #include <QSurfaceFormat>
 #include <QUrl>
@@ -259,6 +260,34 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
             playerSettings.value(QStringLiteral("FastStart"), false).toBool();
         m_controller->setProperty(QStringLiteral("cache-pause-wait"),
                                   fastStart ? 0.2 : 1.0);
+    }
+
+    // Disk-backed streaming cache + switch-time cleanup:
+    //  - when enabled, mpv keeps stream cache files on disk (cache-dir), so
+    //    revisiting the same media can reuse them;
+    //  - before loading a new file the old cache is flushed (cache-free) so
+    //    stale data from the previous media never leaks into the new one.
+    {
+        QSettings playerSettings(QStringLiteral("qEmby"), QStringLiteral("Player"));
+        const bool diskCache =
+            playerSettings.value(QStringLiteral("DiskCache"), false).toBool();
+        if (diskCache) {
+            m_controller->setProperty(QStringLiteral("cache-on-disk"),
+                                      QStringLiteral("yes"));
+            const QString cacheDir =
+                playerSettings.value(QStringLiteral("DiskCacheDir"), QString())
+                    .toString()
+                    .trimmed();
+            if (!cacheDir.isEmpty()) {
+                QDir().mkpath(cacheDir);
+                m_controller->setProperty(QStringLiteral("cache-dir"), cacheDir);
+            }
+        } else {
+            m_controller->setProperty(QStringLiteral("cache-on-disk"),
+                                      QStringLiteral("no"));
+        }
+        // Flush the previous media's cache before opening the new one.
+        m_controller->command(QVariantList{QStringLiteral("cache-free")});
     }
 
     const QString mpvProxyValue =

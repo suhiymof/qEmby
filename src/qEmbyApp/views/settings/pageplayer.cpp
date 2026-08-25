@@ -185,6 +185,33 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
         prefetchWidget, QString(), this));
   }
 
+  // Disk-backed streaming cache: keeps the last-played media's cache files
+  // so revisiting it can reuse them; the cache is flushed (cache-free)
+  // before each new file loads to avoid stale data across media.
+  {
+    auto *diskCacheSwitch = new ModernSwitch(this);
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/hw-decode.svg", tr("Disk Cache"),
+        tr("Keep stream cache on disk so revisiting the same media is "
+           "faster; cache is cleared automatically when switching media"),
+        diskCacheSwitch, ConfigKeys::PlayerDiskCache, this, QVariant(false)));
+
+    auto *cacheDirInput = new QLineEdit(this);
+    cacheDirInput->setPlaceholderText(tr("Cache directory (default: system temp)"));
+    cacheDirInput->setMinimumWidth(280);
+    cacheDirInput->setText(ConfigStore::instance()->get<QString>(
+        ConfigKeys::PlayerDiskCacheDir, QString()));
+    connect(cacheDirInput, &QLineEdit::editingFinished, this, [cacheDirInput]() {
+      ConfigStore::instance()->set(ConfigKeys::PlayerDiskCacheDir,
+                                   cacheDirInput->text().trimmed());
+    });
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/hw-decode.svg", tr("Disk Cache Directory"),
+        tr("Where mpv stores disk cache files. Empty uses the system "
+           "temporary directory"),
+        cacheDirInput, QString(), this));
+  }
+
   
   auto *longPressSwitch = new ModernSwitch(this);
   m_mainLayout->addWidget(new SettingsCard(

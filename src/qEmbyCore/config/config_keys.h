@@ -135,6 +135,11 @@ constexpr const char* PlayerFastStart = "player/fast_start";
 // Next-episode playback-source prefetch trigger: 0 = disabled, otherwise
 // prefetch starts once playback progress reaches this percentage.
 constexpr const char* PlayerPrefetchThreshold = "player/prefetch_threshold";
+// Disk-backed streaming cache: keeps the last-played media's cache files so
+// revisiting it can reuse them. When enabled, the cache is cleared (cache-free)
+// before each new file loads to avoid stale data leaking across media.
+constexpr const char* PlayerDiskCache = "player/disk_cache";
+constexpr const char* PlayerDiskCacheDir = "player/disk_cache_dir";
 constexpr const char* PlayerSeekStep = "player/seek_step";
 constexpr const char* PlayerLongPressSeek = "player/long_press_seek";
 constexpr const char* PlayerLongPressMode = "player/long_press_mode";
