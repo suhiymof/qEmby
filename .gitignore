@@ -12,12 +12,12 @@
 *.pdb
 *.suo
 
-# 库文件
+# 库文�?
 *.lib
 *.a
 *.so
 
-# MOC 和 UI 生成的文件
+# MOC �? UI 生成的文�?
 moc_*.cpp
 ui_*.h
 qrc_*.cpp
@@ -31,18 +31,19 @@ qrc_*.cpp
 .cache/
 compile_commands.json
 
-# 预编译第三方库 (请参阅 README 中的构建说明)
+# 预编译第三方�? (请参�? README 中的构建说明)
 libs/libmpv/
 
 # Release 构建产物
 *.zip
 
-# AI 辅助工具
+# AI ��������
 .antigravityignore
 .antigravityrules
 .gemini/
 .agents/
 _agents/
+.workbuddy/
 # ���Ӳݸ�
 linuxdo_post.md
 
