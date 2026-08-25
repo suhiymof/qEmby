@@ -341,6 +341,17 @@ QString LoginView::displayServerAddress(const QUrl &url) const {
   return address;
 }
 
+std::optional<QUrl> LoginView::validateServerUrl(QString *errorMessage) const {
+  if (m_serverAddressInput->text().trimmed().isEmpty() ||
+      m_usernameInput->text().trimmed().isEmpty()) {
+    if (errorMessage != nullptr) {
+      *errorMessage = tr("Server address and username cannot be empty.");
+    }
+    return std::nullopt;
+  }
+  return buildNormalizedServerUrl(errorMessage);
+}
+
 void LoginView::applyServerUrlToForm(const QUrl &url,
                                      bool ignoreSslVerification) {
   if (m_protocolInput == nullptr || m_serverAddressInput == nullptr ||
@@ -596,6 +607,22 @@ void LoginView::setupAddPage() {
   btnLayout->addWidget(cancelBtn);
   btnLayout->addWidget(m_loginButton);
   layout->addLayout(btnLayout);
+
+  // 测试连接：不保存, 不切换会话, 只跑一遍 GET /System/Info/Public +
+  // (有账号时) POST /Users/AuthenticateByName; 显示绿色 ✓ / 红色 ✗ 结果.
+  m_testConnButton = new QPushButton(tr("Test Connection"), this);
+  m_testConnButton->setObjectName("login-test-conn-btn");
+  m_testConnButton->setCursor(Qt::PointingHandCursor);
+  connect(m_testConnButton, &QPushButton::clicked, this,
+          &LoginView::onTestConnectionClicked);
+  layout->addWidget(m_testConnButton);
+
+  m_testResultLabel = new QLabel(this);
+  m_testResultLabel->setObjectName("login-test-result-label");
+  m_testResultLabel->setAlignment(Qt::AlignCenter);
+  m_testResultLabel->setWordWrap(true);
+  m_testResultLabel->hide();
+  layout->addWidget(m_testResultLabel);
 
   layout->addStretch();
 
@@ -887,6 +914,9 @@ void LoginView::showAddPage() {
 
   m_loginButton->setText(tr("Login"));
   m_errorLabel->hide();
+  if (m_testResultLabel) {
+    m_testResultLabel->hide();
+  }
   m_pageSwitcher->setCurrentWidget(m_addPage);
 
   
@@ -938,6 +968,9 @@ void LoginView::onEditServerClicked(const QString &serverId) {
 
       m_loginButton->setText(tr("Save & Login"));
       m_errorLabel->hide();
+      if (m_testResultLabel) {
+        m_testResultLabel->hide();
+      }
       m_pageSwitcher->setCurrentWidget(m_addPage);
 
       
@@ -1006,25 +1039,20 @@ QCoro::Task<void> LoginView::onServerCardClicked(const QString &serverId) {
 
 
 QCoro::Task<void> LoginView::onLoginClicked() {
-  
+
   QPointer<LoginView> guard(this);
 
-  QString user = m_usernameInput->text().trimmed();
-  QString pass = m_passwordInput->text();
-
-  if (m_serverAddressInput->text().trimmed().isEmpty() || user.isEmpty()) {
-    m_errorLabel->setText(tr("Server address and username cannot be empty."));
-    m_errorLabel->show();
-    co_return;
-  }
-
   QString urlError;
-  const QUrl normalizedUrl = buildNormalizedServerUrl(&urlError);
-  if (!urlError.isEmpty()) {
+  auto maybeUrl = validateServerUrl(&urlError);
+  if (!maybeUrl) {
     m_errorLabel->setText(urlError);
     m_errorLabel->show();
     co_return;
   }
+  const QUrl normalizedUrl = *maybeUrl;
+
+  const QString user = m_usernameInput->text().trimmed();
+  const QString pass = m_passwordInput->text();
 
   const bool ignoreSslVerification =
       normalizedUrl.scheme().compare("https", Qt::CaseInsensitive) == 0 &&
@@ -1092,6 +1120,72 @@ QCoro::Task<void> LoginView::onLoginClicked() {
     m_errorLabel->setText(QString::fromStdString(e.what()));
     m_errorLabel->show();
   }
+}
+
+QCoro::Task<void> LoginView::onTestConnectionClicked() {
+  QPointer<LoginView> guard(this);
+
+  QString urlError;
+  auto maybeUrl = validateServerUrl(&urlError);
+  if (!maybeUrl) {
+    m_testResultLabel->setText(tr("✗ %1").arg(urlError));
+    m_testResultLabel->setProperty("state", "error");
+    m_testResultLabel->style()->unpolish(m_testResultLabel);
+    m_testResultLabel->style()->polish(m_testResultLabel);
+    m_testResultLabel->show();
+    co_return;
+  }
+  const QUrl normalizedUrl = *maybeUrl;
+
+  const QString user = m_usernameInput->text().trimmed();
+  const QString pass = m_passwordInput->text();
+  const bool ignoreSsl =
+      normalizedUrl.scheme().compare("https", Qt::CaseInsensitive) == 0 &&
+      m_ignoreSslSwitch != nullptr && m_ignoreSslSwitch->isChecked();
+  const QString fullUrl = normalizedUrl.toString(QUrl::FullyEncoded);
+
+  m_testConnButton->setEnabled(false);
+  m_testConnButton->setText(tr("Testing..."));
+  m_testResultLabel->hide();
+
+  try {
+    const QString serverName = co_await m_core->authService()->testConnection(
+        fullUrl, user, pass, ignoreSsl);
+
+    if (!guard)
+      co_return;
+
+    m_testResultLabel->setText(
+        tr("✓ Connection succeeded (server: %1)").arg(serverName));
+    m_testResultLabel->setProperty("state", "success");
+  } catch (const std::exception &e) {
+    if (!guard)
+      co_return;
+
+    // 剥除 AuthService 加的包装前缀, 显示真实错误更直观
+    QString raw = QString::fromStdString(e.what());
+    const QString prefix = QStringLiteral("Test connection failed: ");
+    if (raw.startsWith(prefix)) {
+      raw = raw.mid(prefix.size());
+    }
+    m_testResultLabel->setText(tr("✗ %1").arg(raw));
+    m_testResultLabel->setProperty("state", "error");
+  } catch (...) {
+    if (!guard)
+      co_return;
+    m_testResultLabel->setText(tr("✗ Unknown error"));
+    m_testResultLabel->setProperty("state", "error");
+  }
+
+  if (!guard)
+    co_return;
+
+  m_testResultLabel->style()->unpolish(m_testResultLabel);
+  m_testResultLabel->style()->polish(m_testResultLabel);
+  m_testResultLabel->show();
+
+  m_testConnButton->setEnabled(true);
+  m_testConnButton->setText(tr("Test Connection"));
 }
 
 

@@ -150,6 +150,67 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
     co_return tempProfile;
 }
 
+QCoro::Task<QString> AuthService::testConnection(const QString& serverUrl,
+                                                 const QString& username,
+                                                 const QString& password,
+                                                 bool ignoreSslVerification)
+{
+    // 测试连接 = 复用 login 的可达性 + 凭据校验两步, 但跳过 server manager
+    // 写入与 icon 下载. 调用方负责不发生副作用, 用户可放心试用不保存.
+    QString cleanUrl = serverUrl;
+    if (cleanUrl.endsWith('/')) {
+        cleanUrl.chop(1);
+    }
+
+    NetworkRequestOptions requestOptions;
+    requestOptions.ignoreSslErrors = ignoreSslVerification;
+
+    try {
+        // Step 1: 不需要鉴权的服务端公开信息, 验证 URL/SSL/端口可达.
+        const QJsonObject infoResp = co_await m_networkManager->get(
+            cleanUrl + QStringLiteral("/System/Info/Public"),
+            QMap<QString, QString>(), requestOptions);
+
+        QString serverName = infoResp.value(QStringLiteral("ServerName")).toString();
+        if (serverName.isEmpty()) {
+            serverName = infoResp.value(QStringLiteral("Name")).toString();
+        }
+        if (serverName.isEmpty()) {
+            QUrl parsedUrl(cleanUrl);
+            serverName = parsedUrl.host().isEmpty()
+                             ? QStringLiteral("(unknown)")
+                             : parsedUrl.host();
+        }
+
+        // Step 2: 可选地验证账号密码. 用户没填账号就跳过这一步
+        // (只验可达性, 让用户能验证 URL 对不对后再补账号).
+        if (!username.trimmed().isEmpty()) {
+            ServerProfile tempProfile;
+            tempProfile.url = cleanUrl;
+            tempProfile.ignoreSslVerification = ignoreSslVerification;
+            tempProfile.deviceId =
+                QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+            ApiClient tempClient(tempProfile, m_networkManager);
+            QJsonObject payload;
+            payload.insert(QStringLiteral("Username"), username.trimmed());
+            payload.insert(QStringLiteral("Pw"), password);
+
+            // 单纯验证身份, 不读返回字段
+            co_await tempClient.post(QStringLiteral("/Users/AuthenticateByName"),
+                                     payload);
+        }
+
+        co_return serverName;
+    } catch (const std::exception &e) {
+        // 重新包装, 让 UI 层 message 跟 login 格式一致
+        throw std::runtime_error(std::string("Test connection failed: ") +
+                                 e.what());
+    } catch (...) {
+        throw std::runtime_error("Test connection failed: unknown error");
+    }
+}
+
 void AuthService::logout()
 {
     

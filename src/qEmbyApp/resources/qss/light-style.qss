@@ -510,6 +510,19 @@ QWidget#login-add-page QLabel#login-error-label {
     background: transparent;
 }
 
+QWidget#login-add-page QLabel#login-test-result-label[state="success"] {
+    color: #10B981;
+    font-size: 13px;
+    font-weight: bold;
+    background: transparent;
+}
+QWidget#login-add-page QLabel#login-test-result-label[state="error"] {
+    color: #EF4444;
+    font-size: 13px;
+    font-weight: bold;
+    background: transparent;
+}
+
 QWidget#login-add-page QLineEdit {
     background-color: #FFFFFF;
     border: 1px solid #CBD5E1;

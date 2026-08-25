@@ -2,9 +2,10 @@
 #define LOGINVIEW_H
 
 #include <QWidget>
+#include <optional>
 #include <qcorotask.h>
-#include "../../managers/thememanager.h" 
-#include "models/profile/proxyconfig.h"  
+#include "../../managers/thememanager.h"
+#include "models/profile/proxyconfig.h"
 
 class QLineEdit;
 class QPushButton;
@@ -38,8 +39,9 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private Q_SLOTS:
-    
+
     QCoro::Task<void> onLoginClicked();
+    QCoro::Task<void> onTestConnectionClicked();
     QCoro::Task<void> onServerCardClicked(const QString& serverId);
 
     void showAddPage();
@@ -59,6 +61,9 @@ private:
     QUrl buildNormalizedServerUrl(QString* errorMessage) const;
     void applyServerUrlToForm(const QUrl& url, bool ignoreSslVerification);
     QString displayServerAddress(const QUrl& url) const;
+    // 共享校验: 地址非空 + 用户名非空 + 解析 normalized URL.
+    // 用于 onLoginClicked 和 onTestConnectionClicked 复用, 失败填 errorMessage.
+    std::optional<QUrl> validateServerUrl(QString* errorMessage) const;
 
     QEmbyCore* m_core;
 
@@ -79,6 +84,8 @@ private:
     QLineEdit* m_usernameInput;
     QLineEdit* m_passwordInput;
     QPushButton* m_loginButton;
+    QPushButton* m_testConnButton;
+    QLabel* m_testResultLabel;
     QLabel* m_errorLabel;
     
     
