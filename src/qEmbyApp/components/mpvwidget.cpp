@@ -10,6 +10,8 @@
 #include <QUrl>
 #include <QVariantMap>
 #include "api/proxymanager.h"
+#include "config/config_keys.h"
+#include "config/configstore.h"
 
 MpvWidget::MpvWidget(QWidget *parent)
     : QOpenGLWidget(parent), m_mpv_gl(nullptr) {
@@ -253,11 +255,11 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     // Fast Start: lower the buffered-data threshold mpv waits for before
     // playback begins (cache-pause-wait). Default 1.0s; fast start uses 0.2s
     // so remote streams begin rendering sooner, at the cost of possible
-    // early pauses on slow links.
+    // early pauses on slow links. Read via ConfigStore (same store the
+    // Settings UI writes to).
     {
-        QSettings playerSettings(QStringLiteral("qEmby"), QStringLiteral("Player"));
-        const bool fastStart =
-            playerSettings.value(QStringLiteral("FastStart"), false).toBool();
+        const bool fastStart = ConfigStore::instance()->get<bool>(
+            ConfigKeys::PlayerFastStart, false);
         m_controller->setProperty(QStringLiteral("cache-pause-wait"),
                                   fastStart ? 0.2 : 1.0);
     }
@@ -268,16 +270,13 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
     //  - before loading a new file the old cache is flushed (cache-free) so
     //    stale data from the previous media never leaks into the new one.
     {
-        QSettings playerSettings(QStringLiteral("qEmby"), QStringLiteral("Player"));
-        const bool diskCache =
-            playerSettings.value(QStringLiteral("DiskCache"), false).toBool();
+        const bool diskCache = ConfigStore::instance()->get<bool>(
+            ConfigKeys::PlayerDiskCache, false);
         if (diskCache) {
             m_controller->setProperty(QStringLiteral("cache-on-disk"),
                                       QStringLiteral("yes"));
-            const QString cacheDir =
-                playerSettings.value(QStringLiteral("DiskCacheDir"), QString())
-                    .toString()
-                    .trimmed();
+            const QString cacheDir = ConfigStore::instance()->get<QString>(
+                ConfigKeys::PlayerDiskCacheDir, QString());
             if (!cacheDir.isEmpty()) {
                 QDir().mkpath(cacheDir);
                 m_controller->setProperty(QStringLiteral("cache-dir"), cacheDir);
@@ -288,6 +287,74 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
         }
         // Flush the previous media's cache before opening the new one.
         m_controller->command(QVariantList{QStringLiteral("cache-free")});
+    }
+
+    // Advanced mpv tuning (Settings -> Player). All values come from the
+    // same ConfigStore the settings UI writes to; missing values fall back
+    // to mpv defaults (we simply do not touch the property).
+    {
+        ConfigStore *cfg = ConfigStore::instance();
+
+        const QString audioChannels =
+            cfg->get<QString>(ConfigKeys::PlayerAudioChannels, QString()).trimmed();
+        if (!audioChannels.isEmpty()) {
+            m_controller->setProperty(QStringLiteral("audio-channels"), audioChannels);
+        }
+
+        if (cfg->has(ConfigKeys::PlayerAudioNormalizeDownmix)) {
+            m_controller->setProperty(
+                QStringLiteral("audio-normalize-downmix"),
+                cfg->get<bool>(ConfigKeys::PlayerAudioNormalizeDownmix, true)
+                    ? QStringLiteral("yes") : QStringLiteral("no"));
+        }
+        if (cfg->has(ConfigKeys::PlayerAudioExclusive)) {
+            m_controller->setProperty(
+                QStringLiteral("audio-exclusive"),
+                cfg->get<bool>(ConfigKeys::PlayerAudioExclusive, false)
+                    ? QStringLiteral("yes") : QStringLiteral("no"));
+        }
+        if (cfg->has(ConfigKeys::PlayerAudioStreamSilence)) {
+            m_controller->setProperty(
+                QStringLiteral("audio-stream-silence"),
+                cfg->get<bool>(ConfigKeys::PlayerAudioStreamSilence, false)
+                    ? QStringLiteral("yes") : QStringLiteral("no"));
+        }
+        if (cfg->has(ConfigKeys::PlayerStreamBufferSize)) {
+            m_controller->setProperty(
+                QStringLiteral("stream-buffer-size"),
+                QString::number(cfg->get<int>(ConfigKeys::PlayerStreamBufferSize, 128))
+                    + QStringLiteral("KiB"));
+        }
+        if (cfg->has(ConfigKeys::PlayerDemuxerMaxBytes)) {
+            m_controller->setProperty(
+                QStringLiteral("demuxer-max-bytes"),
+                QString::number(cfg->get<int>(ConfigKeys::PlayerDemuxerMaxBytes, 1536))
+                    + QStringLiteral("MiB"));
+        }
+        if (cfg->has(ConfigKeys::PlayerDemuxerMaxBackBytes)) {
+            m_controller->setProperty(
+                QStringLiteral("demuxer-max-back-bytes"),
+                QString::number(cfg->get<int>(ConfigKeys::PlayerDemuxerMaxBackBytes, 0))
+                    + QStringLiteral("MiB"));
+        }
+        if (cfg->has(ConfigKeys::PlayerDemuxerReadaheadSecs)) {
+            m_controller->setProperty(
+                QStringLiteral("demuxer-readahead-secs"),
+                cfg->get<int>(ConfigKeys::PlayerDemuxerReadaheadSecs, 1));
+        }
+        if (cfg->has(ConfigKeys::PlayerCurlBackend)) {
+            m_controller->setProperty(
+                QStringLiteral("network-mode"),
+                cfg->get<bool>(ConfigKeys::PlayerCurlBackend, false)
+                    ? QStringLiteral("prefer-libcurl")
+                    : QStringLiteral("prefer-ffmpeg"));
+        }
+        if (cfg->has(ConfigKeys::PlayerTcpKeepAlive)) {
+            m_controller->setProperty(
+                QStringLiteral("network-tcp-keepalive"),
+                cfg->get<bool>(ConfigKeys::PlayerTcpKeepAlive, false)
+                    ? QStringLiteral("yes") : QStringLiteral("no"));
+        }
     }
 
     const QString mpvProxyValue =

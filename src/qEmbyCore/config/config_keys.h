@@ -140,6 +140,18 @@ constexpr const char* PlayerPrefetchThreshold = "player/prefetch_threshold";
 // before each new file loads to avoid stale data leaking across media.
 constexpr const char* PlayerDiskCache = "player/disk_cache";
 constexpr const char* PlayerDiskCacheDir = "player/disk_cache_dir";
+// Advanced mpv tuning (Settings -> Player). All values are read per file by
+// MpvWidget; empty values fall back to mpv defaults.
+constexpr const char* PlayerAudioChannels = "player/audio_channels";              // QString: auto|stereo|mono
+constexpr const char* PlayerAudioNormalizeDownmix = "player/audio_normalize_downmix"; // bool, default true
+constexpr const char* PlayerAudioExclusive = "player/audio_exclusive";            // bool
+constexpr const char* PlayerAudioStreamSilence = "player/audio_stream_silence";   // bool
+constexpr const char* PlayerStreamBufferSize = "player/stream_buffer_size";       // int KiB, default 128
+constexpr const char* PlayerDemuxerMaxBytes = "player/demuxer_max_bytes";         // int MiB, default 1536
+constexpr const char* PlayerDemuxerMaxBackBytes = "player/demuxer_max_back_bytes";// int MiB, default 0
+constexpr const char* PlayerDemuxerReadaheadSecs = "player/demuxer_readahead_secs";// int s, default 1
+constexpr const char* PlayerCurlBackend = "player/curl_backend";                  // bool (prefer libcurl)
+constexpr const char* PlayerTcpKeepAlive = "player/tcp_keepalive";                // bool
 constexpr const char* PlayerSeekStep = "player/seek_step";
 constexpr const char* PlayerLongPressSeek = "player/long_press_seek";
 constexpr const char* PlayerLongPressMode = "player/long_press_mode";

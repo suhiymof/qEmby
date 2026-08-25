@@ -61,6 +61,11 @@ public:
     QString filePath() const;
     QStringList allKeys() const;
 
+    // True when the key exists in cache or persistent storage (including
+    // legacy keys). Lets callers distinguish "explicitly set" from "missing
+    // -> use caller default" without a special sentinel value.
+    bool has(const QString& key) const;
+
 signals:
     
     void valueChanged(const QString& key, const QVariant& newValue);

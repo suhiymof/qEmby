@@ -167,6 +167,23 @@ void ConfigStore::set(const QString& key, const QVariant& value) {
     emit valueChanged(key, value);
 }
 
+bool ConfigStore::has(const QString& key) const {
+    QMutexLocker locker(&m_mutex);
+    const QString storageKey = canonicalStorageKey(key);
+    if (m_cache.contains(key) || m_cache.contains(storageKey)) {
+        return true;
+    }
+    if (m_settings->contains(storageKey)) {
+        return true;
+    }
+    for (const QString& legacyKey : legacyStorageKeys(key)) {
+        if (m_settings->contains(legacyKey)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void ConfigStore::sync() {
     QMutexLocker locker(&m_mutex);
     m_settings->sync();

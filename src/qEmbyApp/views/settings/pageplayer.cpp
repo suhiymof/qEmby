@@ -39,6 +39,7 @@
 #include <QSignalBlocker>
 #include <QSet>
 #include <QSettings>
+#include <QSpinBox>
 #include <QStringList>
 #include <QStandardPaths>
 #include <QTextStream>
@@ -211,6 +212,99 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
            "temporary directory"),
         cacheDirInput, QString(), this));
   }
+
+  // ---- Advanced mpv tuning ------------------------------------------
+  // Mirrors the advanced options found in desktop players. Values are read
+  // per-file by MpvWidget (mpvwidget.cpp loadMediaNow); empty/absent values
+  // leave mpv defaults untouched.
+
+  // Audio channel layout.
+  {
+    auto *audioChannels = new QComboBox(this);
+    audioChannels->addItem(tr("Auto"), QStringLiteral("auto"));
+    audioChannels->addItem(tr("Stereo"), QStringLiteral("stereo"));
+    audioChannels->addItem(tr("Mono"), QStringLiteral("mono"));
+    const QString cur = ConfigStore::instance()->get<QString>(
+        ConfigKeys::PlayerAudioChannels, QString());
+    const int idx = audioChannels->findData(cur);
+    audioChannels->setCurrentIndex(idx >= 0 ? idx : 0);
+    connect(audioChannels, &QComboBox::currentIndexChanged, this,
+            [audioChannels](int) {
+              const QString v = audioChannels->currentData().toString();
+              ConfigStore::instance()->set(
+                  ConfigKeys::PlayerAudioChannels,
+                  v == QStringLiteral("auto") ? QString() : v);
+            });
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/hw-decode.svg", tr("Audio Channel Layout"),
+        tr("Force the output channel layout. Auto lets mpv pick"),
+        audioChannels, QString(), this));
+  }
+
+  auto addAdvancedBool = [this](const QString &title, const QString &desc,
+                                const QString &configKey, bool defaultValue,
+                                const QString &mpvProperty) {
+    Q_UNUSED(mpvProperty); // property application lives in MpvWidget
+    auto *sw = new ModernSwitch(this);
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/hw-decode.svg", title, desc, sw, configKey, this,
+        QVariant(defaultValue)));
+  };
+
+  addAdvancedBool(tr("Audio Normalize Downmix"),
+                  tr("Normalize audio volume when downmixing channels"),
+                  ConfigKeys::PlayerAudioNormalizeDownmix, true,
+                  QStringLiteral("audio-normalize-downmix"));
+  addAdvancedBool(tr("Audio Exclusive Mode"),
+                  tr("Use exclusive audio output when supported by the device"),
+                  ConfigKeys::PlayerAudioExclusive, false,
+                  QStringLiteral("audio-exclusive"));
+  addAdvancedBool(tr("Keep Audio Stream on Pause"),
+                  tr("Keep the audio stream alive while paused to prevent "
+                     "device sleep"),
+                  ConfigKeys::PlayerAudioStreamSilence, false,
+                  QStringLiteral("audio-stream-silence"));
+  addAdvancedBool(tr("curl Network Backend"),
+                  tr("Prefer libcurl over ffmpeg for network streams"),
+                  ConfigKeys::PlayerCurlBackend, false,
+                  QStringLiteral("network-mode"));
+  addAdvancedBool(tr("TCP Keep-Alive"),
+                  tr("Send TCP keep-alive probes on network streams"),
+                  ConfigKeys::PlayerTcpKeepAlive, false,
+                  QStringLiteral("network-tcp-keepalive"));
+
+  auto addAdvancedSpin = [this](const QString &title, const QString &desc,
+                                const QString &configKey, int minimum,
+                                int maximum, int defaultValue,
+                                const QString &suffix) {
+    auto *spin = new QSpinBox(this);
+    spin->setRange(minimum, maximum);
+    spin->setSuffix(suffix);
+    const int cur = ConfigStore::instance()->get<int>(configKey, defaultValue);
+    spin->setValue(cur);
+    connect(spin, &QSpinBox::valueChanged, this, [configKey](int v) {
+      ConfigStore::instance()->set(configKey, v);
+    });
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/hw-decode.svg", title, desc, spin, QString(), this));
+  };
+
+  addAdvancedSpin(tr("Stream Buffer I/O Size"),
+                  tr("Size of the network stream I/O buffer"),
+                  ConfigKeys::PlayerStreamBufferSize, 16, 4096, 128,
+                  QStringLiteral(" KiB"));
+  addAdvancedSpin(tr("Max Buffer Size"),
+                  tr("Maximum demuxer read-ahead buffer"),
+                  ConfigKeys::PlayerDemuxerMaxBytes, 128, 16384, 1536,
+                  QStringLiteral(" MiB"));
+  addAdvancedSpin(tr("Max Backward Buffer"),
+                  tr("Maximum backward demuxer buffer for seeking back"),
+                  ConfigKeys::PlayerDemuxerMaxBackBytes, 0, 8192, 0,
+                  QStringLiteral(" MiB"));
+  addAdvancedSpin(tr("Buffer Read-Ahead Seconds"),
+                  tr("How much media is read ahead in seconds"),
+                  ConfigKeys::PlayerDemuxerReadaheadSecs, 1, 600, 1,
+                  QStringLiteral(" s"));
 
   
   auto *longPressSwitch = new ModernSwitch(this);
