@@ -136,8 +136,14 @@ public:
     QCoro::Task<QList<MediaItem>> searchMedia(const QString& searchTerm, const QString& includeItemTypes = "Movie,Series,BoxSet,Person", const QString& sortBy = "", const QString& sortOrder = "Ascending", int limit = 50);
 
     QCoro::Task<MediaItem> getItemDetail(const QString& itemId);
-    
+
     QCoro::Task<PlaybackInfo> getPlaybackInfo(const QString& itemId);
+
+    // Player capability declaration sent with PlaybackInfo. Official clients
+    // always include one; servers (and emby2Alist-style proxies that rewrite
+    // the PlaybackInfo response) use it to decide direct-play vs transcode
+    // and to emit a usable DirectStreamUrl.
+    static QJsonObject buildDeviceProfile();
 
     
     

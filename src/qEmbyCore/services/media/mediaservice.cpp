@@ -2235,6 +2235,70 @@ QCoro::Task<QList<MediaItem>> MediaService::getCollectionItems(const QString &co
     co_return parseJsonArray<MediaItem>(response["Items"].toArray());
 }
 
+QJsonObject MediaService::buildDeviceProfile()
+{
+    // libmpv/ffmpeg decodes virtually everything; declare a broad capability
+    // so servers prefer direct play and expose DirectStreamUrl. A missing or
+    // empty DeviceProfile makes some servers omit DirectStreamUrl entirely,
+    // which leaves clients with the /stream endpoint that reverse proxies
+    // (emby2Alist deployments) commonly disable or redirect elsewhere.
+    QJsonObject dp;
+    dp["MaxStreamingBitrate"] = 100000000;
+    dp["MaxStaticBitrate"] = 100000000;
+    dp["MusicStreamingTranscodingBitrate"] = 320000;
+
+    QJsonArray directPlay;
+    {
+        QJsonObject video;
+        video["Container"] = QStringLiteral(
+            "mkv,mp4,m4v,ts,m2ts,avi,mov,flv,webm,wmv,mpg,mpeg,iso");
+        video["Type"] = QStringLiteral("Video");
+        directPlay.append(video);
+
+        QJsonObject audio;
+        audio["Container"] = QStringLiteral(
+            "mp3,flac,m4a,aac,ogg,opus,wav,wma");
+        audio["Type"] = QStringLiteral("Audio");
+        directPlay.append(audio);
+    }
+    dp["DirectPlayProfiles"] = directPlay;
+
+    QJsonArray transcodes;
+    {
+        QJsonObject videoTs;
+        videoTs["Container"] = QStringLiteral("ts");
+        videoTs["Type"] = QStringLiteral("Video");
+        videoTs["VideoCodec"] = QStringLiteral("h264");
+        videoTs["AudioCodec"] = QStringLiteral("aac");
+        videoTs["Protocol"] = QStringLiteral("hls");
+        transcodes.append(videoTs);
+
+        QJsonObject audioTs;
+        audioTs["Container"] = QStringLiteral("mp3");
+        audioTs["Type"] = QStringLiteral("Audio");
+        audioTs["AudioCodec"] = QStringLiteral("mp3");
+        transcodes.append(audioTs);
+    }
+    dp["TranscodingProfiles"] = transcodes;
+
+    dp["ContainerProfiles"] = QJsonArray();
+    dp["CodecProfiles"] = QJsonArray();
+    dp["ResponseProfiles"] = QJsonArray();
+
+    QJsonArray subs;
+    const QStringList subFormats = {"ass", "ssa", "srt", "sub", "vtt", "idx"};
+    for (const QString &fmt : subFormats)
+    {
+        QJsonObject sp;
+        sp["Format"] = fmt;
+        sp["Method"] = QStringLiteral("External");
+        subs.append(sp);
+    }
+    dp["SubtitleProfiles"] = subs;
+
+    return dp;
+}
+
 QCoro::Task<PlaybackInfo> MediaService::getPlaybackInfo(const QString &itemId)
 {
     ensureValidProfile();
@@ -2243,6 +2307,9 @@ QCoro::Task<PlaybackInfo> MediaService::getPlaybackInfo(const QString &itemId)
 
     QJsonObject payload;
     payload["UserId"] = profile.userId;
+    payload["AutoOpenLiveStream"] = false;
+    payload["IsPlayback"] = true;
+    payload["DeviceProfile"] = buildDeviceProfile();
 
     QJsonObject response = co_await m_serverManager->activeClient()->post(path, payload);
     co_return PlaybackInfo::fromJson(response);
