@@ -85,7 +85,10 @@ jobs:
           path: build/bin/Release/
           if-no-files-found: error
 
+  # macOS 构建暂时禁用：macos-latest runner 曾卡 2h+ 不出结果（brew/dylibbundler
+  # 慢 + arm64 runner 排队）。恢复方法：删除下行 `if: false`。
   build-macos:
+    if: false # disabled: runner hangs for hours; Windows-only for now
     runs-on: macos-latest # arm64 runner
     steps:
       - uses: actions/checkout@v5
