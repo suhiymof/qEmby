@@ -39,15 +39,28 @@ struct ServerProfile {
 
     bool isValid() const { return !accessToken.isEmpty(); }
 
+    // Built-in default client identity: a widely used third-party player.
+    // Qt's implicit default varies by network backend and libmpv announces
+    // itself as "libmpv", which some servers treat as unknown clients.
+    static QString defaultUserAgent() {
+        return QStringLiteral(
+            "RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)");
+    }
+
     // Resolution order: per-server customUserAgent -> global
-    // ConfigKeys::CustomUserAgent -> empty (keep qEmby defaults).
+    // ConfigKeys::CustomUserAgent -> built-in default.
     QString effectiveUserAgent() const {
-        if (!customUserAgent.trimmed().isEmpty()) {
-            return customUserAgent.trimmed();
+        const QString perServer = customUserAgent.trimmed();
+        if (!perServer.isEmpty()) {
+            return perServer;
         }
         const QString global = ConfigStore::instance()
                 ->get<QString>(ConfigKeys::CustomUserAgent, QString());
-        return global.trimmed();
+        const QString trimmed = global.trimmed();
+        if (!trimmed.isEmpty()) {
+            return trimmed;
+        }
+        return defaultUserAgent();
     }
 };
 #endif

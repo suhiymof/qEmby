@@ -39,12 +39,12 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
              << "| ignoreSslVerification:" << ignoreSslVerification;
 
     // Strict-UA servers reject the very first request, so the public info
-    // probe must already carry the custom UA.
+    // probe must already carry the resolved UA (explicit or built-in default).
+    const QString explicitUa = userAgent.trimmed();
+    const QString effectiveUa =
+        explicitUa.isEmpty() ? ServerProfile::defaultUserAgent() : explicitUa;
     QMap<QString, QString> infoHeaders;
-    const QString effectiveUa = userAgent.trimmed();
-    if (!effectiveUa.isEmpty()) {
-        infoHeaders.insert("User-Agent", effectiveUa);
-    }
+    infoHeaders.insert("User-Agent", effectiveUa);
 
     QJsonObject infoResp = co_await m_networkManager->get(
         cleanUrl + "/System/Info/Public", infoHeaders,
@@ -55,7 +55,9 @@ QCoro::Task<ServerProfile> AuthService::login(const QString& serverUrl,
     tempProfile.url = cleanUrl;
     tempProfile.deviceId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     tempProfile.ignoreSslVerification = ignoreSslVerification;
-    tempProfile.customUserAgent = effectiveUa;
+    // Persist only the explicitly configured override; the built-in default
+    // is applied at request time so future default changes propagate.
+    tempProfile.customUserAgent = explicitUa;
 
     
     QString productName = infoResp["ProductName"].toString();
@@ -176,12 +178,12 @@ QCoro::Task<QString> AuthService::testConnection(const QString& serverUrl,
 
     try {
         // Step 1: 不需要鉴权的服务端公开信息, 验证 URL/SSL/端口可达.
-        // 严格 UA 白名单的服务器连首个探测请求都会拦, 所以这里就要带自定义 UA.
+        // 严格 UA 白名单的服务器连首个探测请求都会拦, 所以这里就带解析后的 UA.
+        const QString explicitUa = userAgent.trimmed();
+        const QString effectiveUa =
+            explicitUa.isEmpty() ? ServerProfile::defaultUserAgent() : explicitUa;
         QMap<QString, QString> infoHeaders;
-        const QString effectiveUa = userAgent.trimmed();
-        if (!effectiveUa.isEmpty()) {
-            infoHeaders.insert("User-Agent", effectiveUa);
-        }
+        infoHeaders.insert("User-Agent", effectiveUa);
         const QJsonObject infoResp = co_await m_networkManager->get(
             cleanUrl + QStringLiteral("/System/Info/Public"),
             infoHeaders, requestOptions);
@@ -205,7 +207,8 @@ QCoro::Task<QString> AuthService::testConnection(const QString& serverUrl,
             tempProfile.ignoreSslVerification = ignoreSslVerification;
             tempProfile.deviceId =
                 QUuid::createUuid().toString(QUuid::WithoutBraces);
-            tempProfile.customUserAgent = effectiveUa;
+            // Persist only the explicit override; default applies at runtime.
+            tempProfile.customUserAgent = explicitUa;
 
             ApiClient tempClient(tempProfile, m_networkManager);
             QJsonObject payload;
