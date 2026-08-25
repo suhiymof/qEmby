@@ -25,6 +25,7 @@
 #include <QFrame>
 #include <QFutureWatcher>
 #include <QHBoxLayout>
+#include <QSlider>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -152,6 +153,37 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
          "requirement; may pause briefly on slow connections"),
       new ModernSwitch(this), ConfigKeys::PlayerFastStart, this,
       QVariant(false)));
+
+  // Next-episode prefetch: slider 0-100 (0 = disabled). Value is read into
+  // PlayerView at playback start, so a new value applies to the next media.
+  {
+    auto *prefetchWidget = new QWidget(this);
+    auto *row = new QHBoxLayout(prefetchWidget);
+    row->setContentsMargins(0, 0, 0, 0);
+    auto *prefetchSlider = new QSlider(Qt::Horizontal, prefetchWidget);
+    prefetchSlider->setRange(0, 100);
+    prefetchSlider->setMinimumWidth(200);
+    auto *prefetchValue = new QLabel(prefetchWidget);
+    prefetchValue->setMinimumWidth(36);
+    row->addWidget(prefetchSlider, 1);
+    row->addWidget(prefetchValue);
+
+    const int initial =
+        ConfigStore::instance()->get<int>(ConfigKeys::PlayerPrefetchThreshold, 90);
+    prefetchSlider->setValue(initial);
+    prefetchValue->setText(QString::number(initial));
+    connect(prefetchSlider, &QSlider::valueChanged, this, [prefetchValue](int v) {
+      prefetchValue->setText(QString::number(v));
+      ConfigStore::instance()->set(ConfigKeys::PlayerPrefetchThreshold, v);
+    });
+
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/player-continuous-play.svg", tr("Prefetch Next Episode"),
+        tr("Negotiate the next episode's playback source once playback "
+           "progress passes this percentage, so auto-advance starts "
+           "instantly (0 = disabled)"),
+        prefetchWidget, QString(), this));
+  }
 
   
   auto *longPressSwitch = new ModernSwitch(this);

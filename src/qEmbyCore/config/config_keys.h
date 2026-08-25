@@ -132,6 +132,9 @@ constexpr const char* PlayerSelectedSubtitleStream = "player/selected_subtitle_s
 constexpr const char* PlayerVolNormal = "player/vol_normalization";
 constexpr const char* PlayerContinuousPlay = "player/continuous_play";
 constexpr const char* PlayerFastStart = "player/fast_start";
+// Next-episode playback-source prefetch trigger: 0 = disabled, otherwise
+// prefetch starts once playback progress reaches this percentage.
+constexpr const char* PlayerPrefetchThreshold = "player/prefetch_threshold";
 constexpr const char* PlayerSeekStep = "player/seek_step";
 constexpr const char* PlayerLongPressSeek = "player/long_press_seek";
 constexpr const char* PlayerLongPressMode = "player/long_press_mode";

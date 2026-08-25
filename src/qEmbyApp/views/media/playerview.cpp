@@ -5119,12 +5119,13 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
         detectSeriesMode(QPointer<PlayerView>(this), m_core, mediaId);
 
         ensureMediaSwitcherDataLoaded();
-
-        // Background-negotiate the next episode's playback source so the
-        // auto-advance (continuous play) starts without another
-        // PlaybackInfo round trip.
-        QCoro::connect(prefetchNextEpisodeSource(), this, []() {});
     }
+
+    // Next-episode source prefetch is now driven by playback progress (see
+    // onPositionChanged); arm the one-shot trigger for this media.
+    m_prefetchTriggered = false;
+    m_prefetchThreshold =
+        ConfigStore::instance()->get<int>(ConfigKeys::PlayerPrefetchThreshold, 90);
 
     
     
@@ -5492,6 +5493,20 @@ void PlayerView::onPositionChanged(double position)
         position = 0.0;
     }
     m_currentPosition = position;
+
+    // Next-episode playback-source prefetch: one-shot trigger once progress
+    // passes the configured percentage (0 = disabled). The prefetch coroutine
+    // itself guards against re-fetching and against non-series media.
+    if (m_prefetchThreshold > 0 && !m_prefetchTriggered
+        && m_totalDuration > 0.0
+        && position >= m_totalDuration * m_prefetchThreshold / 100.0)
+    {
+        m_prefetchTriggered = true;
+        qDebug().noquote() << "[PlayerView] progress threshold reached, prefetching next episode"
+                           << "| position:" << position
+                           << "| threshold:" << m_prefetchThreshold << "%";
+        QCoro::connect(prefetchNextEpisodeSource(), this, []() {});
+    }
 
     checkAndSkipSegment(position);
 

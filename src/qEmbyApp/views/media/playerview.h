@@ -349,6 +349,10 @@ private:
     // beyond a few entries.
     QHash<QString, MediaSourceInfo> m_prefetchedSources;
 
+    // Guards the progress-threshold prefetch trigger (one shot per media).
+    bool m_prefetchTriggered = false;
+    int m_prefetchThreshold = 90;
+
     QString m_fullTitle;
     
     QRect m_originalGeometry;
