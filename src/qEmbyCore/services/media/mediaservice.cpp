@@ -2457,7 +2457,20 @@ QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo 
         if (sourceInfo.path.startsWith("http://", Qt::CaseInsensitive) ||
             sourceInfo.path.startsWith("https://", Qt::CaseInsensitive))
         {
-            return sourceInfo.path;
+            // Skip path-based direct play when the path points at a loopback
+            // address this client cannot reach: alist-backed servers expose
+            // media paths like http://127.0.0.1:5244/d/... which only work
+            // for clients co-located with the alist instance. Fall through
+            // to the negotiated DirectStreamUrl below instead.
+            const QUrl pathUrl(sourceInfo.path);
+            const QString pathHost = pathUrl.host().toLower();
+            const bool pathIsLoopback = pathHost == QStringLiteral("127.0.0.1")
+                                        || pathHost == QStringLiteral("localhost")
+                                        || pathHost == QStringLiteral("::1");
+            if (!pathIsLoopback)
+            {
+                return sourceInfo.path;
+            }
         }
     }
 
