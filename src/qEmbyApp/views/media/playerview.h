@@ -44,7 +44,7 @@ public:
     void prepareForStackLeave() override;
 
     
-    void playMedia(const QString &mediaId, const QString &title, const QString &streamUrl, long long startPositionTicks = 0, const QVariant& sourceInfoVar = QVariant());
+    void playMedia(const QString &mediaId, const QString &title, const QString &streamUrl, long long startPositionTicks = 0, const QVariant& sourceInfoVar = QVariant(), bool allowSourceFetch = true);
 
     
     bool isMediaPlaying() const;
@@ -138,7 +138,11 @@ private:
     QCoro::Task<void> switchFromMediaSwitcher(QString mediaId,
                                               QString title,
                                               long long startPositionTicks);
-    
+    QCoro::Task<void> ensureMediaSourcesThenPlay(QString mediaId,
+                                                 QString title,
+                                                 QString streamUrl,
+                                                 long long startPositionTicks);
+
     void hideRightSidebar(bool immediate = false);
     void setEffectivePlaybackSpeed(double speed);
     void handlePointerActivity(const QPoint &globalPos);

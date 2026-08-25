@@ -4737,8 +4737,46 @@ QCoro::Task<void> PlayerView::resolveDanmakuPlaybackContext(
     }
 }
 
+QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
+                                                         QString title,
+                                                         QString streamUrl,
+                                                         long long startPositionTicks)
+{
+    QPointer<PlayerView> safeThis(this);
+    QPointer<MediaService> mediaService(m_core ? m_core->mediaService() : nullptr);
+    if (!mediaService)
+    {
+        if (safeThis)
+            safeThis->playMedia(mediaId, title, streamUrl, startPositionTicks, QVariant(), false);
+        co_return;
+    }
+
+    QVariant sourceVar;
+    try
+    {
+        MediaItem detail = co_await mediaService->getItemDetail(mediaId);
+        if (!safeThis || !mediaService)
+            co_return;
+        if (!detail.mediaSources.isEmpty())
+        {
+            sourceVar = QVariant::fromValue(detail.mediaSources.first());
+        }
+    }
+    catch (const std::exception &e)
+    {
+        qWarning() << "[PlayerView] item detail fetch for playback source fallback failed:"
+                   << e.what();
+    }
+
+    if (safeThis)
+    {
+        safeThis->playMedia(mediaId, title, streamUrl, startPositionTicks, sourceVar, false);
+    }
+}
+
 void PlayerView::playMedia(const QString &mediaId, const QString &title, const QString &streamUrl,
-                           long long startPositionTicks, const QVariant &sourceInfoVar)
+                           long long startPositionTicks, const QVariant &sourceInfoVar,
+                           bool allowSourceFetch)
 {
     PlayerLaunchContext launchContext;
     MediaSourceInfo resolvedSourceInfo;
@@ -4752,6 +4790,19 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     else if (sourceInfoVar.isValid() && sourceInfoVar.canConvert<MediaSourceInfo>())
     {
         resolvedSourceInfo = sourceInfoVar.value<MediaSourceInfo>();
+    }
+
+    // SourceInfo missing (e.g. PlaybackInfo still probing a remote strm item):
+    // fetch MediaSources via the lightweight item-detail API (pure DB query that
+    // returns immediately even while the server is still probing the remote
+    // media), then restart playback with a usable source so STRM direct play
+    // (which requires sourceInfo.path) can apply instead of silently falling
+    // back to server relay.
+    if (allowSourceFetch && resolvedSourceInfo.id.isEmpty() && !mediaId.isEmpty() && m_core)
+    {
+        QCoro::connect(ensureMediaSourcesThenPlay(mediaId, title, streamUrl, startPositionTicks),
+                       this, []() {});
+        return;
     }
 
     connect(m_mpvWidget, &MpvWidget::positionChanged, this, &PlayerView::onPositionChanged, Qt::UniqueConnection);
