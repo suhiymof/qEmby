@@ -163,7 +163,10 @@ PlayerView *HomeView::activePlayerView() const
 void HomeView::setupUi()
 {
     this->setProperty("showGlobalSearch", true);
-    this->setProperty("viewTitle", qApp->applicationName());
+    // Drop the global app-name title — the sidebar carries the active server
+    // name instead (see setupSidebar); only secondary views (login, etc.)
+    // set their own viewTitle from elsewhere.
+    this->setProperty("viewTitle", QString());
     this->setProperty("showGlobalBack", true);
     this->setProperty("showGlobalHome", true);
     this->setProperty("showGlobalFav", true);
@@ -648,46 +651,9 @@ void HomeView::setupSidebar()
     layout->setSpacing(6);
 
     
-    auto *serverInfoWidget = new QWidget(m_sidebar);
-    m_serverInfoWidget = serverInfoWidget;
-    serverInfoWidget->setObjectName(QStringLiteral("sidebar-server-info"));
-    serverInfoWidget->setCursor(Qt::PointingHandCursor);
-    serverInfoWidget->installEventFilter(this);
-    m_serverInfoLayout = new QBoxLayout(QBoxLayout::LeftToRight, serverInfoWidget);
-    m_serverInfoLayout->setContentsMargins(8, 0, 8, 10);
-    m_serverInfoLayout->setSpacing(10);
-
-    m_serverIconLabel = new QLabel(serverInfoWidget);
-    m_serverIconLabel->setFixedSize(32, 32);
-    m_serverIconLabel->setScaledContents(true);
-
-    m_serverNameLayout = new QVBoxLayout();
-    m_serverNameLayout->setContentsMargins(0, 0, 0, 0);
-    m_serverNameLayout->setSpacing(0);
-    m_serverNameLayout->setAlignment(Qt::AlignVCenter);
-
-    m_serverNameLabel = new ElidedLabel(serverInfoWidget);
-    m_serverNameLabel->setObjectName("sidebar-server-name");
-
-    m_serverAddressLabel = new ElidedLabel(serverInfoWidget);
-    m_serverAddressLabel->setObjectName("sidebar-server-address");
-
-    m_serverNameLayout->addWidget(m_serverNameLabel);
-    m_serverNameLayout->addWidget(m_serverAddressLabel);
-
-    m_serverInfoLayout->addWidget(m_serverIconLabel, 0, Qt::AlignVCenter);
-    m_serverInfoLayout->addLayout(m_serverNameLayout);
-    layout->addWidget(serverInfoWidget);
-
-    // Sidebar server-info click: child labels eat the mouse event before it
-    // reaches the parent widget's eventFilter, so install the filter on every
-    // descendant (and the parent itself) and resolve via isAncestorOf in
-    // eventFilter.
-    for (QWidget *child : serverInfoWidget->findChildren<QWidget *>())
-    {
-        child->installEventFilter(this);
-    }
-
+    // Sidebar server-info card removed — the active-server switcher moved to
+    // the user row below (m_userNameLabel acts as a dropdown trigger; see
+    // eventFilter and showServerSwitcher).
     
     m_navArea = new QWidget(m_sidebar);
     auto *navLayout = new QVBoxLayout(m_navArea);
@@ -775,8 +741,20 @@ void HomeView::setupSidebar()
     m_userAvatarLabel->setFixedSize(20, 20);
     m_userAvatarLabel->setScaledContents(true);
 
+    // m_userNameLabel doubles as the server-switcher trigger — clicking it
+    // pops the account/server dropdown that used to live in the removed
+    // server-info card. EventFilter handles the click because QLabel
+    // silently accepts MouseButtonPress; descendants are covered too in
+    // case the ElidedLabel re-parents a host widget that swallows the event.
     m_userNameLabel = new ElidedLabel(userInfoWidget);
     m_userNameLabel->setObjectName("sidebar-user-name");
+    m_userNameLabel->setCursor(Qt::PointingHandCursor);
+    m_userNameLabel->installEventFilter(this);
+    for (QWidget *child : m_userNameLabel->findChildren<QWidget *>()) {
+        child->installEventFilter(this);
+    }
+    m_userAvatarLabel->installEventFilter(this);
+    m_userAvatarLabel->setCursor(Qt::PointingHandCursor);
 
     m_btnCloudSync = new QPushButton(userInfoWidget);
     m_btnCloudSync->setObjectName("sidebar-icon-btn");
@@ -1049,6 +1027,16 @@ void HomeView::setupSearchHistory()
                     Q_UNUSED(profile);
                     updateSearchCompleter(m_searchBox ? m_searchBox->text()
                                                       : QString());
+                });
+
+        // Forward the unreachable signal to whichever view is currently shown.
+        // DashboardView owns a clearable empty state; other views ignore it.
+        connect(this, &HomeView::serverUnreachable, this,
+                [this](const QString &, const QString &) {
+                    if (m_dashboardView && m_contentSwitcher
+                        && m_contentSwitcher->currentWidget() == m_dashboardView) {
+                        m_dashboardView->showServerUnreachableState();
+                    }
                 });
     }
 
@@ -1379,27 +1367,10 @@ QCoro::Task<void> HomeView::refreshProfile()
                currentProfile.userId == activeProfile.userId;
     };
 
-    if (activeProfile.type == ServerProfile::Jellyfin)
-    {
-        m_serverIconLabel->setPixmap(QPixmap(":/svg/jellyfin.svg"));
-    }
-    else
-    {
-        if (!activeProfile.iconBase64.isEmpty())
-        {
-            QPixmap pix;
-            pix.loadFromData(QByteArray::fromBase64(activeProfile.iconBase64.toUtf8()));
-            m_serverIconLabel->setPixmap(pix);
-        }
-        else
-        {
-            m_serverIconLabel->setPixmap(QPixmap(":/svg/emby.svg"));
-        }
-    }
-
-    QString displayName = activeProfile.name.isEmpty() ? tr("My Server") : activeProfile.name;
-    m_serverNameLabel->setFullText(displayName);
-    m_serverAddressLabel->setFullText(activeProfile.url);
+    // Server-info card was removed; icon/name/address surfaces live inside the
+    // server-switcher popup avatar now, so this function has nothing to push
+    // to the sidebar. Keep the call site intact for now (callers still fire
+    // it on every active-profile change).
 
     applySidebarIcons();
 
@@ -1630,9 +1601,15 @@ void HomeView::resizeEvent(QResizeEvent *event)
 bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
     
-    if (m_serverInfoWidget && event->type() == QEvent::MouseButtonPress &&
-        (watched == m_serverInfoWidget ||
-         (watched->isWidgetType() && m_serverInfoWidget->isAncestorOf(static_cast<QWidget *>(watched)))))
+    // User row (m_userNameLabel inside userInfoWidget) is the dropdown trigger
+    // for the server switcher after the dedicated server-info card was
+    // removed. m_userNameLabel is a plain QLabel, so it silently accepts the
+    // press (never reaching a QObject::mousePressEvent override); the filter
+    // catches the event here. Descendants are also covered because ElidedLabel
+    // host widgets in this row can absorb the press too.
+    if (m_userNameLabel && event->type() == QEvent::MouseButtonPress &&
+        (watched == m_userNameLabel ||
+         (watched->isWidgetType() && m_userNameLabel->isAncestorOf(static_cast<QWidget *>(watched)))))
     {
         auto *mouse = static_cast<QMouseEvent *>(event);
         if (mouse->button() == Qt::LeftButton)
@@ -1875,50 +1852,11 @@ void HomeView::applySidebarMetrics(bool pinned)
         m_sidebarFooterActionsLayout->setSpacing(pinned ? 4 : 6);
     }
 
-    if (m_serverInfoLayout)
-    {
-        m_serverInfoLayout->setDirection(pinned ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
-        m_serverInfoLayout->setContentsMargins(pinned ? QMargins(4, 0, horizontalInset + 4, 10)
-                                                       : QMargins(8, 0, horizontalInset + 8, 10));
-        m_serverInfoLayout->setSpacing(pinned ? 8 : 10);
-        m_serverInfoLayout->setAlignment(m_serverIconLabel, pinned ? Qt::AlignHCenter : Qt::AlignVCenter);
-        if (m_serverNameLayout)
-        {
-            m_serverInfoLayout->setAlignment(m_serverNameLayout, pinned ? Qt::AlignHCenter : Qt::AlignVCenter);
-        }
-    }
+    // Server-info card removed — its layout, icon, name and address labels no
+    // longer exist, so the pinned-vs-floating tweak block has nothing to
+    // adjust. Leave this scope empty for future reskin hooks.
 
-    if (m_serverNameLayout)
-    {
-        m_serverNameLayout->setAlignment(pinned ? Qt::AlignHCenter : Qt::AlignVCenter);
-    }
-
-    if (m_serverNameLabel)
-    {
-        m_serverNameLabel->setAlignment(pinned ? Qt::AlignHCenter : Qt::AlignLeft);
-        const QString serverName = m_serverNameLabel->fullText();
-        const QString serverAddress = m_serverAddressLabel ? m_serverAddressLabel->fullText() : QString();
-
-        if (pinned && !serverAddress.isEmpty())
-        {
-            m_serverNameLabel->setToolTip(serverName.isEmpty() ? serverAddress : serverName + "\n" + serverAddress);
-        }
-        else
-        {
-            m_serverNameLabel->setToolTip(serverName);
-        }
-    }
-
-    if (m_serverAddressLabel)
-    {
-        m_serverAddressLabel->setAlignment(pinned ? Qt::AlignHCenter : Qt::AlignLeft);
-        m_serverAddressLabel->setVisible(!pinned);
-        if (!pinned)
-        {
-            m_serverAddressLabel->setToolTip(m_serverAddressLabel->fullText());
-        }
-    }
-
+    
     if (m_userInfoLayout)
     {
         m_userInfoLayout->setContentsMargins(pinned ? QMargins(4, 0, horizontalInset + 4, 8)
@@ -2225,7 +2163,9 @@ void HomeView::showServerSwitcher()
     if (!m_core || !m_core->serverManager()) {
         return;
     }
-    if (m_serverInfoWidget == nullptr) {
+    // Anchor the popup to the user row (suhiy label) — that is the new
+    // server-switcher trigger after the server-info card was removed.
+    if (m_userNameLabel == nullptr) {
         return;
     }
 
@@ -2358,8 +2298,11 @@ void HomeView::showServerSwitcher()
             child->installEventFilter(clickFilter);
         }
     }
-    list->setFixedWidth(m_serverInfoWidget->width());
+    // Width follows the sidebar (the dropdown trigger is the user row, but the
+    // popup should match the sidebar's right edge so multi-line server URLs
+    // don't overflow the sidebar surface).
     list->setMinimumWidth(220);
+    list->setMaximumWidth(m_sidebar ? m_sidebar->width() - 32 : 260);
     m_serverSwitcherViewport = list->viewport();
     list->viewport()->installEventFilter(this);
 
@@ -2368,8 +2311,9 @@ void HomeView::showServerSwitcher()
     layout->addWidget(list);
     popup->setMinimumWidth(220);
 
-    // Position below the server-info widget, aligned to its left edge.
-    const QPoint anchor = m_serverInfoWidget->mapToGlobal(QPoint(0, m_serverInfoWidget->height()));
+    // Anchor popup to the user row, aligned to its left edge (visual
+    // hierarchy: trigger = label, dropdown floats over the media list).
+    const QPoint anchor = m_userNameLabel->mapToGlobal(QPoint(0, m_userNameLabel->height()));
     popup->move(anchor);
     popup->show();
     list->setFocus();
@@ -2391,8 +2335,35 @@ QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
     }();
     if (target.id.isEmpty()) co_return;
 
-    // Pre-flight: probe the target server's public endpoint so we don't flip
-    // to a server the client can't reach.
+    // Apply the switch eagerly so the sidebar library refresh, search box
+    // placeholder and any dashboard re-bindings react immediately. The active
+    // playback window is intentionally left running — it was constructed with
+    // a snapshot of the old ApiClient and is streaming through mpv, so it
+    // keeps playing even after the underlying client is retired 30s later
+    // (see ServerManager::retireActiveClient). The user explicitly asked
+    // for this behaviour.
+    sm->setActiveServer(serverId);
+    ModernToast::showMessage(tr("Switched to %1").arg(displayName), 1500);
+
+    // Asynchronously verify reachability. If the probe later fails we tell
+    // the dashboard to render an empty/error state instead of flashing the
+    // old server's contents; the active server still flips because the
+    // user explicitly picked one and we'd rather show a recoverable error
+    // than refuse to navigate. Stale probes from earlier switches
+    // self-cancel via m_profileRefreshGeneration (no need to hold the
+    // Task here — every co_await inside verifyServerReachability can be
+    // abandoned the same way as if the user had been routed away).
+    const int generation = ++m_profileRefreshGeneration;
+    launchTask(verifyServerReachability(target, generation, displayName), this);
+}
+
+QCoro::Task<void> HomeView::verifyServerReachability(const ServerProfile &target,
+                                                      int generation,
+                                                      const QString &displayName)
+{
+    ServerManager *sm = m_core ? m_core->serverManager() : nullptr;
+    if (!sm) co_return;
+
     NetworkRequestOptions opts;
     opts.ignoreSslErrors = target.ignoreSslVerification;
     opts.timeoutMs = 10000;
@@ -2405,18 +2376,18 @@ QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
     } catch (...) {
         reachable = false;
     }
-    if (!reachable) {
-        ModernToast::showMessage(
-            tr("Failed to connect to %1 — switch cancelled").arg(displayName),
-            3500);
-        co_return;
-    }
 
-    // Stop current playback (user requirement) before swapping servers.
-    if (PlayerView *pv = activePlayerView()) {
-        pv->stopAndReport();
-    }
+    // A newer switch has been initiated; the user already moved on, drop
+    // this stale verification quietly.
+    if (generation != m_profileRefreshGeneration) co_return;
 
-    sm->setActiveServer(serverId);
-    ModernToast::showMessage(tr("Switched to %1").arg(displayName), 2000);
+    if (reachable) co_return;
+
+    // Server is unreachable: push the dashboard into an empty state so the
+    // user sees the failure on the main content, not just a transient
+    // toast. We do NOT roll back the active server — the click is treated
+    // as the user's intent and we surface the error in place.
+    ModernToast::showMessage(
+        tr("Failed to connect to %1").arg(displayName), 3500);
+    Q_EMIT serverUnreachable(target.id, displayName);
 }

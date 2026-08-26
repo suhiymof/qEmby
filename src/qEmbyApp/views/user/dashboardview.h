@@ -21,9 +21,15 @@ class DashboardView : public BaseView
     Q_OBJECT
 public:
     explicit DashboardView(QEmbyCore* core, QWidget *parent = nullptr);
-    
-    
+
+
     QCoro::Task<void> loadDashboardData();
+
+    // Surface a transient empty/error state when the active server is
+    // unreachable after a server-switch. Hides the section galleries and
+    // shows a retry CTA. Auto-clears when activeServerChanged fires with a
+    // different serverId (see onActiveServerChanged below).
+    void showServerUnreachableState();
 
 public Q_SLOTS:
     void scrollToTop() override;
@@ -81,9 +87,14 @@ private:
         MediaItem item, bool replaceAllMetadata, bool replaceAllImages,
         bool isMetadataRefresh);
 
-    QScrollArea* m_mainScrollArea = nullptr; 
+    QScrollArea* m_mainScrollArea = nullptr;
 
     SmoothScrollController* m_vScrollController = nullptr;
+
+    // Empty/error overlay shown on dashboard when an active server is
+    // unreachable. Built lazily by showServerUnreachableState().
+    QWidget* m_unreachableOverlay = nullptr;
+    QLabel* m_unreachableDetailLabel = nullptr;
 
     
     QWidget* m_resumeSection = nullptr;

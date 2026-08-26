@@ -87,6 +87,7 @@ signals:
     
     void immersiveStateChanged(bool isImmersive);
     void playerChromeVisibilityChanged(bool visible);
+    void serverUnreachable(const QString& serverId, const QString& displayName);
 
 private:
     void scheduleProfileRefresh();
@@ -128,6 +129,9 @@ private:
     
     void showServerSwitcher();
     QCoro::Task<void> trySwitchToServer(const QString& serverId, const QString& displayName);
+    QCoro::Task<void> verifyServerReachability(const ServerProfile& target,
+                                                int generation,
+                                                const QString& displayName);
     QListWidgetItem* m_serverSwitcherHoverItem = nullptr;
     QPointer<QWidget> m_serverSwitcherViewport;
 
@@ -151,14 +155,7 @@ private:
     bool m_sidebarPinned = false;
     bool m_sidebarPinnedApplied = false;
     QHBoxLayout* m_contentLayout = nullptr;
-
-    QLabel* m_serverIconLabel = nullptr;
-    QWidget* m_serverInfoWidget = nullptr;
-    QBoxLayout* m_serverInfoLayout = nullptr;
-    QVBoxLayout* m_serverNameLayout = nullptr;
     QVBoxLayout* m_sidebarFooterActionsLayout = nullptr;
-    ElidedLabel* m_serverNameLabel = nullptr;
-    ElidedLabel* m_serverAddressLabel = nullptr;
     QLineEdit* m_searchBox = nullptr;
     QAction* m_searchAction = nullptr;
     QCompleter* m_searchCompleter = nullptr;

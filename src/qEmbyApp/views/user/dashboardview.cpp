@@ -259,9 +259,15 @@ void DashboardView::setupUi()
     m_containerLayout->addWidget(m_librarySectionsContainer);
     m_containerLayout->addStretch();
 
+    // Default-hidden sections are gated by user preferences (see
+    // loadDashboardData which reads ConfigKeys::ShowResume / Latest /
+    // Recommended / Completed / Libraries / EachLibrary, all defaulting
+    // to true except Completed). m_recommendSection used to be force-hidden
+    // here unconditionally; that override has been removed so the user
+    // preference actually takes effect. Sections whose underlying fetch
+    // returns an empty list still auto-hide themselves.
     m_resumeSection->hide();
     m_latestSection->hide();
-    m_recommendSection->hide();
     m_completedSection->hide();
     m_libraryGridSection->hide();
     m_librarySectionsContainer->hide();
@@ -274,6 +280,76 @@ void DashboardView::setupUi()
     m_vScrollController->setDuration(160);
 
     m_mainScrollArea->viewport()->installEventFilter(this);
+
+    // Empty/error overlay is built lazily on first failure — most sessions
+    // never need it. See showServerUnreachableState().
+}
+
+void DashboardView::showServerUnreachableState()
+{
+    if (!m_mainScrollArea) {
+        return;
+    }
+
+    if (!m_unreachableOverlay) {
+        m_unreachableOverlay = new QWidget(this);
+        m_unreachableOverlay->setObjectName(QStringLiteral("dashboard-unreachable-overlay"));
+        auto *lay = new QVBoxLayout(m_unreachableOverlay);
+        lay->setContentsMargins(40, 40, 40, 40);
+        lay->setSpacing(14);
+        lay->setAlignment(Qt::AlignCenter);
+
+        auto *titleLabel = new QLabel(
+            tr("Can't reach this server"), m_unreachableOverlay);
+        titleLabel->setObjectName(QStringLiteral("dashboard-unreachable-title"));
+        titleLabel->setAlignment(Qt::AlignCenter);
+        titleLabel->setWordWrap(true);
+
+        auto *detailLabel = new QLabel(m_unreachableOverlay);
+        detailLabel->setObjectName(QStringLiteral("dashboard-unreachable-detail"));
+        detailLabel->setAlignment(Qt::AlignCenter);
+        detailLabel->setWordWrap(true);
+
+        auto *retryBtn = new QPushButton(tr("Retry"), m_unreachableOverlay);
+        retryBtn->setObjectName(QStringLiteral("dashboard-unreachable-retry"));
+        retryBtn->setCursor(Qt::PointingHandCursor);
+        retryBtn->setMinimumWidth(120);
+        connect(retryBtn, &QPushButton::clicked, this, [this]() {
+            if (m_unreachableOverlay) m_unreachableOverlay->hide();
+            launchTask(loadDashboardData(), this);
+        });
+
+        lay->addWidget(titleLabel);
+        lay->addWidget(detailLabel);
+        lay->addSpacing(8);
+        lay->addWidget(retryBtn, 0, Qt::AlignHCenter);
+
+        // Cover the main content area, not the whole dashboard widget — so
+        // the global header bar remains usable while the error is shown.
+        auto *rootLay = static_cast<QVBoxLayout *>(layout());
+        rootLay->addWidget(m_unreachableOverlay);
+        m_unreachableOverlay->hide();
+        m_unreachableDetailLabel = detailLabel;
+    }
+
+    const QString serverName = m_core && m_core->serverManager()
+        ? m_core->serverManager()->activeProfile().name
+        : QString();
+    const QString detailText = serverName.isEmpty()
+        ? tr("The selected server did not respond. Check the URL, credentials, or network and try again.")
+        : tr("\"%1\" did not respond. Check the URL, credentials, or network and try again.")
+              .arg(serverName);
+    m_unreachableDetailLabel->setText(detailText);
+
+    // Hide every section and surface the overlay.
+    if (m_resumeSection) m_resumeSection->hide();
+    if (m_latestSection) m_latestSection->hide();
+    if (m_recommendSection) m_recommendSection->hide();
+    if (m_completedSection) m_completedSection->hide();
+    if (m_libraryGridSection) m_libraryGridSection->hide();
+    if (m_librarySectionsContainer) m_librarySectionsContainer->hide();
+    m_unreachableOverlay->show();
+    m_unreachableOverlay->raise();
 }
 
 void DashboardView::applyDashboardSectionOrder()
@@ -799,6 +875,12 @@ QCoro::Task<void> DashboardView::loadDashboardData()
 {
     const int generation = ++m_loadGeneration;
     const QString contextKey = currentDashboardContextKey();
+
+    // A fresh load (e.g. after a server switch) supersedes any unreachable
+    // overlay that the previous server's failed probe dropped here.
+    if (m_unreachableOverlay) {
+        m_unreachableOverlay->hide();
+    }
 
     if (contextKey != m_dashboardContextKey) {
         qDebug() << "[DashboardView] Dashboard context changed before reload, "
