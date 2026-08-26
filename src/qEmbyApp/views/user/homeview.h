@@ -12,6 +12,7 @@
 
 class QTimer;
 class QEmbyCore;
+struct ServerProfile;
 class SlidingStackedWidget;
 class QLabel;
 class QPushButton;
