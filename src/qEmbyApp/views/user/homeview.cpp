@@ -2329,6 +2329,14 @@ void HomeView::showServerSwitcher()
     list->setFocus();
 }
 
+void HomeView::launchTask(QCoro::Task<void> &&task)
+{
+    // Keeps the coroutine alive (via QCoro::connect) until it finishes,
+    // including across suspension points. Dropping the temporary Task
+    // directly would cancel the coroutine at its first co_await.
+    QCoro::connect(std::move(task), this, []() {});
+}
+
 QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
                                               const QString &displayName)
 {

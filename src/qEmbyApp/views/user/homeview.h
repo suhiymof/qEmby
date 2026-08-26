@@ -128,6 +128,7 @@ private:
     
     void showServerSwitcher();
     QCoro::Task<void> trySwitchToServer(const QString& serverId, const QString& displayName);
+    void launchTask(QCoro::Task<void>&& task);
     QListWidgetItem* m_serverSwitcherHoverItem = nullptr;
     QPointer<QWidget> m_serverSwitcherViewport;
 
