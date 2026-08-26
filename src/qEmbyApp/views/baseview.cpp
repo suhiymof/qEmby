@@ -1,5 +1,5 @@
 #include "baseview.h"
-#include "../../utils/qcoroutil.h"
+#include "../utils/qcoroutil.h"
 #include <qembycore.h>
 #include <services/admin/adminservice.h>
 #include <services/media/mediaservice.h>

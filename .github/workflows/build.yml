@@ -28,24 +28,6 @@ jobs:
         with:
           submodules: recursive
 
-      # 诊断：C1083 报 qcoroutil.h 不存在但 git 树里有该文件，逐阶段
-      # 追踪文件生命周期，定位它到底在哪一步消失。
-      - name: Debug file state (after checkout)
-        shell: bash
-        run: |
-          echo "=== HEAD: $(git rev-parse HEAD) ==="
-          if [ -f src/qEmbyApp/utils/qcoroutil.h ]; then
-            echo "::notice::qcoroutil.h EXISTS after checkout"
-            ls -la src/qEmbyApp/utils/qcoroutil.h
-          else
-            echo "::error file=src/qEmbyApp/utils/qcoroutil.h::MISSING after checkout"
-            echo "--- utils/ 目录内容 ---"
-            ls -la src/qEmbyApp/utils/ | head -8
-            echo "--- git 视角 ---"
-            git ls-files src/qEmbyApp/utils/ | grep qcoro || echo "not in index?!"
-            exit 1
-          fi
-
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.9.*'
@@ -97,22 +79,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-
-      - name: Debug file state (before build)
-        shell: bash
-        run: |
-          if [ -f src/qEmbyApp/utils/qcoroutil.h ]; then
-            echo "::notice::qcoroutil.h EXISTS before build"
-          else
-            echo "::error file=src/qEmbyApp/utils/qcoroutil.h::MISSING before build, restoring from git"
-            git checkout HEAD -- src/qEmbyApp/utils/qcoroutil.h
-            if [ -f src/qEmbyApp/utils/qcoroutil.h ]; then
-              echo "::notice::qcoroutil.h RESTORED from git object store"
-            else
-              echo "::error file=src/qEmbyApp/utils/qcoroutil.h::RESTORE FAILED — blob not in local repo"
-              exit 1
-            fi
-          fi
 
       - name: Build (Release)
         env:
