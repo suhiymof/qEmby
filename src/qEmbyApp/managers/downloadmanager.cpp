@@ -1165,6 +1165,10 @@ QCoro::Task<void> DownloadManager::startDownload(
 
     QNetworkRequest request{QUrl(downloadUrl)};
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
+    // Strict-UA servers drop connections from the Qt default UA; mirror the
+    // identity the API path uses (see ApiClient::getAuthHeaders).
+    request.setHeader(QNetworkRequest::UserAgentHeader,
+                      profile.effectiveUserAgent());
     if (resumeOffset > 0) {
         request.setRawHeader(
             QByteArrayLiteral("Range"),

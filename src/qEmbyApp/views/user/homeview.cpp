@@ -2368,9 +2368,16 @@ QCoro::Task<void> HomeView::verifyServerReachability(const ServerProfile &target
     opts.ignoreSslErrors = target.ignoreSslVerification;
     opts.timeoutMs = 10000;
     const QString probeUrl = target.url + QStringLiteral("/System/Info/Public");
+    // Strict-UA servers silently drop connections from the Qt default UA,
+    // which would make a perfectly fine server look "unreachable". Send
+    // the same UA the API path uses (see ApiClient::getAuthHeaders).
+    QMap<QString, QString> probeHeaders;
+    probeHeaders.insert(QStringLiteral("User-Agent"),
+                        target.effectiveUserAgent());
     bool reachable = false;
     try {
-        const QJsonObject body = co_await sm->network()->get(probeUrl, {}, opts);
+        const QJsonObject body =
+            co_await sm->network()->get(probeUrl, probeHeaders, opts);
         reachable = !body.value(QStringLiteral("ServerName")).toString().isEmpty()
                     || !body.isEmpty();
     } catch (...) {
