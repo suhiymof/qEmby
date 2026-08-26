@@ -17,7 +17,7 @@ on:
     branches: [main, master]
 
 concurrency:
-  group: build-${{ github.ref }}-v2
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
