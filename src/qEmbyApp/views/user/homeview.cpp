@@ -1657,11 +1657,14 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
         auto *list = qobject_cast<QListWidget *>(m_serverSwitcherViewport->parent());
         if (!list) return false;
         auto *mouse = static_cast<QMouseEvent *>(event);
-        // mouse->pos() is in viewport coordinates; itemAt/indexAt want list
-        // coordinates (with header/frame offsets). Translate explicitly —
-        // otherwise indexAt lands one column off and hover lags by a row.
-        const QPoint listPos = list->mapFrom(m_serverSwitcherViewport, mouse->pos());
-        QListWidgetItem *item = list->itemAt(listPos);
+        // QListWidget::itemAt expects coordinates RELATIVE TO THE VIEWPORT,
+        // not the list widget — see Qt docs:
+        //   "Returns a pointer to the item at the coordinates p. These
+        //    coordinates are relative to the list widget's viewport."
+        // Earlier revisions wrongly ran list->mapFrom(viewport, ...) which
+        // added an offset and made itemAt land on the wrong row (or none),
+        // so the hover highlight trailed the cursor by one row.
+        QListWidgetItem *item = list->itemAt(mouse->pos());
         if (item == m_serverSwitcherHoverItem) return false;
         if (m_serverSwitcherHoverItem) {
             if (auto *prevRow = qvariant_cast<QWidget *>(
