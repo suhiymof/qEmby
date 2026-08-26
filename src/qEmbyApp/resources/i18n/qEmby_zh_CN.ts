@@ -341,6 +341,14 @@ Error: </source>
         <translation>已切换到 %1</translation>
     </message>
     <message>
+        <source>Switch</source>
+        <translation>切换</translation>
+    </message>
+    <message>
+        <source>Current</source>
+        <translation>当前</translation>
+    </message>
+    <message>
         <source>Administrator</source>
         <translation>管理员</translation>
     </message>

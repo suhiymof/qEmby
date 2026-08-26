@@ -18,6 +18,7 @@ class QPushButton;
 class QAction;
 class QLineEdit;
 class QListWidget;
+class QListWidgetItem;
 class QCompleter;
 class QStringListModel;
 class ElidedLabel;
@@ -127,6 +128,8 @@ private:
     
     void showServerSwitcher();
     QCoro::Task<void> trySwitchToServer(const QString& serverId, const QString& displayName);
+    QListWidgetItem* m_serverSwitcherHoverItem = nullptr;
+    QPointer<QWidget> m_serverSwitcherViewport;
 
     
     void launchPlayer(const QString& mediaId, const QString& title, const QString& streamUrl, long long startPositionTicks, const QVariant& extraData);

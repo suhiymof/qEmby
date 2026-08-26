@@ -1619,6 +1619,27 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    
+    if (watched == m_serverSwitcherViewport && event->type() == QEvent::Leave)
+    {
+        if (m_serverSwitcherHoverItem)
+        {
+            if (auto *row = qvariant_cast<QWidget *>(
+                    m_serverSwitcherHoverItem->data(Qt::UserRole + 2)))
+            {
+                row->setProperty("switcherHover", false);
+                row->style()->unpolish(row);
+                row->style()->polish(row);
+                if (auto *badge = row->property("switcherBadge")
+                                      .template value<QWidget *>())
+                {
+                    badge->setVisible(false);
+                }
+            }
+            m_serverSwitcherHoverItem = nullptr;
+        }
+    }
+
     if (m_libraryList && watched == m_libraryList->viewport() &&
         event->type() == QEvent::Wheel)
     {
@@ -2142,6 +2163,10 @@ void HomeView::showServerSwitcher()
         return;
     }
 
+    // The previous popup may have been closed and destroyed; its hovered
+    // item is gone, so reset before building a fresh popup.
+    m_serverSwitcherHoverItem = nullptr;
+
     // Reuse a single popup instance.
     auto *popup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
     popup->setAttribute(Qt::WA_DeleteOnClose);
@@ -2155,6 +2180,7 @@ void HomeView::showServerSwitcher()
     list->setFocusPolicy(Qt::NoFocus);
     list->setUniformItemSizes(true);
     list->setSpacing(0);
+    list->setMouseTracking(true);
 
     // Avatar palette (matches the mockup); colour is chosen by hashing the
     // stable server id so the same server always shows the same colour.
@@ -2187,6 +2213,7 @@ void HomeView::showServerSwitcher()
 
         auto *row = new QWidget(list);
         row->setObjectName(QStringLiteral("server-switcher-row"));
+        row->setProperty("switcherActive", isActive);
         auto *rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(8, 0, 10, 0);
         rowLayout->setSpacing(10);
@@ -2228,10 +2255,18 @@ void HomeView::showServerSwitcher()
         } else {
             rowLayout->addSpacing(20);
         }
+        // Hover badge ("Switch" / "Current") shown on mouse-over via C++.
+        auto *badge = new QLabel(isActive ? tr("Current") : tr("Switch"), row);
+        badge->setObjectName(QStringLiteral("server-switcher-badge"));
+        badge->setAlignment(Qt::AlignCenter);
+        badge->setVisible(false);
+        rowLayout->addWidget(badge);
+        row->setProperty("switcherBadge", QVariant::fromValue<QWidget *>(badge));
 
         auto *item = new QListWidgetItem(list);
         item->setData(Qt::UserRole, p.id);
         item->setData(Qt::UserRole + 1, displayName);
+        item->setData(Qt::UserRole + 2, QVariant::fromValue<QWidget *>(row));
         item->setToolTip(urlText);
         item->setSizeHint(QSize(0, 40));
         list->addItem(item);
@@ -2239,6 +2274,8 @@ void HomeView::showServerSwitcher()
     }
     list->setFixedWidth(m_serverInfoWidget->width());
     list->setMinimumWidth(220);
+    m_serverSwitcherViewport = list->viewport();
+    list->viewport()->installEventFilter(this);
 
     auto *layout = new QVBoxLayout(popup);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -2255,6 +2292,34 @@ void HomeView::showServerSwitcher()
         // probe network call. Dropping the temporary Task directly would
         // cancel the coroutine at its first suspension point.
         launchTask(trySwitchToServer(id, displayName));
+    });
+
+    // Hover feedback (C-option): highlight the row and reveal the badge.
+    // Row background colour is driven by the "switcherHover" dynamic
+    // property so the QSS can layer it over the active-tint / divider.
+    connect(list, &QListWidget::itemEntered, this, [this](QListWidgetItem *item) {
+        if (m_serverSwitcherHoverItem && m_serverSwitcherHoverItem != item) {
+            if (auto *prevRow = qvariant_cast<QWidget *>(
+                    m_serverSwitcherHoverItem->data(Qt::UserRole + 2))) {
+                prevRow->setProperty("switcherHover", false);
+                prevRow->style()->unpolish(prevRow);
+                prevRow->style()->polish(prevRow);
+                if (auto *badge = prevRow->property("switcherBadge")
+                                      .template value<QWidget *>()) {
+                    badge->setVisible(false);
+                }
+            }
+        }
+        m_serverSwitcherHoverItem = item;
+        if (auto *row = qvariant_cast<QWidget *>(item->data(Qt::UserRole + 2))) {
+            row->setProperty("switcherHover", true);
+            row->style()->unpolish(row);
+            row->style()->polish(row);
+            if (auto *badge =
+                    row->property("switcherBadge").template value<QWidget *>()) {
+                badge->setVisible(true);
+            }
+        }
     });
 
     // Position below the server-info widget, aligned to its left edge.

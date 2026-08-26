@@ -6504,6 +6504,7 @@ QListWidget#server-switcher-list {
 QListWidget#server-switcher-list::item {
     background-color: transparent;
     border: none;
+    border-bottom: 1px solid rgba(100, 116, 139, 0.18);
 }
 
 QListWidget#server-switcher-list QScrollBar:vertical {
@@ -6531,16 +6532,17 @@ QListWidget#server-switcher-list QWidget#server-switcher-row {
     margin: 0 4px;
 }
 
-QListWidget#server-switcher-list::item:hover QWidget#server-switcher-row {
-    background-color: rgba(241, 245, 249, 1.0);
-}
-
-QListWidget#server-switcher-list QWidget#server-switcher-row[active="true"] {
+QListWidget#server-switcher-list QWidget#server-switcher-row[switcherHover="true"] {
     background-color: rgba(59, 130, 246, 0.10);
 }
 
-QListWidget#server-switcher-list::item:hover QWidget#server-switcher-row[active="true"] {
-    background-color: rgba(59, 130, 246, 0.22);
+QListWidget#server-switcher-list QWidget#server-switcher-row[switcherActive="true"] {
+    background-color: rgba(30, 58, 138, 0.08);
+    border-left: 3px solid #3B82F6;
+}
+
+QListWidget#server-switcher-list QWidget#server-switcher-row[switcherActive="true"][switcherHover="true"] {
+    background-color: rgba(30, 58, 138, 0.16);
 }
 
 QLabel#server-switcher-name {
@@ -6562,4 +6564,13 @@ QLabel#server-switcher-check {
     font-size: 16px;
     font-weight: 500;
     background-color: transparent;
+}
+
+QLabel#server-switcher-badge {
+    background-color: rgba(59, 130, 246, 0.12);
+    color: #1D4ED8;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
 }
