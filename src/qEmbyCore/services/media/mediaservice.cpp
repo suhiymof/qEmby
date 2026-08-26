@@ -96,7 +96,10 @@ namespace
     
     
     
-    constexpr int kRecommendCacheFormatVersion = 7;
+    // v8: bumped when getDashboardRecommendations switched the dashboard to
+    // the server-native /Movies/Recommendations source, so pre-existing
+    // caches filled by the old Random path are ignored once and re-fetched.
+    constexpr int kRecommendCacheFormatVersion = 8;
     constexpr int kDefaultRecommendFetchLimit = 1000;
 
     QString appendMediaCardTooltipFields(QString fieldsCsv)
@@ -2042,6 +2045,121 @@ QCoro::Task<QList<MediaItem>> MediaService::getRecommendedMovies(int limit, cons
         co_return allItems.mid(0, limit);
     }
     co_return allItems;
+}
+
+QCoro::Task<QList<MediaItem>> MediaService::getDashboardRecommendations(int limit)
+{
+    ensureValidProfile();
+
+    const auto &profile = m_serverManager->activeProfile();
+    const QString currentServerId = profile.id;
+    const QString currentUserId = profile.userId;
+
+    int cacheDurationHours = ConfigStore::instance()->get<QString>(ConfigKeys::DataCacheDuration, "24").toInt();
+    if (cacheDurationHours <= 0)
+        cacheDurationHours = 24;
+
+    // Shares the same cache as the Random path (getRecommendedMovies):
+    // whichever source filled it most recently is served until the TTL
+    // expires, then the native endpoint gets first shot again.
+    if (m_recommendCache.isValid(currentServerId, currentUserId,
+                                 cacheDurationHours, limit))
+    {
+        QList<MediaItem> cached = m_recommendCache.items;
+        if (limit > 0 && cached.size() > limit)
+            co_return cached.mid(0, limit);
+        co_return cached;
+    }
+
+    if (m_recommendCache.loadFromDisk(currentServerId, currentUserId,
+                                      cacheDurationHours) &&
+        m_recommendCache.isValid(currentServerId, currentUserId,
+                                 cacheDurationHours, limit))
+    {
+        QList<MediaItem> cached = m_recommendCache.items;
+        if (limit > 0 && cached.size() > limit)
+            co_return cached.mid(0, limit);
+        co_return cached;
+    }
+
+    // Server-native recommendations: /Movies/Recommendations groups similar
+    // items around the user's recently played titles ("because you watched
+    // X"). The server recomputes similarity over playback history, which
+    // can take seconds on large libraries (or never answer on overloaded
+    // servers), so bound the wait and fall back to random picks below.
+    const QString fieldQuery = appendMediaCardTooltipFields(
+        QStringLiteral("ProductionYear,RecursiveItemCount,PrimaryImageAspectRatio,CanDownload"));
+    QString path = QString("/Movies/Recommendations?UserId=%1"
+                           "&categoryLimit=4&itemLimit=12"
+                           "&Fields=%2"
+                           "&EnableImageTypes=Primary,Backdrop,Thumb"
+                           "&ImageTypeLimit=1")
+                       .arg(currentUserId, fieldQuery);
+
+    try
+    {
+        const QJsonObject response =
+            co_await m_serverManager->activeClient()->get(path, 15000);
+
+        // NetworkManager wraps top-level JSON arrays as {"data": [...]}.
+        const QJsonArray groups =
+            response.value(QStringLiteral("data")).toArray();
+        QList<MediaItem> officialItems;
+        QSet<QString> seenIds;
+        for (const auto &groupValue : groups)
+        {
+            // Each group is one "because you watched <BaselineItemName>"
+            // bucket carrying its own Items array; flatten in server order
+            // and dedupe across buckets.
+            const QJsonArray groupItems =
+                groupValue.toObject().value(QStringLiteral("Items")).toArray();
+            for (const auto &itemValue : groupItems)
+            {
+                const MediaItem item = MediaItem::fromJson(itemValue.toObject());
+                if (item.id.isEmpty() || seenIds.contains(item.id))
+                    continue;
+                seenIds.insert(item.id);
+                officialItems.append(item);
+            }
+        }
+
+        if (!officialItems.isEmpty())
+        {
+            m_recommendCache.items = officialItems;
+            m_recommendCache.fetchTime = QDateTime::currentDateTime();
+            m_recommendCache.serverId = currentServerId;
+            m_recommendCache.userId = currentUserId;
+            // requestLimit 0 = "cache satisfies any requested limit" (see
+            // RecommendCache::isValid); the native endpoint returns a
+            // bounded set (~categoryLimit*itemLimit) regardless of the
+            // caller's limit.
+            m_recommendCache.requestLimit = 0;
+            m_recommendCache.saveToDisk();
+
+            if (limit > 0 && officialItems.size() > limit)
+                co_return officialItems.mid(0, limit);
+            co_return officialItems;
+        }
+
+        // Empty native result (e.g. brand-new account with no playback
+        // history): fall through to the random path instead of caching
+        // nothing.
+        qDebug() << "[Recommend] Native /Movies/Recommendations returned no"
+                    "items, falling back to random picks";
+    }
+    catch (const std::exception &e)
+    {
+        qDebug() << "[Recommend] Native /Movies/Recommendations failed, "
+                    "falling back to random picks:"
+                 << e.what();
+    }
+    catch (...)
+    {
+        qDebug() << "[Recommend] Native /Movies/Recommendations failed "
+                    "(unknown error), falling back to random picks";
+    }
+
+    co_return co_await getRecommendedMovies(limit);
 }
 
 QCoro::Task<QList<MediaItem>> MediaService::getFavoriteMovies(int limit, const QString &sortBy,

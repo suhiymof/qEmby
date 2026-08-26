@@ -1240,7 +1240,7 @@ QCoro::Task<void> DashboardView::loadRecommendedSection(bool show,
 
     try {
         QList<MediaItem> recommendedItems =
-            co_await mediaService->getRecommendedMovies(requestLimit);
+            co_await mediaService->getDashboardRecommendations(requestLimit);
         if (!guard || m_loadGeneration != generation) {
             co_return;
         }

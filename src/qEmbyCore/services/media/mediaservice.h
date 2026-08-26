@@ -128,6 +128,14 @@ public:
     QCoro::Task<QList<MediaItem>> getLatestItems(int limit = 1000, const QString& sortBy = "DateCreated", const QString& sortOrder = "Descending");
     QCoro::Task<QList<MediaItem>> getPlayedItems(int limit = 0, const QString& sortBy = "DatePlayed", const QString& sortOrder = "Descending");
     QCoro::Task<QList<MediaItem>> getRecommendedMovies(int limit = 1000, const QString& sortBy = "Random", const QString& sortOrder = "Ascending");
+    // Dashboard "为你推荐" source: prefers the server-native
+    // /Movies/Recommendations endpoint (based on the user's playback
+    // history, e.g. "because you watched X") and falls back to
+    // getRecommendedMovies (Random) when the endpoint fails, times out or
+    // returns nothing. Shares the same RecommendCache as the random path so
+    // a successful fetch of either kind is served from cache for the
+    // configured DataCacheDuration.
+    QCoro::Task<QList<MediaItem>> getDashboardRecommendations(int limit = 0);
     QCoro::Task<MediaQueryPage> getResumeItemsPage(const QString& sortBy = "", const QString& sortOrder = "", int startIndex = 0, int limit = 50);
     QCoro::Task<MediaQueryPage> getLatestItemsPage(const QString& sortBy = "DateCreated", const QString& sortOrder = "Descending", int startIndex = 0, int limit = 50);
     QCoro::Task<MediaQueryPage> getPlayedItemsPage(const QString& sortBy = "DatePlayed", const QString& sortOrder = "Descending", int startIndex = 0, int limit = 50);

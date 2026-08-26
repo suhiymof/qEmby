@@ -16,6 +16,11 @@ public:
 
     
     QCoro::Task<QJsonObject> get(const QString& path);
+    // Same as get(path) but with an explicit transfer timeout (ms). Used for
+    // endpoints that can be slow on the server side (e.g. Recommendations,
+    // which scans playback history and computes similarity) so callers can
+    // bound the wait and fall back to something cheaper.
+    QCoro::Task<QJsonObject> get(const QString& path, int timeoutMs);
     QCoro::Task<QString> getText(const QString& path);
     QCoro::Task<QJsonObject> post(const QString& path, const QJsonObject& payload);
     QCoro::Task<QJsonObject> postArray(const QString& path, const QJsonArray& payload);

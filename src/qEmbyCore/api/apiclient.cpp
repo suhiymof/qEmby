@@ -61,6 +61,14 @@ QCoro::Task<QJsonObject> ApiClient::get(const QString& path) {
                                       requestOptions());
 }
 
+QCoro::Task<QJsonObject> ApiClient::get(const QString& path, int timeoutMs) {
+    QString fullUrl = m_profile.url + path;
+    NetworkRequestOptions options = requestOptions();
+    if (timeoutMs > 0)
+        options.timeoutMs = timeoutMs;
+    co_return co_await m_network->get(fullUrl, getAuthHeaders(), options);
+}
+
 QCoro::Task<QString> ApiClient::getText(const QString& path) {
     QString fullUrl = m_profile.url + path;
     co_return co_await m_network->getText(fullUrl, getAuthHeaders(),
