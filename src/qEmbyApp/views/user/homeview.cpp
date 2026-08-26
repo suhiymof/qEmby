@@ -1607,9 +1607,9 @@ void HomeView::resizeEvent(QResizeEvent *event)
 bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
     
-    if (m_serverInfoWidget &&
-        (watched == m_serverInfoWidget || m_serverInfoWidget->isAncestorOf(watched)) &&
-        event->type() == QEvent::MouseButtonPress)
+    if (m_serverInfoWidget && event->type() == QEvent::MouseButtonPress &&
+        (watched == m_serverInfoWidget ||
+         (watched->isWidgetType() && m_serverInfoWidget->isAncestorOf(static_cast<QWidget *>(watched)))))
     {
         auto *mouse = static_cast<QMouseEvent *>(event);
         if (mouse->button() == Qt::LeftButton)
