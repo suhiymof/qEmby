@@ -34,6 +34,7 @@
 #include <qcorofuture.h>
 #include <qcoronetwork.h>
 #include <stdexcept>
+#include <QSysInfo>
 #include <utility>
 
 namespace
@@ -300,6 +301,36 @@ namespace
         return left.scheme().compare(right.scheme(), Qt::CaseInsensitive) == 0 &&
                left.host().compare(right.host(), Qt::CaseInsensitive) == 0 &&
                effectivePort(left) == effectivePort(right);
+    }
+
+    // Mirror ApiClient::getAuthHeaders() so the standalone QNAM owned by
+    // MediaService (m_imageManager) sends the same User-Agent /
+    // X-Emby-Authorization that the API path uses. Some servers whitelist
+    // specific client UAs and silently drop connections from the Qt
+    // default "Mozilla/5.0 ..." that QNetworkAccessManager emits; this
+    // keeps image requests consistent with the rest of the app and
+    // avoids RemoteDisconnected on UA-strict servers.
+    void applyImageRequestHeaders(QNetworkRequest &request,
+                                  const ServerProfile &profile)
+    {
+        const QString userAgent = profile.effectiveUserAgent();
+        if (userAgent.isEmpty()) {
+            return;
+        }
+        const QString clientName = userAgent.section('/', 0, 0).trimmed();
+        const QString version = userAgent.section('/', 1).section(' ', 0, 0).trimmed();
+        const QString device = QSysInfo::machineHostName();
+        QString auth = QString("Emby Client=\"%1\", Device=\"%2\", "
+                               "DeviceId=\"%3\", Version=\"%4\"")
+                           .arg(clientName.isEmpty() ? QStringLiteral("qEmby") : clientName,
+                                device,
+                                profile.deviceId,
+                                version.isEmpty() ? QStringLiteral("1.0") : version);
+        if (!profile.accessToken.isEmpty()) {
+            auth += QString(", Token=\"%1\"").arg(profile.accessToken);
+        }
+        request.setRawHeader("User-Agent", userAgent.toUtf8());
+        request.setRawHeader("X-Emby-Authorization", auth.toUtf8());
     }
 
     NetworkRequestOptions buildImageRequestOptions(const ServerProfile &profile,
@@ -955,6 +986,7 @@ QCoro::Task<QPixmap> MediaService::fetchImage(QString itemId,
     const NetworkRequestOptions requestOptions =
         buildImageRequestOptions(profile, request.url());
     NetworkManager::applyRequestOptions(request, requestOptions);
+    applyImageRequestHeaders(request, profile);
     request.setAttribute(
         QNetworkRequest::CacheLoadControlAttribute,
         networkOnly
@@ -1422,6 +1454,7 @@ QCoro::Task<DownloadedImageData> MediaService::downloadImageByUrl(QString imageU
     const NetworkRequestOptions requestOptions =
         buildImageRequestOptions(profile, resolvedRequest.url);
     NetworkManager::applyRequestOptions(request, requestOptions);
+    applyImageRequestHeaders(request, profile);
     request.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
                          QNetworkRequest::PreferCache);
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
