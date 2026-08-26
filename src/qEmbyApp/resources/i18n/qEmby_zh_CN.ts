@@ -81,6 +81,14 @@ Release notes:
         <translation>登录</translation>
     </message>
     <message>
+        <source>Custom User-Agent (optional, for strict servers)</source>
+        <translation>自定义 User-Agent（可选，用于严格限制的服务器）</translation>
+    </message>
+    <message>
+        <source>Present this User-Agent to this server for API and streaming requests. Useful when the server only allows specific players, e.g. "RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)"</source>
+        <translation>向该服务器发送 API 与流媒体请求时使用此 User-Agent。当服务器只允许特定播放器时很有用，例如 "RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)"</translation>
+    </message>
+    <message>
         <source>Select Server</source>
         <translation>选择服务器</translation>
     </message>
@@ -235,8 +243,16 @@ This action cannot be undone.</source>
         <translation>请输入有效的端口号。</translation>
     </message>
     <message>
-        <source>Server URL must use http:</source>
-        <translation>服务器 URL 必须使用 http:</translation>
+        <source>Server URL must use http:// or https://.</source>
+        <translation>服务器 URL 必须使用 http:// 或 https://。</translation>
+    </message>
+    <message>
+        <source>✓ Connection succeeded (server: %1)</source>
+        <translation>✓ 连接成功（服务器：%1）</translation>
+    </message>
+    <message>
+        <source>✗ Unknown error</source>
+        <translation>✗ 未知错误</translation>
     </message>
     <message>
         <source>Connecting...</source>
@@ -315,6 +331,14 @@ Error: </source>
     <message>
         <source>My Server</source>
         <translation>我的服务器</translation>
+    </message>
+    <message>
+        <source>Failed to connect to %1 — switch cancelled</source>
+        <translation>无法连接到 %1 — 已取消切换</translation>
+    </message>
+    <message>
+        <source>Switched to %1</source>
+        <translation>已切换到 %1</translation>
     </message>
     <message>
         <source>Administrator</source>
@@ -2031,6 +2055,18 @@ Choose a file, paste an image URL, or drag one onto the preview.</source>
         <translation>通用</translation>
     </message>
     <message>
+        <source>Custom User-Agent</source>
+        <translation>自定义 User-Agent</translation>
+    </message>
+    <message>
+        <source>Global default UA for API and streaming requests. Servers with strict client whitelists may reject the default UA; per-server UA set in the login form takes precedence.</source>
+        <translation>API 与流媒体请求的全局默认 UA。对客户端白名单严格的服务器可能会拒绝默认 UA；登录表单中设置的每服务器 UA 优先。</translation>
+    </message>
+    <message>
+        <source>e.g. RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)</source>
+        <translation>例如 RodelPlayer/2.2607.7.0 (Windows NT 10.0.26100; x64)</translation>
+    </message>
+    <message>
         <source>System</source>
         <translation>跟随系统</translation>
     </message>
@@ -3274,6 +3310,130 @@ This action cannot be undone.</source>
         <translation>播放结束后自动播放下一集或下一个媒体</translation>
     </message>
     <message>
+        <source>Fast Start</source>
+        <translation>快速启动</translation>
+    </message>
+    <message>
+        <source>Start playback sooner by lowering the initial buffering requirement; may pause briefly on slow connections</source>
+        <translation>降低初始缓冲要求，让播放更早开始；网络不佳时可能短暂卡顿</translation>
+    </message>
+    <message>
+        <source>Prefetch Next Episode</source>
+        <translation>预加载下一集</translation>
+    </message>
+    <message>
+        <source>Negotiate the next episode's playback source once playback progress passes this percentage, so auto-advance starts instantly (0 = disabled)</source>
+        <translation>播放进度超过该百分比时预先协商下一集的播放源，连播时立即开始（0 = 关闭）</translation>
+    </message>
+    <message>
+        <source>Disk Cache</source>
+        <translation>磁盘缓存</translation>
+    </message>
+    <message>
+        <source>Keep stream cache on disk so revisiting the same media is faster; cache is cleared automatically when switching media</source>
+        <translation>将流缓存保留在磁盘上，再次播放同一媒体时启动更快；切换媒体时自动清除缓存</translation>
+    </message>
+    <message>
+        <source>Cache directory (default: system temp)</source>
+        <translation>缓存目录（默认：系统临时目录）</translation>
+    </message>
+    <message>
+        <source>Disk Cache Directory</source>
+        <translation>磁盘缓存目录</translation>
+    </message>
+    <message>
+        <source>Where mpv stores disk cache files. Empty uses the system temporary directory</source>
+        <translation>mpv 存储磁盘缓存文件的位置。留空则使用系统临时目录</translation>
+    </message>
+    <message>
+        <source>Audio Channel Layout</source>
+        <translation>音频声道布局</translation>
+    </message>
+    <message>
+        <source>Force the output channel layout. Auto lets mpv pick</source>
+        <translation>强制指定输出声道布局。自动模式下由 mpv 自行选择</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>立体声</translation>
+    </message>
+    <message>
+        <source>Mono</source>
+        <translation>单声道</translation>
+    </message>
+    <message>
+        <source>Audio Normalize Downmix</source>
+        <translation>音频降混归一化</translation>
+    </message>
+    <message>
+        <source>Normalize audio volume when downmixing channels</source>
+        <translation>声道降混时归一化音频音量</translation>
+    </message>
+    <message>
+        <source>Audio Exclusive Mode</source>
+        <translation>音频独占模式</translation>
+    </message>
+    <message>
+        <source>Use exclusive audio output when supported by the device</source>
+        <translation>设备支持时使用独占音频输出</translation>
+    </message>
+    <message>
+        <source>Keep Audio Stream on Pause</source>
+        <translation>暂停时保持音频流</translation>
+    </message>
+    <message>
+        <source>Keep the audio stream alive while paused to prevent device sleep</source>
+        <translation>暂停时保持音频流活跃，防止设备进入休眠</translation>
+    </message>
+    <message>
+        <source>curl Network Backend</source>
+        <translation>curl 网络后端</translation>
+    </message>
+    <message>
+        <source>Prefer libcurl over ffmpeg for network streams</source>
+        <translation>网络流优先使用 libcurl 而非 ffmpeg</translation>
+    </message>
+    <message>
+        <source>TCP Keep-Alive</source>
+        <translation>TCP 保活</translation>
+    </message>
+    <message>
+        <source>Send TCP keep-alive probes on network streams</source>
+        <translation>在网络流上发送 TCP 保活探测包</translation>
+    </message>
+    <message>
+        <source>Stream Buffer I/O Size</source>
+        <translation>流缓冲区 I/O 大小</translation>
+    </message>
+    <message>
+        <source>Size of the network stream I/O buffer</source>
+        <translation>网络流 I/O 缓冲区大小</translation>
+    </message>
+    <message>
+        <source>Max Buffer Size</source>
+        <translation>最大缓冲大小</translation>
+    </message>
+    <message>
+        <source>Maximum demuxer read-ahead buffer</source>
+        <translation>解复用器最大预读缓冲</translation>
+    </message>
+    <message>
+        <source>Max Backward Buffer</source>
+        <translation>最大后退缓冲</translation>
+    </message>
+    <message>
+        <source>Maximum backward demuxer buffer for seeking back</source>
+        <translation>向后跳转时解复用器最大回退缓冲</translation>
+    </message>
+    <message>
+        <source>Buffer Read-Ahead Seconds</source>
+        <translation>缓冲预读秒数</translation>
+    </message>
+    <message>
+        <source>How much media is read ahead in seconds</source>
+        <translation>提前预读多少秒的媒体数据</translation>
+    </message>
+    <message>
         <source>3 Seconds</source>
         <translation>3 秒</translation>
     </message>
@@ -3478,8 +3638,8 @@ This action cannot be undone.</source>
         <translation>URL路径替换 每行一条规则：源路径 =&gt; 目标路径</translation>
     </message>
     <message>
-        <source>e.g., http:</source>
-        <translation>例如 http:</translation>
+        <source>e.g., http://192.168.2.1:19798/path/ =&gt; W:/mount/</source>
+        <translation>例如：http://192.168.2.1:19798/path/ =&gt; W:/mount/</translation>
     </message>
 </context>
 
