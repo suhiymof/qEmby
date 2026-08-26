@@ -26,6 +26,7 @@
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QSlider>
+#include <QStandardPaths>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -197,7 +198,11 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
            "faster; cache is cleared automatically when switching media"),
         diskCacheSwitch, ConfigKeys::PlayerDiskCache, this, QVariant(false)));
 
-    auto *cacheDirInput = new QLineEdit(this);
+    auto *cacheDirRow = new QWidget(this);
+    auto *cacheDirLayout = new QHBoxLayout(cacheDirRow);
+    cacheDirLayout->setContentsMargins(0, 0, 0, 0);
+    cacheDirLayout->setSpacing(8);
+    auto *cacheDirInput = new QLineEdit(cacheDirRow);
     cacheDirInput->setPlaceholderText(tr("Cache directory (default: system temp)"));
     cacheDirInput->setMinimumWidth(280);
     cacheDirInput->setText(ConfigStore::instance()->get<QString>(
@@ -206,11 +211,26 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       ConfigStore::instance()->set(ConfigKeys::PlayerDiskCacheDir,
                                    cacheDirInput->text().trimmed());
     });
+    auto *cacheDirBrowse = new QPushButton(tr("Browse..."), cacheDirRow);
+    cacheDirBrowse->setObjectName(QStringLiteral("secondary-btn"));
+    connect(cacheDirBrowse, &QPushButton::clicked, this, [cacheDirInput]() {
+      const QString start = cacheDirInput->text().trimmed().isEmpty()
+                                ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                                : cacheDirInput->text().trimmed();
+      const QString picked = QFileDialog::getExistingDirectory(
+          cacheDirInput, tr("Select Cache Directory"), start,
+          QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+      if (picked.isEmpty()) return;
+      cacheDirInput->setText(picked);
+      ConfigStore::instance()->set(ConfigKeys::PlayerDiskCacheDir, picked);
+    });
+    cacheDirLayout->addWidget(cacheDirInput, 1);
+    cacheDirLayout->addWidget(cacheDirBrowse);
     m_mainLayout->addWidget(new SettingsCard(
         ":/svg/dark/hw-decode.svg", tr("Disk Cache Directory"),
         tr("Where mpv stores disk cache files. Empty uses the system "
            "temporary directory"),
-        cacheDirInput, QString(), this));
+        cacheDirRow, QString(), this));
   }
 
   // ---- Advanced mpv tuning ------------------------------------------

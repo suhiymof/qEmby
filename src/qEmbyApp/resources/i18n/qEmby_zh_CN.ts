@@ -3368,6 +3368,14 @@ This action cannot be undone.</source>
         <translation>mpv 存储磁盘缓存文件的位置。留空则使用系统临时目录</translation>
     </message>
     <message>
+        <source>Browse...</source>
+        <translation>浏览...</translation>
+    </message>
+    <message>
+        <source>Select Cache Directory</source>
+        <translation>选择缓存目录</translation>
+    </message>
+    <message>
         <source>Audio Channel Layout</source>
         <translation>音频声道布局</translation>
     </message>
