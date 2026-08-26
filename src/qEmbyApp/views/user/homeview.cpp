@@ -2250,7 +2250,11 @@ void HomeView::showServerSwitcher()
         const QString displayName = item->data(Qt::UserRole + 1).toString();
         list->window()->close();
         if (id.isEmpty()) return;
-        trySwitchToServer(id, displayName);
+        // launchTask keeps the coroutine alive (via QCoro::connect) until
+        // trySwitchToServer finishes, including across the co_await on the
+        // probe network call. Dropping the temporary Task directly would
+        // cancel the coroutine at its first suspension point.
+        launchTask(trySwitchToServer(id, displayName));
     });
 
     // Position below the server-info widget, aligned to its left edge.
