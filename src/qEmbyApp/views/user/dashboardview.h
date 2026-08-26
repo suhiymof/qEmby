@@ -49,7 +49,6 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
-    void launchDashboardTask(QCoro::Task<void>&& task);
     void setupUi();
     void applyDashboardSectionOrder();
     QStringList dashboardSectionOrder() const;

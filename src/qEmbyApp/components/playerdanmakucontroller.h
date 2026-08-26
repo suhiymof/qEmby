@@ -56,7 +56,6 @@ signals:
     void toastRequested(const QString &message);
 
 private:
-    void launchTask(QCoro::Task<void> &&task);
     DanmakuMediaContext buildMediaContext(const PlayerLaunchContext &context) const;
     bool isDanmakuTrackMap(const QVariantMap &trackMap) const;
     void onTrackListChanged();

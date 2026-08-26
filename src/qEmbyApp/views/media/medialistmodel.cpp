@@ -1,4 +1,5 @@
 #include "medialistmodel.h"
+#include "../../utils/qcoroutil.h"
 #include <qembycore.h>
 #include <services/media/mediaservice.h>
 #include <config/configstore.h>
@@ -689,10 +690,8 @@ void MediaListModel::scheduleImageFetches()
         ++m_activeImageFetches;
 
         QPointer<MediaListModel> safeThis(this);
-        QCoro::connect(
-            executeImageFetch(safeThis, itemId, request,
-                              m_imageRequestGeneration, m_core),
-            this, []() {});
+        launchTask(executeImageFetch(safeThis, itemId, request,
+                              m_imageRequestGeneration, m_core), this);
     }
 }
 

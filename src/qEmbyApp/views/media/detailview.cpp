@@ -1,4 +1,5 @@
 #include "detailview.h"
+#include "../../utils/qcoroutil.h"
 #include "../../components/detailactionwidget.h"
 #include "../../components/detailbottominfowidget.h"
 #include "../../components/detailcontentwidget.h"
@@ -763,7 +764,7 @@ void DetailView::setupUi()
                 {
                     markManualSeriesSelection(QStringLiteral("season-switcher"));
                     m_currentSeasonIndex = idx;
-                    QCoro::connect(switchToSeason(idx, true), this, []() {});
+                    launchTask(switchToSeason(idx, true), this);
                 }
             });
     connect(m_episodeJumpEdit, &QLineEdit::editingFinished, this, &DetailView::submitEpisodeJump);
@@ -885,7 +886,7 @@ void DetailView::setupUi()
                 if (item.type == "Episode")
                 {
                     markManualSeriesSelection(QStringLiteral("episode-click"));
-                    QCoro::connect(applySeriesPlayableItem(item, true), this, []() {});
+                    launchTask(applySeriesPlayableItem(item, true), this);
                 }
                 else
                 {
@@ -1088,8 +1089,7 @@ void DetailView::loadItem(QString itemId, MediaItem seedItem)
     
     if (!itemId.isEmpty())
     {
-        QCoro::connect(loadDetailCacheAndStartPrefetch(itemId, seedItem, m_detailCacheServerId, m_detailCacheUserId),
-                       this, []() {});
+        launchTask(loadDetailCacheAndStartPrefetch(itemId, seedItem, m_detailCacheServerId, m_detailCacheUserId), this);
     }
 
     
@@ -1216,8 +1216,7 @@ QCoro::Task<void> DetailView::loadDetailCacheAndStartPrefetch(QString itemId, Me
 
     if (safeThis->m_core && safeThis->m_core->mediaService())
     {
-        QCoro::connect(safeThis->prefetchItemDetail(targetId, serverId, userId, cachedFingerprint), safeThis.data(),
-                       []() {});
+        launchTask(safeThis->prefetchItemDetail(targetId, serverId, userId, cachedFingerprint), safeThis.data());
     }
 }
 
@@ -1282,7 +1281,7 @@ QCoro::Task<void> DetailView::prefetchItemDetail(QString itemId, QString cacheSe
         {
             qDebug() << "[DetailView] Applying refreshed detail after cache"
                      << "itemId=" << targetId;
-            QCoro::connect(safeThis->executeDeferredUpdate(std::move(item), true), safeThis.data(), []() {});
+            launchTask(safeThis->executeDeferredUpdate(std::move(item), true), safeThis.data());
         }
     }
     catch (...)
@@ -1334,7 +1333,7 @@ void DetailView::maybeFlushDeferredUpdate(const QString &itemId)
     }
     qDebug() << "[DetailView] Deferred detail update"
              << "itemId=" << itemId << "fromCache=" << fromCache;
-    QCoro::connect(executeDeferredUpdate(std::move(item)), this, []() {});
+    launchTask(executeDeferredUpdate(std::move(item)), this);
 }
 
 QCoro::Task<void> DetailView::executeDeferredUpdate(MediaItem item, bool isSilentRefresh)
@@ -1423,8 +1422,7 @@ void DetailView::startSecondaryFetches(const QString &targetId, const QString &d
     {
         qDebug() << "[DetailView][network] Start secondary fetches"
                  << "itemId=" << targetId << "type=" << detectedType;
-        QCoro::connect(executeFetchSecondaries(QPointer<DetailView>(this), m_core, targetId, detectedType), this,
-                       []() {});
+        launchTask(executeFetchSecondaries(QPointer<DetailView>(this), m_core, targetId, detectedType), this);
     };
 
     if (detectedType == "Series")
@@ -1757,7 +1755,7 @@ void DetailView::applySeedToUi(const MediaItem &seed)
     
     
     
-    QCoro::connect(executeLoadImages(QPointer<DetailView>(this), m_core, seed, false), this, []() {});
+    launchTask(executeLoadImages(QPointer<DetailView>(this), m_core, seed, false), this);
 }
 
 
@@ -3093,7 +3091,7 @@ QCoro::Task<void> DetailView::updateUi(MediaItem item, bool isSilentRefresh)
     
     buildTagButtons(item.genres);
 
-    QCoro::connect(executeLoadImages(QPointer<DetailView>(this), m_core, item, true), this, []() {});
+    launchTask(executeLoadImages(QPointer<DetailView>(this), m_core, item, true), this);
 
     QPointer<DetailView> safeThis(this);
 
@@ -3140,7 +3138,7 @@ QCoro::Task<void> DetailView::updateUi(MediaItem item, bool isSilentRefresh)
         {
             
             
-            QCoro::connect(fetchAndApplyPlaybackInfo(item.id), this, []() {});
+            launchTask(fetchAndApplyPlaybackInfo(item.id), this);
         }
     }
 
@@ -3620,7 +3618,7 @@ void DetailView::onMediaItemUpdated(const MediaItem &item)
     
     if (m_currentItemId == item.id && m_core && !m_skipSilentRefresh)
     {
-        QCoro::connect(executeSilentRefresh(QPointer<DetailView>(this), m_core, item.id), this, []() {});
+        launchTask(executeSilentRefresh(QPointer<DetailView>(this), m_core, item.id), this);
     }
 
     
@@ -3886,7 +3884,7 @@ void DetailView::submitEpisodeJump()
 
     m_episodeJumpEdit->clear();
     markManualSeriesSelection(QStringLiteral("episode-jump"));
-    QCoro::connect(applySeriesPlayableItem(targetEpisode, true), this, []() {});
+    launchTask(applySeriesPlayableItem(targetEpisode, true), this);
 }
 
 QCoro::Task<void> DetailView::loadEpisodesForSeason(int idx, QString highlightEpisodeId, bool scrollToHighlight,

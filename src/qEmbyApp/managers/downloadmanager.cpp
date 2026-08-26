@@ -1,5 +1,6 @@
 #include "downloadmanager.h"
 
+#include "../utils/qcoroutil.h"
 #include "../components/moderntoast.h"
 #include "../utils/mediasourcepreferenceutils.h"
 #include "../../qEmbyCore/config/config_keys.h"
@@ -425,7 +426,7 @@ void DownloadManager::enqueueDownload(MediaItem item)
         return;
     }
 
-    QCoro::connect(startDownload(std::move(item)), this, []() {});
+    launchTask(startDownload(std::move(item)), this);
 }
 
 bool DownloadManager::pauseDownload(const QString& recordId)
@@ -503,7 +504,7 @@ bool DownloadManager::resumeDownload(const QString& recordId)
                  << "| filePath:" << record.filePath
                  << "| bytesReceived:" << record.bytesReceived;
 
-        QCoro::connect(startDownload(std::move(item), record), this, []() {});
+        launchTask(startDownload(std::move(item), record), this);
         notifyDownloadsChanged();
         return true;
     }

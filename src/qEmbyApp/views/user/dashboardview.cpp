@@ -1,5 +1,6 @@
 #include "dashboardview.h"
 
+#include "../../utils/qcoroutil.h"
 #include "../../components/horizontallistviewgallery.h"
 #include "../../components/libraryactionmenu.h"
 #include "../../components/mediaimageeditdialog.h"
@@ -95,7 +96,7 @@ DashboardView::DashboardView(QEmbyCore* core, QWidget* parent)
                 if (key == customOrderEnabledKey || key == homeSectionOrderKey) {
                     applyDashboardSectionOrder();
                     if (isVisible()) {
-                        launchDashboardTask(loadDashboardData());
+                        launchTask(loadDashboardData(), this);
                     }
                     return;
                 }
@@ -122,7 +123,7 @@ DashboardView::DashboardView(QEmbyCore* core, QWidget* parent)
                     key ==
                         ConfigKeys::forServer(sid, ConfigKeys::ShowEachLibrary)) {
                     if (isVisible()) {
-                        launchDashboardTask(loadDashboardData());
+                        launchTask(loadDashboardData(), this);
                     }
                 }
             });
@@ -150,15 +151,10 @@ DashboardView::DashboardView(QEmbyCore* core, QWidget* parent)
                     applyDashboardSectionOrder();
 
                     if (!nextContextKey.isEmpty() && isVisible()) {
-                        launchDashboardTask(loadDashboardData());
+                        launchTask(loadDashboardData(), this);
                     }
                 });
     }
-}
-
-void DashboardView::launchDashboardTask(QCoro::Task<void>&& task)
-{
-    QCoro::connect(std::move(task), this, []() {});
 }
 
 void DashboardView::setupUi()
@@ -651,7 +647,7 @@ void DashboardView::resizeEvent(QResizeEvent* event)
 void DashboardView::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
-    launchDashboardTask(loadDashboardData());
+    launchTask(loadDashboardData(), this);
 }
 
 bool DashboardView::isManageableDashboardLibraryCard(const MediaItem& item) const
@@ -735,12 +731,10 @@ void DashboardView::dispatchCardContextMenuRequest(
             openDashboardLibraryImageEditor(item);
             return;
         case CardContextMenuAction::RefreshMetadata:
-            launchDashboardTask(
-                executeDashboardLibraryRefresh(item, true, true, true));
+            launchTask(executeDashboardLibraryRefresh(item, true, true, true), this);
             return;
         case CardContextMenuAction::ScanLibraryFiles:
-            launchDashboardTask(
-                executeDashboardLibraryRefresh(item, false, false, false));
+            launchTask(executeDashboardLibraryRefresh(item, false, false, false), this);
             return;
         default:
             break;
@@ -798,7 +792,7 @@ void DashboardView::openDashboardLibraryImageEditor(const MediaItem& item)
     qDebug() << "[DashboardView] Library image editor applied changes"
              << "| itemId=" << item.id
              << "| imageItemId=" << target.imageItemId;
-    launchDashboardTask(loadDashboardData());
+    launchTask(loadDashboardData(), this);
 }
 
 QCoro::Task<void> DashboardView::loadDashboardData()
@@ -907,12 +901,11 @@ QCoro::Task<void> DashboardView::loadDashboardData()
         m_librarySectionsContainer->setVisible(showEachLibrary);
     }
 
-    launchDashboardTask(loadResumeSection(showResume, generation));
-    launchDashboardTask(loadLatestSection(showLatest, generation));
-    launchDashboardTask(loadRecommendedSection(showRecommended, generation));
-    launchDashboardTask(loadCompletedSection(showCompleted, generation));
-    launchDashboardTask(
-        loadLibrarySections(showLibraries, showEachLibrary, generation));
+    launchTask(loadResumeSection(showResume, generation), this);
+    launchTask(loadLatestSection(showLatest, generation), this);
+    launchTask(loadRecommendedSection(showRecommended, generation), this);
+    launchTask(loadCompletedSection(showCompleted, generation), this);
+    launchTask(loadLibrarySections(showLibraries, showEachLibrary, generation), this);
     co_return;
 }
 
@@ -1005,7 +998,7 @@ QCoro::Task<void> DashboardView::executeDashboardLibraryRefresh(
         qDebug() << "[DashboardView] Running delayed dashboard library reload"
                  << "| itemId=" << itemId;
         m_core->mediaService()->clearUserViewsCache();
-        launchDashboardTask(loadDashboardData());
+        launchTask(loadDashboardData(), this);
     });
 }
 

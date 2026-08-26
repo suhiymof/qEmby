@@ -1,4 +1,5 @@
 #include "baseview.h"
+#include "../../utils/qcoroutil.h"
 #include <qembycore.h>
 #include <services/admin/adminservice.h>
 #include <services/media/mediaservice.h>
@@ -53,11 +54,6 @@ BaseView::BaseView(QEmbyCore* core, QWidget *parent)
 {
     setAttribute(Qt::WA_StyledBackground, true);
     setProperty("showGlobalSearch", true);
-}
-
-void BaseView::launchTask(QCoro::Task<void>&& task)
-{
-    QCoro::connect(std::move(task), this, []() {});
 }
 
 bool BaseView::isJellyfinServer() const
@@ -819,12 +815,12 @@ QCoro::Task<void> BaseView::executeRemoveMedia(MediaItem item)
 
 void BaseView::handlePlayRequested(const MediaItem& item)
 {
-    launchTask(executePlay(item));
+    launchTask(executePlay(item), this);
 }
 
 void BaseView::handleFavoriteRequested(const MediaItem& item)
 {
-    launchTask(executeToggleFavorite(item));
+    launchTask(executeToggleFavorite(item), this);
 }
 
 void BaseView::handleAddToPlaylistRequested(const MediaItem& item)
@@ -859,18 +855,18 @@ void BaseView::handleAddToPlaylistRequested(const MediaItem& item)
              << "| itemName=" << item.name
              << "| playlistId=" << playlistId
              << "| playlistName=" << playlistName;
-    launchTask(executeAddToPlaylist(item, playlistId, playlistName));
+    launchTask(executeAddToPlaylist(item, playlistId, playlistName), this);
 }
 
 
 void BaseView::handleMarkPlayedRequested(const MediaItem& item)
 {
-    launchTask(executeMarkPlayed(item));
+    launchTask(executeMarkPlayed(item), this);
 }
 
 void BaseView::handleRemoveFromPlaylistRequested(const MediaItem& item)
 {
-    launchTask(executeRemoveFromPlaylist(item));
+    launchTask(executeRemoveFromPlaylist(item), this);
 }
 
 void BaseView::handleDeletePlaylistRequested(const MediaItem& item)
@@ -882,12 +878,12 @@ void BaseView::handleDeletePlaylistRequested(const MediaItem& item)
         return;
     }
 
-    launchTask(executeDeletePlaylist(item));
+    launchTask(executeDeletePlaylist(item), this);
 }
 
 void BaseView::handleEditMetadataRequested(const MediaItem& item)
 {
-    launchTask(executeEditMetadata(item));
+    launchTask(executeEditMetadata(item), this);
 }
 
 void BaseView::handleEditImagesRequested(const MediaItem& item)
@@ -928,7 +924,7 @@ void BaseView::handleEditImagesRequested(const MediaItem& item)
         return;
     }
 
-    launchTask(executeServerRefreshAndReloadItem(itemId, item.name, false));
+    launchTask(executeServerRefreshAndReloadItem(itemId, item.name, false), this);
     QTimer::singleShot(1500, this, [this, itemId]() {
         if (itemId.isEmpty()) {
             return;
@@ -936,7 +932,7 @@ void BaseView::handleEditImagesRequested(const MediaItem& item)
 
         qDebug() << "[BaseView] Running delayed image refresh reload"
                  << "| itemId=" << itemId;
-        launchTask(executeServerRefreshAndReloadItem(itemId, QString(), false));
+        launchTask(executeServerRefreshAndReloadItem(itemId, QString(), false), this);
     });
 }
 
@@ -974,7 +970,7 @@ void BaseView::handleIdentifyRequested(const MediaItem& item)
     }
 
     launchTask(executeServerRefreshAndReloadItem(itemId, item.name, true, true,
-                                                 true));
+                                                 true), this);
 
     QTimer::singleShot(2000, this, [this, itemId]() {
         if (itemId.isEmpty()) {
@@ -983,7 +979,7 @@ void BaseView::handleIdentifyRequested(const MediaItem& item)
 
         qDebug() << "[BaseView] Running delayed identify refresh"
                  << "| itemId=" << itemId;
-        launchTask(executeServerRefreshAndReloadItem(itemId, QString(), false));
+        launchTask(executeServerRefreshAndReloadItem(itemId, QString(), false), this);
     });
 }
 
@@ -1010,7 +1006,7 @@ void BaseView::handleRefreshMetadataRequested(const MediaItem& item)
     }
 
     launchTask(executeServerRefreshAndReloadItem(itemId, item.name, true, true,
-                                                 true));
+                                                 true), this);
     ModernToast::showMessage(
         tr("Refreshing metadata for \"%1\"...")
             .arg(item.name.trimmed().isEmpty() ? tr("this item") : item.name));
@@ -1022,7 +1018,7 @@ void BaseView::handleRefreshMetadataRequested(const MediaItem& item)
 
         qDebug() << "[BaseView] Running delayed metadata refresh reload"
                  << "| itemId=" << itemId;
-        launchTask(executeServerRefreshAndReloadItem(itemId, QString(), false));
+        launchTask(executeServerRefreshAndReloadItem(itemId, QString(), false), this);
     });
 }
 
@@ -1046,17 +1042,17 @@ void BaseView::handleRemoveMediaRequested(const MediaItem& item)
         return;
     }
 
-    launchTask(executeRemoveMedia(item));
+    launchTask(executeRemoveMedia(item), this);
 }
 
 void BaseView::handleMarkUnplayedRequested(const MediaItem& item)
 {
-    launchTask(executeMarkUnplayed(item));
+    launchTask(executeMarkUnplayed(item), this);
 }
 
 void BaseView::handleRemoveFromResumeRequested(const MediaItem& item)
 {
-    launchTask(executeRemoveFromResume(item));
+    launchTask(executeRemoveFromResume(item), this);
 }
 
 void BaseView::handleMoreMenuRequested(const MediaItem& item, const QPoint& globalPos)
@@ -1092,7 +1088,7 @@ void BaseView::dispatchCardContextMenuRequest(
                      << "| itemName=" << item.name;
             return;
         }
-        launchTask(executeExternalPlay(item, request.stringValue));
+        launchTask(executeExternalPlay(item, request.stringValue), this);
         return;
     case CardContextMenuAction::ViewDetails:
         Q_EMIT navigateToDetail(item.id, item.name, item);

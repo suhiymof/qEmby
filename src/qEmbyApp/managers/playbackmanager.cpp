@@ -1,4 +1,5 @@
 #include "playbackmanager.h"
+#include "../utils/qcoroutil.h"
 #include <qembycore.h>
 #include <services/media/mediaservice.h>
 #include <services/manager/servermanager.h>
@@ -609,7 +610,8 @@ void PlaybackManager::launchExternalPlayer(const QString& mediaId, const QString
     process->setArguments(args);
 
     
-    
+    // Needs the coroutine's result (sessionId) for the callback, so it stays
+    // as a direct QCoro::connect instead of the fire-and-forget launchTask().
     QCoro::connect(m_core->mediaService()->reportPlaybackStart(mediaId, mediaSourceId, startPositionTicks),
                    this, [this](const QString &sessionId) {
         m_currentPlaySessionId = sessionId;

@@ -1,4 +1,5 @@
 #include "homeview.h"
+#include "../../utils/qcoroutil.h"
 #include "../../components/searchcompleterpopup.h"
 #include "../../components/downloadmanagerdialog.h"
 #include "../../components/elidedlabel.h"
@@ -321,7 +322,7 @@ QWidget *HomeView::createCategoryView(const QString &categoryId, const QString &
     view->setProperty("routeTitle", title);
 
     QTimer::singleShot(0, view, [view, categoryId, title]()
-                       { QCoro::connect(view->loadCategory(categoryId, title), view, []() {}); });
+                       { launchTask(view->loadCategory(categoryId, title), view); });
 
     connect(view, &CategoryView::navigateToDetail, this,
             [this](const QString &id, const QString &name, const MediaItem &seed) { pushView(createDetailView(id, name, seed)); });
@@ -1233,8 +1234,7 @@ void HomeView::goHome()
 {
     if (m_contentSwitcher->currentWidget() == m_dashboardView)
     {
-        QCoro::connect(m_dashboardView->loadDashboardData(), m_dashboardView,
-                       []() {});
+        launchTask(m_dashboardView->loadDashboardData(), m_dashboardView);
         return;
     }
     m_libraryList->clearSelection();
@@ -2291,7 +2291,7 @@ void HomeView::showServerSwitcher()
         // trySwitchToServer finishes, including across the co_await on the
         // probe network call. Dropping the temporary Task directly would
         // cancel the coroutine at its first suspension point.
-        launchTask(trySwitchToServer(id, displayName));
+        launchTask(trySwitchToServer(id, displayName), this);
     });
 
     // Hover feedback (C-option): highlight the row and reveal the badge.
@@ -2327,14 +2327,6 @@ void HomeView::showServerSwitcher()
     popup->move(anchor);
     popup->show();
     list->setFocus();
-}
-
-void HomeView::launchTask(QCoro::Task<void> &&task)
-{
-    // Keeps the coroutine alive (via QCoro::connect) until it finishes,
-    // including across suspension points. Dropping the temporary Task
-    // directly would cancel the coroutine at its first co_await.
-    QCoro::connect(std::move(task), this, []() {});
 }
 
 QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,

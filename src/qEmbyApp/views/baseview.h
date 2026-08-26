@@ -101,8 +101,6 @@ protected:
     QEmbyCore* m_core;
 
 private:
-    void launchTask(QCoro::Task<void>&& task);
-
     QCoro::Task<void> executeToggleFavorite(MediaItem item);
     QCoro::Task<void> executePlay(MediaItem item);
     QCoro::Task<void> executeExternalPlay(MediaItem item, QString playerPath);

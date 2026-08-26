@@ -1,4 +1,5 @@
 #include "playerview.h"
+#include "../../utils/qcoroutil.h"
 #include "../../components/modernscrollpanel.h"
 #include "../../components/nativedanmakuoverlay.h"
 #include "../../components/playerdanmakuidentifydialog.h"
@@ -4926,9 +4927,8 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
             && !pathIsDirectPlayable;
         if (needSourceFetch || needPlaybackNegotiation)
         {
-            QCoro::connect(ensureMediaSourcesThenPlay(mediaId, title, streamUrl,
-                                                      startPositionTicks, resolvedSourceInfo),
-                           this, []() {});
+            launchTask(ensureMediaSourcesThenPlay(mediaId, title, streamUrl,
+                                                      startPositionTicks, resolvedSourceInfo), this);
             return;
         }
     }
@@ -5163,10 +5163,9 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
             << "| mediaId:" << mediaId
             << "| sourceId:" << resolvedSourceInfo.id
             << "| sourceInfoValid:" << sourceInfoVar.isValid();
-        QCoro::connect(resolveDanmakuPlaybackContext(
+        launchTask(resolveDanmakuPlaybackContext(
                            QPointer<PlayerView>(this), QPointer<QEmbyCore>(m_core),
-                           mediaId, title, resolvedSourceInfo),
-                       this, []() {});
+                           mediaId, title, resolvedSourceInfo), this);
     }
     else
     {
@@ -5505,7 +5504,7 @@ void PlayerView::onPositionChanged(double position)
         qDebug().noquote() << "[PlayerView] progress threshold reached, prefetching next episode"
                            << "| position:" << position
                            << "| threshold:" << m_prefetchThreshold << "%";
-        QCoro::connect(prefetchNextEpisodeSource(), this, []() {});
+        launchTask(prefetchNextEpisodeSource(), this);
     }
 
     checkAndSkipSegment(position);

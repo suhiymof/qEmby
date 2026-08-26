@@ -1,5 +1,6 @@
 #include "playerdanmakucontroller.h"
 
+#include "../utils/qcoroutil.h"
 #include "mpvwidget.h"
 #include "nativedanmakuoverlay.h"
 #include "../utils/danmakurendererutils.h"
@@ -182,7 +183,7 @@ void PlayerDanmakuController::setPlaybackContext(const PlayerLaunchContext &cont
         return;
     }
 
-    launchTask(loadDanmakuTask(m_requestSerial));
+    launchTask(loadDanmakuTask(m_requestSerial), this);
 }
 
 void PlayerDanmakuController::clearPlaybackContext()
@@ -437,7 +438,7 @@ void PlayerDanmakuController::reload(const QString &manualKeyword)
         << "| manualKeyword:" << trimmedKeyword
         << "| enabled:" << isDanmakuEnabled();
     emit stateChanged();
-    launchTask(loadDanmakuTask(m_requestSerial, trimmedKeyword));
+    launchTask(loadDanmakuTask(m_requestSerial, trimmedKeyword), this);
 }
 
 void PlayerDanmakuController::loadFromCandidate(
@@ -477,7 +478,7 @@ void PlayerDanmakuController::loadFromCandidate(
         << "| saveManualMatch:" << saveAsManualMatch;
     emit stateChanged();
     launchTask(loadDanmakuCandidateTask(m_requestSerial, candidate,
-                                        saveAsManualMatch));
+                                        saveAsManualMatch), this);
 }
 
 void PlayerDanmakuController::loadLocalFile(QString filePath)
@@ -494,11 +495,6 @@ void PlayerDanmakuController::loadLocalFile(QString filePath)
     }
 
     loadFromCandidate(candidate, true);
-}
-
-void PlayerDanmakuController::launchTask(QCoro::Task<void> &&task)
-{
-    QCoro::connect(std::move(task), this, []() {});
 }
 
 DanmakuMediaContext PlayerDanmakuController::buildMediaContext(
