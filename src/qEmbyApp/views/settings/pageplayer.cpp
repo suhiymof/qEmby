@@ -279,7 +279,10 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
                                 const QString &suffix) {
     auto *spin = new QSpinBox(this);
     spin->setRange(minimum, maximum);
-    spin->setSuffix(suffix);
+    spin->setMinimumWidth(96);
+    if (!suffix.isEmpty()) {
+      spin->setSuffix(suffix);
+    }
     const int cur = ConfigStore::instance()->get<int>(configKey, defaultValue);
     spin->setValue(cur);
     connect(spin, &QSpinBox::valueChanged, this, [configKey](int v) {
@@ -289,22 +292,18 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
         ":/svg/dark/hw-decode.svg", title, desc, spin, QString(), this));
   };
 
-  addAdvancedSpin(tr("Stream Buffer I/O Size"),
+  addAdvancedSpin(tr("Stream Buffer I/O Size (KiB)"),
                   tr("Size of the network stream I/O buffer"),
-                  ConfigKeys::PlayerStreamBufferSize, 16, 4096, 128,
-                  QStringLiteral(" KiB"));
-  addAdvancedSpin(tr("Max Buffer Size"),
+                  ConfigKeys::PlayerStreamBufferSize, 16, 4096, 128, QString());
+  addAdvancedSpin(tr("Max Buffer Size (MiB)"),
                   tr("Maximum demuxer read-ahead buffer"),
-                  ConfigKeys::PlayerDemuxerMaxBytes, 128, 16384, 1536,
-                  QStringLiteral(" MiB"));
-  addAdvancedSpin(tr("Max Backward Buffer"),
+                  ConfigKeys::PlayerDemuxerMaxBytes, 128, 16384, 1536, QString());
+  addAdvancedSpin(tr("Max Backward Buffer (MiB)"),
                   tr("Maximum backward demuxer buffer for seeking back"),
-                  ConfigKeys::PlayerDemuxerMaxBackBytes, 0, 8192, 0,
-                  QStringLiteral(" MiB"));
-  addAdvancedSpin(tr("Buffer Read-Ahead Seconds"),
+                  ConfigKeys::PlayerDemuxerMaxBackBytes, 0, 8192, 0, QString());
+  addAdvancedSpin(tr("Buffer Read-Ahead (seconds)"),
                   tr("How much media is read ahead in seconds"),
-                  ConfigKeys::PlayerDemuxerReadaheadSecs, 1, 600, 1,
-                  QStringLiteral(" s"));
+                  ConfigKeys::PlayerDemuxerReadaheadSecs, 1, 600, 1, QString());
 
   
   auto *longPressSwitch = new ModernSwitch(this);

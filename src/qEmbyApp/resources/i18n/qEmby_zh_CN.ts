@@ -3424,32 +3424,32 @@ This action cannot be undone.</source>
         <translation>在网络流上发送 TCP 保活探测包</translation>
     </message>
     <message>
-        <source>Stream Buffer I/O Size</source>
-        <translation>流缓冲区 I/O 大小</translation>
+        <source>Stream Buffer I/O Size (KiB)</source>
+        <translation>流缓冲区 I/O 大小（KiB）</translation>
     </message>
     <message>
         <source>Size of the network stream I/O buffer</source>
         <translation>网络流 I/O 缓冲区大小</translation>
     </message>
     <message>
-        <source>Max Buffer Size</source>
-        <translation>最大缓冲大小</translation>
+        <source>Max Buffer Size (MiB)</source>
+        <translation>最大缓冲大小（MiB）</translation>
     </message>
     <message>
         <source>Maximum demuxer read-ahead buffer</source>
         <translation>解复用器最大预读缓冲</translation>
     </message>
     <message>
-        <source>Max Backward Buffer</source>
-        <translation>最大后退缓冲</translation>
+        <source>Max Backward Buffer (MiB)</source>
+        <translation>最大后退缓冲（MiB）</translation>
     </message>
     <message>
         <source>Maximum backward demuxer buffer for seeking back</source>
         <translation>向后跳转时解复用器最大回退缓冲</translation>
     </message>
     <message>
-        <source>Buffer Read-Ahead Seconds</source>
-        <translation>缓冲预读秒数</translation>
+        <source>Buffer Read-Ahead (seconds)</source>
+        <translation>缓冲预读时长（秒）</translation>
     </message>
     <message>
         <source>How much media is read ahead in seconds</source>
