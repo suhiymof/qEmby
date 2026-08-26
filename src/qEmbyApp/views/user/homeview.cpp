@@ -38,6 +38,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMargins>
+#include <QMouseEvent>
 #include <QPointer> 
 #include <QPropertyAnimation>
 #include <QPushButton>
@@ -1596,6 +1597,17 @@ void HomeView::resizeEvent(QResizeEvent *event)
 
 bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
+    
+    if (watched == m_serverInfoWidget && event->type() == QEvent::MouseButtonPress)
+    {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton)
+        {
+            showServerSwitcher();
+            return true;
+        }
+    }
+
     if (m_libraryList && watched == m_libraryList->viewport() &&
         event->type() == QEvent::Wheel)
     {
@@ -2110,18 +2122,6 @@ void HomeView::applySidebarPinned(bool pinned)
     }
 }
 
-bool HomeView::eventFilter(QObject *watched, QEvent *event)
-{
-    if (watched == m_serverInfoWidget && event->type() == QEvent::MouseButtonPress) {
-        auto *mouse = static_cast<QMouseEvent *>(event);
-        if (mouse->button() == Qt::LeftButton) {
-            showServerSwitcher();
-            return true;
-        }
-    }
-    return BaseView::eventFilter(watched, event);
-}
-
 void HomeView::showServerSwitcher()
 {
     if (!m_core || !m_core->serverManager()) {
@@ -2200,7 +2200,7 @@ QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
     // to a server the client can't reach.
     NetworkRequestOptions opts;
     opts.ignoreSslErrors = target.ignoreSslVerification;
-    opts.timeoutSeconds = 10;
+    opts.timeoutMs = 10000;
     const QString probeUrl = target.url + QStringLiteral("/System/Info/Public");
     bool reachable = false;
     try {
