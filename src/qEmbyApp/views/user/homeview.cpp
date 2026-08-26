@@ -51,6 +51,7 @@
 #include <models/profile/serverprofile.h>
 #include <qembycore.h>
 #include <qcorotask.h>
+#include <api/networkmanager.h>
 #include <services/manager/servermanager.h>
 #include <services/media/mediaservice.h>
 
@@ -623,6 +624,10 @@ void HomeView::setupSidebar()
 
     
     auto *serverInfoWidget = new QWidget(m_sidebar);
+    m_serverInfoWidget = serverInfoWidget;
+    serverInfoWidget->setObjectName(QStringLiteral("sidebar-server-info"));
+    serverInfoWidget->setCursor(Qt::PointingHandCursor);
+    serverInfoWidget->installEventFilter(this);
     m_serverInfoLayout = new QBoxLayout(QBoxLayout::LeftToRight, serverInfoWidget);
     m_serverInfoLayout->setContentsMargins(8, 0, 8, 10);
     m_serverInfoLayout->setSpacing(10);
@@ -2103,4 +2108,120 @@ void HomeView::applySidebarPinned(bool pinned)
         applySidebarMetrics(false);
         syncSidebarVisibility();
     }
+}
+
+bool HomeView::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_serverInfoWidget && event->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton) {
+            showServerSwitcher();
+            return true;
+        }
+    }
+    return BaseView::eventFilter(watched, event);
+}
+
+void HomeView::showServerSwitcher()
+{
+    if (!m_core || !m_core->serverManager()) {
+        return;
+    }
+    if (m_serverInfoWidget == nullptr) {
+        return;
+    }
+
+    // Reuse a single popup instance.
+    auto *popup = new QWidget(nullptr, Qt::Popup | Qt::FramelessWindowHint);
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->setObjectName(QStringLiteral("server-switcher-popup"));
+
+    auto *list = new QListWidget(popup);
+    list->setObjectName(QStringLiteral("server-switcher-list"));
+    list->setFrameShape(QFrame::NoFrame);
+    list->setSelectionMode(QAbstractItemView::SingleSelection);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list->setFocusPolicy(Qt::NoFocus);
+
+    const QList<ServerProfile> all = m_core->serverManager()->servers();
+    const QString activeId = m_core->serverManager()->activeProfile().id;
+    for (const ServerProfile &p : all) {
+        const QString label = p.name.isEmpty() ? p.url : p.name;
+        auto *item = new QListWidgetItem(label, list);
+        item->setData(Qt::UserRole, p.id);
+        item->setToolTip(p.url);
+        if (p.id == activeId) {
+            item->setText(QStringLiteral("\u2713 ") + label);  // checkmark prefix
+            QFont f = item->font();
+            f.setBold(true);
+            item->setFont(f);
+        }
+        list->addItem(item);
+    }
+    list->setFixedWidth(m_serverInfoWidget->width());
+    list->setMinimumWidth(220);
+
+    auto *layout = new QVBoxLayout(popup);
+    layout->setContentsMargins(6, 6, 6, 6);
+    layout->addWidget(list);
+    popup->setMinimumWidth(220);
+
+    connect(list, &QListWidget::itemClicked, this, [this, list](QListWidgetItem *item) {
+        const QString id = item->data(Qt::UserRole).toString();
+        list->window()->close();
+        if (id.isEmpty()) return;
+        trySwitchToServer(id, item->text());
+    });
+
+    // Position below the server-info widget, aligned to its left edge.
+    const QPoint anchor = m_serverInfoWidget->mapToGlobal(QPoint(0, m_serverInfoWidget->height()));
+    popup->move(anchor);
+    popup->show();
+    list->setFocus();
+}
+
+QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
+                                              const QString &displayName)
+{
+    if (!m_core || !m_core->serverManager()) co_return;
+    if (serverId == m_core->serverManager()->activeProfile().id) co_return;
+
+    ServerManager *sm = m_core->serverManager();
+    const QList<ServerProfile> all = sm->servers();
+    const ServerProfile target = [&]() {
+        for (const ServerProfile &p : all) {
+            if (p.id == serverId) return p;
+        }
+        return ServerProfile{};
+    }();
+    if (target.id.isEmpty()) co_return;
+
+    // Pre-flight: probe the target server's public endpoint so we don't flip
+    // to a server the client can't reach.
+    NetworkRequestOptions opts;
+    opts.ignoreSslErrors = target.ignoreSslVerification;
+    opts.timeoutSeconds = 10;
+    const QString probeUrl = target.url + QStringLiteral("/System/Info/Public");
+    bool reachable = false;
+    try {
+        const QJsonObject body = co_await sm->network()->get(probeUrl, {}, opts);
+        reachable = !body.value(QStringLiteral("ServerName")).toString().isEmpty()
+                    || !body.isEmpty();
+    } catch (...) {
+        reachable = false;
+    }
+    if (!reachable) {
+        ModernToast::showMessage(
+            tr("Failed to connect to %1 — switch cancelled").arg(displayName),
+            3500);
+        co_return;
+    }
+
+    // Stop current playback (user requirement) before swapping servers.
+    if (PlayerView *pv = activePlayerView()) {
+        pv->stopAndReport();
+    }
+
+    sm->setActiveServer(serverId);
+    ModernToast::showMessage(tr("Switched to %1").arg(displayName), 2000);
 }

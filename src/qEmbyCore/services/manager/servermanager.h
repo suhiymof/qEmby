@@ -22,6 +22,9 @@ public:
     void setActiveServer(const QString& id);
 
     
+    NetworkManager* network() const { return m_network; }
+
+    
     
     
     

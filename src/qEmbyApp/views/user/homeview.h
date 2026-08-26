@@ -119,10 +119,14 @@ private:
     QWidget* createFilteredView(const QString& filterType, const QString& filterValue);
     QWidget* createPlayerView(const QString& mediaId, const QString& title, const QString& streamUrl, long long startPositionTicks, const QVariant &extraData);
     QWidget* createSettingsView();
-    QWidget* createManageView(); 
-    
-    
+    QWidget* createManageView();
+
+
     QWidget* createSeasonView(const QString& seriesId, const QString& seasonId, const QString& seasonName);
+
+    
+    void showServerSwitcher();
+    QCoro::Task<void> trySwitchToServer(const QString& serverId, const QString& displayName);
 
     
     void launchPlayer(const QString& mediaId, const QString& title, const QString& streamUrl, long long startPositionTicks, const QVariant& extraData);
@@ -146,6 +150,7 @@ private:
     QHBoxLayout* m_contentLayout = nullptr;
 
     QLabel* m_serverIconLabel = nullptr;
+    QWidget* m_serverInfoWidget = nullptr;
     QBoxLayout* m_serverInfoLayout = nullptr;
     QVBoxLayout* m_serverNameLayout = nullptr;
     QVBoxLayout* m_sidebarFooterActionsLayout = nullptr;
