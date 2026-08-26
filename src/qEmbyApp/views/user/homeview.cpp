@@ -655,6 +655,15 @@ void HomeView::setupSidebar()
     m_serverInfoLayout->addLayout(m_serverNameLayout);
     layout->addWidget(serverInfoWidget);
 
+    // Sidebar server-info click: child labels eat the mouse event before it
+    // reaches the parent widget's eventFilter, so install the filter on every
+    // descendant (and the parent itself) and resolve via isAncestorOf in
+    // eventFilter.
+    for (QWidget *child : serverInfoWidget->findChildren<QWidget *>())
+    {
+        child->installEventFilter(this);
+    }
+
     
     m_navArea = new QWidget(m_sidebar);
     auto *navLayout = new QVBoxLayout(m_navArea);
@@ -1598,7 +1607,9 @@ void HomeView::resizeEvent(QResizeEvent *event)
 bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
     
-    if (watched == m_serverInfoWidget && event->type() == QEvent::MouseButtonPress)
+    if (m_serverInfoWidget &&
+        (watched == m_serverInfoWidget || m_serverInfoWidget->isAncestorOf(watched)) &&
+        event->type() == QEvent::MouseButtonPress)
     {
         auto *mouse = static_cast<QMouseEvent *>(event);
         if (mouse->button() == Qt::LeftButton)
