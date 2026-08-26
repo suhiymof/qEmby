@@ -90,6 +90,11 @@ signals:
     void canNavigateBackChanged(bool canBack);
     void homeContentSwitched();
     
+    // 聚合功能入口（阶段3/4 的聚合视图连接这些信号）：
+    // 侧边栏「聚合搜索...」回车 / 「聚合历史」「聚合收藏」按钮点击。
+    void aggregatedSearchRequested(const QString& query);
+    void aggregatedHistoryRequested();
+    void aggregatedFavoritesRequested();
     
     void immersiveStateChanged(bool isImmersive);
     void playerChromeVisibilityChanged(bool visible);
@@ -170,6 +175,13 @@ private:
     QPushButton* m_btnFavorites = nullptr;
     QWidget* m_navArea = nullptr;
     QWidget* m_searchSpacer = nullptr;
+
+    // —— 聚合分组（侧边栏：服务器信息 → 聚合分组 → 当前服分组 → 媒体库）——
+    QLabel* m_aggregateGroupTitle = nullptr;      // "AGGREGATE" 分组标题
+    QLineEdit* m_aggregatedSearchBox = nullptr;   // 聚合搜索输入框
+    QPushButton* m_btnAggregatedHistory = nullptr;// 聚合历史按钮
+    QPushButton* m_btnAggregatedFavorites = nullptr; // 聚合收藏按钮
+    QLabel* m_currentServerLabel = nullptr;       // "当前服 · 服名" 分组标题
 
     // Read-only server info card pinned to the top of the sidebar (icon +
     // name + address). The switching entry point lives in the mainwindow

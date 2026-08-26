@@ -684,6 +684,47 @@ void HomeView::setupSidebar()
     m_serverInfoLayout->addLayout(m_serverNameLayout);
     layout->addWidget(serverInfoWidget);
 
+    // —— 聚合分组：跨服务器搜索/历史/收藏 ——
+    // 布局顺序（用户确认）：服务器信息 → 聚合分组 → 当前服分组 → 媒体库。
+    // 聚合搜索是输入框（跨所有已添加服务器），聚合历史/收藏是按钮（点击进入）。
+    m_aggregateGroupTitle = new QLabel(tr("AGGREGATE"), m_sidebar);
+    m_aggregateGroupTitle->setObjectName("sidebar-title");
+    layout->addWidget(m_aggregateGroupTitle);
+
+    m_aggregatedSearchBox = new QLineEdit(m_sidebar);
+    m_aggregatedSearchBox->setObjectName("sidebar-search");
+    m_aggregatedSearchBox->setPlaceholderText(tr("Aggregate Search..."));
+    m_aggregatedSearchBox->setClearButtonEnabled(true);
+    m_aggregatedSearchBox->setFocusPolicy(Qt::ClickFocus);
+    layout->addWidget(m_aggregatedSearchBox);
+
+    m_btnAggregatedHistory = new QPushButton(tr("Aggregate History"), m_sidebar);
+    m_btnAggregatedFavorites = new QPushButton(tr("Aggregate Favorites"), m_sidebar);
+    m_btnAggregatedHistory->setObjectName("sidebar-btn");
+    m_btnAggregatedFavorites->setObjectName("sidebar-btn");
+    m_btnAggregatedHistory->setCursor(Qt::PointingHandCursor);
+    m_btnAggregatedFavorites->setCursor(Qt::PointingHandCursor);
+    layout->addWidget(m_btnAggregatedHistory);
+    layout->addWidget(m_btnAggregatedFavorites);
+
+    // 聚合搜索回车 → 触发跨服务器搜索（阶段3 连接 aggregatedSearchRequested）。
+    connect(m_aggregatedSearchBox, &QLineEdit::returnPressed, this,
+            [this]() {
+                const QString query = m_aggregatedSearchBox->text().trimmed();
+                if (query.isEmpty()) return;
+                Q_EMIT aggregatedSearchRequested(query);
+            });
+    connect(m_btnAggregatedHistory, &QPushButton::clicked, this,
+            [this]() { Q_EMIT aggregatedHistoryRequested(); });
+    connect(m_btnAggregatedFavorites, &QPushButton::clicked, this,
+            [this]() { Q_EMIT aggregatedFavoritesRequested(); });
+
+    // —— 当前服分组标题：显示当前 active server 名称（切服时更新）——
+    m_currentServerLabel = new QLabel(tr("CURRENT SERVER"), m_sidebar);
+    m_currentServerLabel->setObjectName("sidebar-title");
+    m_currentServerLabel->setProperty("isCurrentServerGroup", true);
+    layout->addWidget(m_currentServerLabel);
+
     m_navArea = new QWidget(m_sidebar);
     auto *navLayout = new QVBoxLayout(m_navArea);
     navLayout->setContentsMargins(0, 0, 16, 0);
@@ -1046,7 +1087,14 @@ void HomeView::setupSearchHistory()
     if (m_core && m_core->serverManager()) {
         connect(m_core->serverManager(), &ServerManager::activeServerChanged, this,
                 [this](const ServerProfile &profile) {
-                    Q_UNUSED(profile);
+                    // 「当前服」分组标题跟随 active server 更新。
+                    if (m_currentServerLabel) {
+                        const QString name = profile.name.isEmpty()
+                                                 ? profile.url
+                                                 : profile.name;
+                        m_currentServerLabel->setText(
+                            tr("CURRENT SERVER · %1").arg(name));
+                    }
                     updateSearchCompleter(m_searchBox ? m_searchBox->text()
                                                       : QString());
                 });
@@ -1060,6 +1108,13 @@ void HomeView::setupSearchHistory()
                         m_dashboardView->showServerUnreachableState();
                     }
                 });
+    }
+
+    // 初始化「当前服」分组标题（首次进入可能未触发 activeServerChanged）。
+    if (m_currentServerLabel && m_core && m_core->serverManager()) {
+        const ServerProfile profile = m_core->serverManager()->activeProfile();
+        const QString name = profile.name.isEmpty() ? profile.url : profile.name;
+        m_currentServerLabel->setText(tr("CURRENT SERVER · %1").arg(name));
     }
 
     updateSearchCompleter();
