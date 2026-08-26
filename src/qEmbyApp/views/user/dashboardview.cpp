@@ -251,9 +251,11 @@ void DashboardView::setupUi()
     m_librarySectionsLayout->setContentsMargins(0, 0, 0, 0);
     m_librarySectionsLayout->setSpacing(0);
 
+    // 为你推荐置顶——Emby 官方原生推荐（/Movies/Recommendations，基于近期播放相似项 +
+    // 高分作品）比断点续看更适合作为首页第一眼内容。其他 section 保持原相对顺序。
+    m_containerLayout->addWidget(m_recommendSection);
     m_containerLayout->addWidget(m_resumeSection);
     m_containerLayout->addWidget(m_latestSection);
-    m_containerLayout->addWidget(m_recommendSection);
     m_containerLayout->addWidget(m_completedSection);
     m_containerLayout->addWidget(m_libraryGridSection);
     m_containerLayout->addWidget(m_librarySectionsContainer);
