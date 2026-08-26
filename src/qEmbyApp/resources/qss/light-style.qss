@@ -6591,12 +6591,3 @@ QLabel#server-switcher-check {
     font-weight: 500;
     background-color: transparent;
 }
-
-QLabel#server-switcher-badge {
-    background-color: rgba(59, 130, 246, 0.12);
-    color: #1D4ED8;
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-weight: 500;
-}

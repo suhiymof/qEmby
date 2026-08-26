@@ -1669,10 +1669,6 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                 prevRow->setProperty("switcherHover", false);
                 prevRow->style()->unpolish(prevRow);
                 prevRow->style()->polish(prevRow);
-                if (auto *badge = prevRow->property("switcherBadge")
-                                      .template value<QWidget *>()) {
-                    badge->setVisible(false);
-                }
             }
         }
         m_serverSwitcherHoverItem = item;
@@ -1682,17 +1678,12 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                 row->setProperty("switcherHover", true);
                 row->style()->unpolish(row);
                 row->style()->polish(row);
-                if (auto *badge =
-                        row->property("switcherBadge")
-                            .template value<QWidget *>()) {
-                    badge->setVisible(true);
-                }
             }
         }
         return false;
     }
 
-    
+
     if (watched == m_serverSwitcherViewport && event->type() == QEvent::Leave)
     {
         // Fallback for the rare case where the cursor leaves the viewport
@@ -1705,11 +1696,6 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                 row->setProperty("switcherHover", false);
                 row->style()->unpolish(row);
                 row->style()->polish(row);
-                if (auto *badge = row->property("switcherBadge")
-                                      .template value<QWidget *>())
-                {
-                    badge->setVisible(false);
-                }
             }
             m_serverSwitcherHoverItem = nullptr;
         }
@@ -2341,13 +2327,12 @@ void HomeView::showServerSwitcher(QWidget *anchorWidget)
         } else {
             rowLayout->addSpacing(20);
         }
-        // Hover badge ("Switch" / "Current") shown on mouse-over via C++.
-        auto *badge = new QLabel(isActive ? tr("Current") : tr("Switch"), row);
-        badge->setObjectName(QStringLiteral("server-switcher-badge"));
-        badge->setAlignment(Qt::AlignCenter);
-        badge->setVisible(false);
-        rowLayout->addWidget(badge);
-        row->setProperty("switcherBadge", QVariant::fromValue<QWidget *>(badge));
+        // Hover feedback (blue background + border + 3% scale) is enough to
+        // signal "click to switch" — the previous "Switch"/"Current" text
+        // badge was redundant and cluttered the row. Keep a fixed-width
+        // trailing spacing so the row width doesn't jump between the active
+        // (has check mark) and inactive (has spacing) cases.
+        rowLayout->addSpacing(64);
 
         auto *item = new QListWidgetItem(list);
         item->setData(Qt::UserRole, p.id);
