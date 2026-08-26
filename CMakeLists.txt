@@ -21,6 +21,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
+# Parallelize the AUTOMOC scan/generation stage (CMake >= 3.27; ignored
+# by older versions). CI on a 4-vCPU runner benefits from moc not being
+# the serial bottleneck.
+set(CMAKE_AUTOMOC_PARALLEL 4)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

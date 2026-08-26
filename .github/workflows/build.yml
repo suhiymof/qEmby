@@ -35,6 +35,13 @@ jobs:
           modules: qtwebsockets
           cache: true
 
+      # sccache: cross-build compiler cache backed by the GitHub Actions
+      # cache service. Unchanged translation units are served from cache
+      # instead of being recompiled, so incremental pushes only pay for
+      # the files they touched + linking.
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Setup libmpv SDK (shinchiro build)
         shell: bash
         env:
@@ -64,13 +71,25 @@ jobs:
 
       - name: Configure
         shell: bash
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: |
           cmake -B build \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build (Release)
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: cmake --build build --config Release --parallel
+
+      # Hit-rate report: verify the cache actually pays off. Compiled
+      # requests vs cache hits should approach ~100% on incremental pushes.
+      - name: Show sccache stats
+        shell: bash
+        run: sccache --show-stats || true
 
       # 输出目录由根 CMakeLists.txt:16 CMAKE_RUNTIME_OUTPUT_DIRECTORY 统一定为
       # ${CMAKE_BINARY_DIR}/bin，VS 多配置生成器再追加 Release/ 子目录。
