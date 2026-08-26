@@ -28,6 +28,22 @@ jobs:
         with:
           submodules: recursive
 
+      # 诊断：C1083 报 qcoroutil.h 不存在但 git 树里有该文件，逐阶段
+      # 追踪文件生命周期，定位它到底在哪一步消失。
+      - name: Debug file state (after checkout)
+        shell: bash
+        run: |
+          echo "=== HEAD ==="
+          git log --oneline -1
+          echo "=== qcoroutil.h ==="
+          ls -la src/qEmbyApp/utils/qcoroutil.h 2>&1 || echo "!! MISSING after checkout !!"
+          echo "=== utils/ 前 5 项 ==="
+          ls src/qEmbyApp/utils/ | head -5
+          echo "=== baseview.cpp 前 3 行 ==="
+          head -3 src/qEmbyApp/views/baseview.cpp
+          echo "=== git status（非空=checkout 后被改）==="
+          git status --short | head -10
+
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.9.*'
@@ -79,6 +95,11 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Debug file state (before build)
+        shell: bash
+        run: |
+          ls -la src/qEmbyApp/utils/qcoroutil.h 2>&1 || echo "!! MISSING before build !!"
 
       - name: Build (Release)
         env:
