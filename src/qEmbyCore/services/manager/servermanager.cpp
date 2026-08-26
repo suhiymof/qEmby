@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QStandardPaths>
 #include <QDir>
+#include <QTimer>
 
 ServerManager::ServerManager(NetworkManager* nm, QObject* parent)
     : QObject(parent), m_network(nm) {
@@ -38,17 +39,16 @@ void ServerManager::removeServer(const QString& id) {
 
             
             if (m_activeProfile.id == id) {
-                
-                disconnectWebSocket();
-                
-                m_activeProfile = ServerProfile();
-                m_activeClient.reset();
 
-                
+                disconnectWebSocket();
+
+                m_activeProfile = ServerProfile();
+                retireActiveClient();
+
                 if (!m_servers.isEmpty()) {
                     setActiveServer(m_servers.first().id);
                 } else {
-                    
+
                     Q_EMIT activeServerChanged(m_activeProfile);
                 }
             }
@@ -60,9 +60,26 @@ void ServerManager::removeServer(const QString& id) {
 void ServerManager::setActiveServer(const QString& id) {
     for (const auto& profile : m_servers) {
         if (profile.id == id) {
+            // Retire the old client with a grace period instead of destroying
+            // it synchronously: coroutines all over the app capture the raw
+            // ApiClient* returned by activeClient() across co_await suspension
+            // points. Dropping the last shared reference right here would
+            // delete the client while those coroutines are still in flight,
+            // corrupting the heap when they resume and touch the freed object
+            // (crash seen when switching servers while playback reporting was
+            // still running). 30s comfortably outlives every request timeout
+            // (10s) plus a follow-up request.
+            QSharedPointer<ApiClient> retired;
+            if (m_activeClient && m_activeProfile.id != profile.id) {
+                retired = m_activeClient;
+            }
             m_activeProfile = profile;
-            
             m_activeClient = QSharedPointer<ApiClient>::create(profile, m_network);
+            if (retired) {
+                QTimer::singleShot(30000, this, [retired]() mutable {
+                    retired.clear();
+                });
+            }
             Q_EMIT activeServerChanged(m_activeProfile);
             return;
         }
@@ -228,7 +245,22 @@ void ServerManager::clearActiveSession()
 {
     disconnectWebSocket();
     m_activeProfile = ServerProfile();
-    m_activeClient.reset();
+    retireActiveClient();
     Q_EMIT activeServerChanged(m_activeProfile);
+}
+
+void ServerManager::retireActiveClient()
+{
+    // Grace-period retirement: keep the outgoing ApiClient alive for a while
+    // so coroutines that captured the raw activeClient() pointer across
+    // co_await suspension points finish their in-flight requests against
+    // freed memory. See setActiveServer() for details.
+    QSharedPointer<ApiClient> retired = m_activeClient;
+    m_activeClient.reset();
+    if (retired) {
+        QTimer::singleShot(30000, this, [retired]() mutable {
+            retired.clear();
+        });
+    }
 }
 

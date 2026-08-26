@@ -46,6 +46,13 @@ public:
     void saveSettings();
 
     void clearActiveSession();
+
+private:
+    // Detaches the current ApiClient with a 30s grace period instead of
+    // destroying it synchronously (in-flight coroutines hold raw pointers
+    // to it across co_await suspension points).
+    void retireActiveClient();
+
 Q_SIGNALS:
     void serversChanged();
     void activeServerChanged(const ServerProfile& profile);
