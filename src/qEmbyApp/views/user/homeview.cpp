@@ -1650,14 +1650,18 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == m_serverSwitcherViewport && event->type() == QEvent::MouseMove)
     {
-        // Drive hover feedback from MouseMove + itemAt() instead of
+        // Drive hover feedback from MouseMove + indexAt() instead of
         // QListWidget::itemEntered, which is silently suppressed when
         // a sub-widget inside the setItemWidget() row intercepts the
         // enter event.
         auto *list = qobject_cast<QListWidget *>(m_serverSwitcherViewport->parent());
         if (!list) return false;
         auto *mouse = static_cast<QMouseEvent *>(event);
-        QListWidgetItem *item = list->itemAt(mouse->pos());
+        // mouse->pos() is in viewport coordinates; itemAt/indexAt want list
+        // coordinates (with header/frame offsets). Translate explicitly —
+        // otherwise indexAt lands one column off and hover lags by a row.
+        const QPoint listPos = list->mapFrom(m_serverSwitcherViewport, mouse->pos());
+        QListWidgetItem *item = list->itemAt(listPos);
         if (item == m_serverSwitcherHoverItem) return false;
         if (m_serverSwitcherHoverItem) {
             if (auto *prevRow = qvariant_cast<QWidget *>(
@@ -2257,6 +2261,12 @@ void HomeView::showServerSwitcher(QWidget *anchorWidget)
     list->setUniformItemSizes(true);
     list->setSpacing(0);
     list->setMouseTracking(true);
+    // Viewport needs its own mouseTracking — QListWidget's setMouseTracking
+    // doesn't always propagate down, and without it MouseMove stops firing
+    // once the cursor is stationary inside the row, leaving the previous
+    // item stuck in the "hovered" state until the next pixel of movement.
+    list->viewport()->setAttribute(Qt::WA_Hover, true);
+    list->viewport()->setMouseTracking(true);
 
     // Avatar palette (matches the mockup); colour is chosen by hashing the
     // stable server id so the same server always shows the same colour.

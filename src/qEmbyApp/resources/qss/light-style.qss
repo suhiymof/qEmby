@@ -6555,7 +6555,11 @@ QListWidget#server-switcher-list QWidget#server-switcher-row {
 }
 
 QListWidget#server-switcher-list QWidget#server-switcher-row[switcherHover="true"] {
-    background-color: rgba(59, 130, 246, 0.10);
+    background-color: rgba(59, 130, 246, 0.12);
+    border: 1.5px solid rgba(59, 130, 246, 0.55);
+    border-radius: 8px;
+    transform: scale(1.03);
+    transform-origin: center center;
 }
 
 QListWidget#server-switcher-list QWidget#server-switcher-row[switcherActive="true"] {
