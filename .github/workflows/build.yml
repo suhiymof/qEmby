@@ -33,16 +33,18 @@ jobs:
       - name: Debug file state (after checkout)
         shell: bash
         run: |
-          echo "=== HEAD ==="
-          git log --oneline -1
-          echo "=== qcoroutil.h ==="
-          ls -la src/qEmbyApp/utils/qcoroutil.h 2>&1 || echo "!! MISSING after checkout !!"
-          echo "=== utils/ 前 5 项 ==="
-          ls src/qEmbyApp/utils/ | head -5
-          echo "=== baseview.cpp 前 3 行 ==="
-          head -3 src/qEmbyApp/views/baseview.cpp
-          echo "=== git status（非空=checkout 后被改）==="
-          git status --short | head -10
+          echo "=== HEAD: $(git rev-parse HEAD) ==="
+          if [ -f src/qEmbyApp/utils/qcoroutil.h ]; then
+            echo "::notice::qcoroutil.h EXISTS after checkout"
+            ls -la src/qEmbyApp/utils/qcoroutil.h
+          else
+            echo "::error file=src/qEmbyApp/utils/qcoroutil.h::MISSING after checkout"
+            echo "--- utils/ 目录内容 ---"
+            ls -la src/qEmbyApp/utils/ | head -8
+            echo "--- git 视角 ---"
+            git ls-files src/qEmbyApp/utils/ | grep qcoro || echo "not in index?!"
+            exit 1
+          fi
 
       - uses: jurplel/install-qt-action@v4
         with:
@@ -99,7 +101,18 @@ jobs:
       - name: Debug file state (before build)
         shell: bash
         run: |
-          ls -la src/qEmbyApp/utils/qcoroutil.h 2>&1 || echo "!! MISSING before build !!"
+          if [ -f src/qEmbyApp/utils/qcoroutil.h ]; then
+            echo "::notice::qcoroutil.h EXISTS before build"
+          else
+            echo "::error file=src/qEmbyApp/utils/qcoroutil.h::MISSING before build, restoring from git"
+            git checkout HEAD -- src/qEmbyApp/utils/qcoroutil.h
+            if [ -f src/qEmbyApp/utils/qcoroutil.h ]; then
+              echo "::notice::qcoroutil.h RESTORED from git object store"
+            else
+              echo "::error file=src/qEmbyApp/utils/qcoroutil.h::RESTORE FAILED — blob not in local repo"
+              exit 1
+            fi
+          fi
 
       - name: Build (Release)
         env:
