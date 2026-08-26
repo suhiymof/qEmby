@@ -536,6 +536,10 @@ Error: </source>
         <source>%1 min</source>
         <translation>%1 分钟</translation>
     </message>
+    <message>
+        <source>No Subtitles</source>
+        <translation>无字幕</translation>
+    </message>
 </context>
 
 <context>
@@ -1609,6 +1613,10 @@ Choose a file, paste an image URL, or drag one onto the preview.</source>
     <message>
         <source>%1 Results</source>
         <translation>%1 个结果</translation>
+    </message>
+    <message>
+        <source>Error Loading Results</source>
+        <translation>加载结果失败</translation>
     </message>
 </context>
 
@@ -2746,6 +2754,20 @@ Release notes:
         <source>The update page could not be opened. Please try again later.</source>
         <translation>无法打开升级页面，请稍后重试。</translation>
     </message>
+    <message>
+        <source>Report an Issue</source>
+        <translation>反馈问题</translation>
+    </message>
+    <message>
+        <source>Open Source Licenses</source>
+        <translation>开源许可</translation>
+    </message>
+    <message>
+        <source>This project is open-source software built with Qt 6 and modern C++.
+Special thanks to the Emby and Jellyfin communities for their fantastic APIs.</source>
+        <translation>本项目是基于 Qt 6 与现代 C++ 构建的开源软件。
+特别感谢 Emby 与 Jellyfin 社区提供的出色 API。</translation>
+    </message>
 </context>
 
 <context>
@@ -3612,6 +3634,10 @@ This action cannot be undone.</source>
     <message>
         <source>Launching %1...</source>
         <translation>正在启动 %1...</translation>
+    </message>
+    <message>
+        <source>External player not found</source>
+        <translation>未找到外部播放器</translation>
     </message>
 </context>
 
@@ -4524,6 +4550,10 @@ This action cannot be undone.</source>
     <message>
         <source>%1fps</source>
         <translation>%1fps</translation>
+    </message>
+    <message>
+        <source>Max Bitrate</source>
+        <translation>最大码率</translation>
     </message>
 </context>
 
@@ -5868,6 +5898,10 @@ Do you want to continue?</source>
     <message>
         <source>Continue</source>
         <translation>继续</translation>
+    </message>
+    <message>
+        <source>Every 14 days</source>
+        <translation>每 14 天</translation>
     </message>
 </context>
 
@@ -9781,4 +9815,33 @@ This cannot be undone.</source>
     </message>
 </context>
 
+<context>
+    <name>LibraryEditDialog</name>
+    <message>
+        <source>Edit Library — "%1"</source>
+        <translation>编辑媒体库 — “%1”</translation>
+    </message>
+</context>
+<context>
+    <name>LicensesDialog</name>
+    <message>
+        <source>Open Source Licenses</source>
+        <translation>开源许可</translation>
+    </message>
+</context>
+<context>
+    <name>ModernTagInput</name>
+    <message>
+        <source>Type &amp; Enter...</source>
+        <translation>输入后按回车...</translation>
+    </message>
+    <message>
+        <source>Clear all</source>
+        <translation>清空全部</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>预设</translation>
+    </message>
+</context>
 </TS>
