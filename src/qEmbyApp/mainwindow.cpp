@@ -277,11 +277,9 @@ MainWindow::MainWindow(QWidget *parent)
     closeButton->hide();
 #endif
     windowBar->setTitleLabel(titleLabel);
-#if !defined(Q_OS_MACOS) && !defined(Q_OS_MAC)
-    windowBar->setBackButton(backButton);
-    windowBar->setHomeButton(homeButton);
-    windowBar->setFavButton(favButton);
-#endif
+    // Back/home/fav buttons are NOT handed to the WindowBar slots: they are
+    // laid out inside the center container next to the server pill (see the
+    // centerLayout setup above) so the order is [pill][back][home][fav].
     windowBar->setHostWidget(this);
 
     
@@ -335,6 +333,31 @@ MainWindow::MainWindow(QWidget *parent)
     macTitlebarNav->hide();
 
     centerLayout->addWidget(macTitlebarNavSpacer);
+#else
+    // Windows titlebar layout: [server pill][back][home][fav] pinned to the
+    // left edge, then the centered search box. The pill is the sole
+    // server-switcher entry point; home/fav sit to its right (user-approved
+    // mockup v3). The buttons are no longer handed to QWK::WindowBar slots —
+    // they live in the center container instead.
+    m_serverPill = new QPushButton(centerContainer);
+    m_serverPill->setObjectName(QStringLiteral("titlebar-server-pill"));
+    m_serverPill->setCursor(Qt::PointingHandCursor);
+    m_serverPill->setFlat(true);
+    m_serverPill->setToolTip(tr("Switch server"));
+    m_serverPill->hide();
+    connect(m_serverPill, &QPushButton::clicked, this, [this]() {
+        if (m_viewStack->currentWidget() == m_homeView) {
+            m_homeView->showServerSwitcher(m_serverPill);
+        }
+    });
+
+    centerLayout->addWidget(m_serverPill, 0, Qt::AlignVCenter);
+    centerLayout->addSpacing(6);
+    centerLayout->addWidget(backButton, 0, Qt::AlignVCenter);
+    centerLayout->addWidget(homeButton, 0, Qt::AlignVCenter);
+    centerLayout->addWidget(favButton, 0, Qt::AlignVCenter);
+    // No trailing spacing needed: the fav-button QSS rule already carries
+    // margin-right: 10px.
 #endif
     centerLayout->addStretch();
     centerLayout->addWidget(m_globalSearchBox, 0, Qt::AlignVCenter); 
@@ -358,15 +381,26 @@ MainWindow::MainWindow(QWidget *parent)
 #if defined(Q_OS_MACOS) || defined(Q_OS_MAC)
     centerLayout->insertWidget(1, m_updateButton, 0, Qt::AlignVCenter);
 #else
-    centerLayout->insertWidget(0, m_updateButton, 0, Qt::AlignVCenter);
+    // Insert after the server pill (index 0) so the update indicator stays
+    // within the left-side button group instead of pushing the pill right.
+    centerLayout->insertWidget(1, m_updateButton, 0, Qt::AlignVCenter);
 #endif
 
 
     agent->setTitleBar(windowBar);
 
     agent->setHitTestVisible(themeButton, true);
-    agent->setHitTestVisible(m_globalSearchBox, true); 
+    agent->setHitTestVisible(m_globalSearchBox, true);
     agent->setHitTestVisible(m_updateButton, true);
+    // Back/home/fav now live in the center container (next to the server
+    // pill) instead of QWK WindowBar slots, so register them for hit-testing
+    // explicitly — otherwise the frameless titlebar would swallow clicks.
+    agent->setHitTestVisible(backButton, true);
+    agent->setHitTestVisible(homeButton, true);
+    agent->setHitTestVisible(favButton, true);
+    if (m_serverPill) {
+        agent->setHitTestVisible(m_serverPill, true);
+    }
     agent->setSystemButton(QWK::WindowAgentBase::WindowIcon, iconButton);
 #if !defined(Q_OS_MACOS) && !defined(Q_OS_MAC)
     agent->setSystemButton(QWK::WindowAgentBase::Minimize, minButton);
@@ -453,21 +487,25 @@ MainWindow::MainWindow(QWidget *parent)
         if (currentView == m_homeView) {
             if (back) {
                 back->setVisible(true);
-                
-                back->setEnabled(true); 
+
+                back->setEnabled(true);
             }
             if (icon) icon->setVisible(false);
             if (home)
             {
                 home->setVisible(true);
-                
-                home->setEnabled(true); 
+
+                home->setEnabled(true);
             }
             if (fav)
             {
                 fav->setVisible(true);
-                
-                fav->setEnabled(true); 
+
+                fav->setEnabled(true);
+            }
+            if (m_serverPill) {
+                updateServerPill();
+                m_serverPill->setVisible(true);
             }
         } else {
             
@@ -488,6 +526,9 @@ MainWindow::MainWindow(QWidget *parent)
             {
                 fav->setVisible(showFav);
                 fav->setEnabled(true);
+            }
+            if (m_serverPill) {
+                m_serverPill->setVisible(false);
             }
         }
 
@@ -769,6 +810,29 @@ MainWindow::MainWindow(QWidget *parent)
             });
 }
 
+void MainWindow::updateServerPill()
+{
+    // No-op on macOS (no pill) and before login (no active profile yet).
+    if (!m_serverPill) {
+        return;
+    }
+    if (!m_core || !m_core->serverManager()) {
+        return;
+    }
+    const ServerProfile profile = m_core->serverManager()->activeProfile();
+    QString name = profile.name.isEmpty() ? profile.url : profile.name;
+    if (name.isEmpty()) {
+        name = tr("Server");
+    }
+    // Keep an over-long server name from eating the titlebar on narrow windows.
+    if (name.size() > 24) {
+        name = name.left(21) + QStringLiteral("...");
+    }
+    m_serverPill->setText(QStringLiteral("%1 \u25BE").arg(name));
+    m_serverPill->setToolTip(profile.url.isEmpty() ? tr("Switch server")
+                                                   : tr("%1\nClick to switch server").arg(profile.url));
+}
+
 void MainWindow::showUpdateConfirmation()
 {
     if (!m_hasAvailableUpdate) {
@@ -873,6 +937,7 @@ void MainWindow::setupGlobalSearchHistory()
         connect(m_core->serverManager(), &ServerManager::activeServerChanged, this,
                 [this](const ServerProfile &profile) {
                     Q_UNUSED(profile);
+                    updateServerPill();
                     updateGlobalSearchCompleter(m_globalSearchBox
                                                     ? m_globalSearchBox->text()
                                                     : QString());

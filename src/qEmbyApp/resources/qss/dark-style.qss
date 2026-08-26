@@ -91,6 +91,28 @@ QWK--WindowBar QPushButton#titlebar-update-button:pressed {
     background-color: #475569;
 }
 
+/* 标题栏服务器切换 pill（唯一切换入口，位于最左） */
+QPushButton#titlebar-server-pill {
+    background-color: #1E293B;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 3px 12px 3px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #E2E8F0;
+    margin: 0;
+}
+
+QPushButton#titlebar-server-pill:hover {
+    background-color: #334155;
+    border: 1px solid #475569;
+}
+
+QPushButton#titlebar-server-pill:pressed {
+    background-color: #0F172A;
+    border: 1px solid #3B82F6;
+}
+
 QLabel#mac-title-label {
     padding: 0;
     border: none;

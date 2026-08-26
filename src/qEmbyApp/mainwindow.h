@@ -11,6 +11,7 @@ class LoginView;
 class HomeView;
 class QStackedWidget;
 class QLineEdit;
+class QPushButton;
 class QCompleter;
 class QStringListModel;
 class TrayManager; 
@@ -41,12 +42,14 @@ class MainWindow : public QMainWindow
         void submitGlobalSearch(const QString &query);
         QString currentSearchServerId() const;
         void showUpdateConfirmation();
+        void updateServerPill();
 
         QEmbyCore *m_core;
         QStackedWidget *m_viewStack;
         LoginView *m_loginView;
         HomeView *m_homeView;
         QLineEdit *m_globalSearchBox;
+        QPushButton *m_serverPill = nullptr; // titlebar server dropdown pill (Windows titlebar only)
         QCompleter *m_globalSearchCompleter = nullptr;
         QStringListModel *m_globalSearchModel = nullptr;
         SearchHistoryPopup *m_globalSearchHistoryPopup = nullptr;

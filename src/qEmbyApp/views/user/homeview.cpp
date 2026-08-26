@@ -651,10 +651,39 @@ void HomeView::setupSidebar()
     layout->setSpacing(6);
 
     
-    // Sidebar server-info card removed — the active-server switcher moved to
-    // the user row below (m_userNameLabel acts as a dropdown trigger; see
-    // eventFilter and showServerSwitcher).
-    
+    // Read-only server info card at the very top of the sidebar: icon +
+    // name + address of the currently active server. The switch entry point
+    // is the titlebar server pill in MainWindow; this card is display-only
+    // (no cursor / eventFilter / click handling on purpose).
+    auto *serverInfoWidget = new QWidget(m_sidebar);
+    m_serverInfoWidget = serverInfoWidget;
+    serverInfoWidget->setObjectName(QStringLiteral("sidebar-server-info"));
+    m_serverInfoLayout = new QBoxLayout(QBoxLayout::LeftToRight, serverInfoWidget);
+    m_serverInfoLayout->setContentsMargins(8, 0, 8, 10);
+    m_serverInfoLayout->setSpacing(10);
+
+    m_serverIconLabel = new QLabel(serverInfoWidget);
+    m_serverIconLabel->setFixedSize(32, 32);
+    m_serverIconLabel->setScaledContents(true);
+
+    m_serverNameLayout = new QVBoxLayout();
+    m_serverNameLayout->setContentsMargins(0, 0, 0, 0);
+    m_serverNameLayout->setSpacing(0);
+    m_serverNameLayout->setAlignment(Qt::AlignVCenter);
+
+    m_serverNameLabel = new ElidedLabel(serverInfoWidget);
+    m_serverNameLabel->setObjectName("sidebar-server-name");
+
+    m_serverAddressLabel = new ElidedLabel(serverInfoWidget);
+    m_serverAddressLabel->setObjectName("sidebar-server-address");
+
+    m_serverNameLayout->addWidget(m_serverNameLabel);
+    m_serverNameLayout->addWidget(m_serverAddressLabel);
+
+    m_serverInfoLayout->addWidget(m_serverIconLabel, 0, Qt::AlignVCenter);
+    m_serverInfoLayout->addLayout(m_serverNameLayout);
+    layout->addWidget(serverInfoWidget);
+
     m_navArea = new QWidget(m_sidebar);
     auto *navLayout = new QVBoxLayout(m_navArea);
     navLayout->setContentsMargins(0, 0, 16, 0);
@@ -741,18 +770,11 @@ void HomeView::setupSidebar()
     m_userAvatarLabel->setFixedSize(20, 20);
     m_userAvatarLabel->setScaledContents(true);
 
-    // m_userNameLabel doubles as the server-switcher trigger — clicking it
-    // pops the account/server dropdown that used to live in the removed
-    // server-info card. EventFilter handles the click because QLabel
-    // silently accepts MouseButtonPress; descendants are covered too in
-    // case the ElidedLabel re-parents a host widget that swallows the event.
+    // Plain account display — no click behaviour. The server-switcher entry
+    // point is the titlebar server pill owned by MainWindow (see
+    // showServerSwitcher(QWidget*)).
     m_userNameLabel = new ElidedLabel(userInfoWidget);
     m_userNameLabel->setObjectName("sidebar-user-name");
-    m_userNameLabel->setCursor(Qt::PointingHandCursor);
-    m_userNameLabel->installEventFilter(this);
-    for (QWidget *child : m_userNameLabel->findChildren<QWidget *>()) {
-        child->installEventFilter(this);
-    }
     m_userAvatarLabel->installEventFilter(this);
     m_userAvatarLabel->setCursor(Qt::PointingHandCursor);
 
@@ -1367,10 +1389,36 @@ QCoro::Task<void> HomeView::refreshProfile()
                currentProfile.userId == activeProfile.userId;
     };
 
-    // Server-info card was removed; icon/name/address surfaces live inside the
-    // server-switcher popup avatar now, so this function has nothing to push
-    // to the sidebar. Keep the call site intact for now (callers still fire
-    // it on every active-profile change).
+    // Read-only server info card at the sidebar top mirrors the active
+    // profile (icon / name / address).
+    if (m_serverIconLabel)
+    {
+        if (activeProfile.type == ServerProfile::Jellyfin)
+        {
+            m_serverIconLabel->setPixmap(QPixmap(":/svg/jellyfin.svg"));
+        }
+        else if (!activeProfile.iconBase64.isEmpty())
+        {
+            QPixmap pix;
+            pix.loadFromData(QByteArray::fromBase64(activeProfile.iconBase64.toUtf8()));
+            m_serverIconLabel->setPixmap(pix);
+        }
+        else
+        {
+            m_serverIconLabel->setPixmap(QPixmap(":/svg/emby.svg"));
+        }
+    }
+    if (m_serverNameLabel)
+    {
+        const QString displayName = activeProfile.name.isEmpty()
+                                        ? tr("My Server")
+                                        : activeProfile.name;
+        m_serverNameLabel->setFullText(displayName);
+    }
+    if (m_serverAddressLabel)
+    {
+        m_serverAddressLabel->setFullText(activeProfile.url);
+    }
 
     applySidebarIcons();
 
@@ -1600,26 +1648,6 @@ void HomeView::resizeEvent(QResizeEvent *event)
 
 bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
-    
-    // User row (m_userNameLabel inside userInfoWidget) is the dropdown trigger
-    // for the server switcher after the dedicated server-info card was
-    // removed. m_userNameLabel is a plain QLabel, so it silently accepts the
-    // press (never reaching a QObject::mousePressEvent override); the filter
-    // catches the event here. Descendants are also covered because ElidedLabel
-    // host widgets in this row can absorb the press too.
-    if (m_userNameLabel && event->type() == QEvent::MouseButtonPress &&
-        (watched == m_userNameLabel ||
-         (watched->isWidgetType() && m_userNameLabel->isAncestorOf(static_cast<QWidget *>(watched)))))
-    {
-        auto *mouse = static_cast<QMouseEvent *>(event);
-        if (mouse->button() == Qt::LeftButton)
-        {
-            showServerSwitcher();
-            return true;
-        }
-    }
-
-    
     if (watched == m_serverSwitcherViewport && event->type() == QEvent::MouseMove)
     {
         // Drive hover feedback from MouseMove + itemAt() instead of
@@ -1852,11 +1880,50 @@ void HomeView::applySidebarMetrics(bool pinned)
         m_sidebarFooterActionsLayout->setSpacing(pinned ? 4 : 6);
     }
 
-    // Server-info card removed — its layout, icon, name and address labels no
-    // longer exist, so the pinned-vs-floating tweak block has nothing to
-    // adjust. Leave this scope empty for future reskin hooks.
+    if (m_serverInfoLayout)
+    {
+        m_serverInfoLayout->setDirection(pinned ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+        m_serverInfoLayout->setContentsMargins(pinned ? QMargins(4, 0, horizontalInset + 4, 10)
+                                                       : QMargins(8, 0, horizontalInset + 8, 10));
+        m_serverInfoLayout->setSpacing(pinned ? 8 : 10);
+        m_serverInfoLayout->setAlignment(m_serverIconLabel, pinned ? Qt::AlignHCenter : Qt::AlignVCenter);
+        if (m_serverNameLayout)
+        {
+            m_serverInfoLayout->setAlignment(m_serverNameLayout, pinned ? Qt::AlignHCenter : Qt::AlignVCenter);
+        }
+    }
 
-    
+    if (m_serverNameLayout)
+    {
+        m_serverNameLayout->setAlignment(pinned ? Qt::AlignHCenter : Qt::AlignVCenter);
+    }
+
+    if (m_serverNameLabel)
+    {
+        m_serverNameLabel->setAlignment(pinned ? Qt::AlignHCenter : Qt::AlignLeft);
+        const QString serverName = m_serverNameLabel->fullText();
+        const QString serverAddress = m_serverAddressLabel ? m_serverAddressLabel->fullText() : QString();
+
+        if (pinned && !serverAddress.isEmpty())
+        {
+            m_serverNameLabel->setToolTip(serverName.isEmpty() ? serverAddress : serverName + "\n" + serverAddress);
+        }
+        else
+        {
+            m_serverNameLabel->setToolTip(serverName);
+        }
+    }
+
+    if (m_serverAddressLabel)
+    {
+        m_serverAddressLabel->setAlignment(pinned ? Qt::AlignHCenter : Qt::AlignLeft);
+        m_serverAddressLabel->setVisible(!pinned);
+        if (!pinned)
+        {
+            m_serverAddressLabel->setToolTip(m_serverAddressLabel->fullText());
+        }
+    }
+
     if (m_userInfoLayout)
     {
         m_userInfoLayout->setContentsMargins(pinned ? QMargins(4, 0, horizontalInset + 4, 8)
@@ -2158,14 +2225,17 @@ void HomeView::applySidebarPinned(bool pinned)
     }
 }
 
-void HomeView::showServerSwitcher()
+void HomeView::showServerSwitcher(QWidget *anchorWidget)
 {
     if (!m_core || !m_core->serverManager()) {
         return;
     }
-    // Anchor the popup to the user row (suhiy label) — that is the new
-    // server-switcher trigger after the server-info card was removed.
-    if (m_userNameLabel == nullptr) {
+    // Anchor the popup to the given trigger widget — normally the titlebar
+    // server pill owned by MainWindow. Fall back to the read-only sidebar
+    // server-info card when no anchor is supplied so the popup still has a
+    // sane on-screen position.
+    QWidget *anchor = anchorWidget ? anchorWidget : m_serverInfoWidget;
+    if (anchor == nullptr) {
         return;
     }
 
@@ -2298,9 +2368,8 @@ void HomeView::showServerSwitcher()
             child->installEventFilter(clickFilter);
         }
     }
-    // Width follows the sidebar (the dropdown trigger is the user row, but the
-    // popup should match the sidebar's right edge so multi-line server URLs
-    // don't overflow the sidebar surface).
+    // Width: comfortable minimum, capped at roughly the sidebar width so the
+    // popup never grows absurdly wide on narrow windows.
     list->setMinimumWidth(220);
     list->setMaximumWidth(m_sidebar ? m_sidebar->width() - 32 : 260);
     m_serverSwitcherViewport = list->viewport();
@@ -2311,10 +2380,9 @@ void HomeView::showServerSwitcher()
     layout->addWidget(list);
     popup->setMinimumWidth(220);
 
-    // Anchor popup to the user row, aligned to its left edge (visual
-    // hierarchy: trigger = label, dropdown floats over the media list).
-    const QPoint anchor = m_userNameLabel->mapToGlobal(QPoint(0, m_userNameLabel->height()));
-    popup->move(anchor);
+    // Anchor popup to the trigger widget, aligned to its left edge.
+    const QPoint anchorPos = anchor->mapToGlobal(QPoint(0, anchor->height()));
+    popup->move(anchorPos);
     popup->show();
     list->setFocus();
 }

@@ -65,6 +65,11 @@ public:
 
     bool canGoFav() const;
 
+    // Opens the server-switcher dropdown anchored to the given trigger
+    // widget (the MainWindow titlebar server pill). Public so MainWindow
+    // can invoke it.
+    void showServerSwitcher(QWidget *anchorWidget = nullptr);
+
     
     PlayerView* activePlayerView() const;
 
@@ -128,7 +133,6 @@ private:
     QWidget* createSeasonView(const QString& seriesId, const QString& seasonId, const QString& seasonName);
 
     
-    void showServerSwitcher();
     QCoro::Task<void> trySwitchToServer(const QString& serverId, const QString& displayName);
     QCoro::Task<void> verifyServerReachability(const ServerProfile& target,
                                                 int generation,
@@ -166,6 +170,17 @@ private:
     QPushButton* m_btnFavorites = nullptr;
     QWidget* m_navArea = nullptr;
     QWidget* m_searchSpacer = nullptr;
+
+    // Read-only server info card pinned to the top of the sidebar (icon +
+    // name + address). The switching entry point lives in the mainwindow
+    // titlebar server pill; this card is display-only.
+    QWidget* m_serverInfoWidget = nullptr;
+    QLabel* m_serverIconLabel = nullptr;
+    QBoxLayout* m_serverInfoLayout = nullptr;
+    QVBoxLayout* m_serverNameLayout = nullptr;
+    ElidedLabel* m_serverNameLabel = nullptr;
+    ElidedLabel* m_serverAddressLabel = nullptr;
+
     QListWidget* m_libraryList = nullptr;
     SmoothScrollController* m_sidebarLibraryScrollController = nullptr;
 
