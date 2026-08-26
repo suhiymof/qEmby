@@ -28,6 +28,7 @@
 #include <QAbstractItemView>
 #include <QBoxLayout>
 #include <QCompleter>
+#include <functional>
 #include <QCursor>
 #include <QDebug>
 #include <QEvent>
@@ -65,6 +66,28 @@ constexpr int kSidebarHiddenOffset = 30;
 constexpr int kLeftEdgeTriggerWidth = 15;
 constexpr int kRightEdgeTriggerWidth = 20;
 constexpr int kSidebarLibraryNameRole = Qt::UserRole + 1;
+
+// Captures left-button press anywhere in a server-switcher row (including
+// its sub-widgets) and dispatches the click. Needed because QListWidget's
+// itemClicked signal is never emitted when a sub-widget inside a
+// setItemWidget() row swallows the event.
+class RowClickFilter : public QObject
+{
+public:
+    std::function<void()> onClick;
+    explicit RowClickFilter(QObject *parent) : QObject(parent) {}
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto *mouse = static_cast<QMouseEvent *>(event);
+            if (mouse->button() == Qt::LeftButton && onClick) {
+                onClick();
+                return true;  // consume the press
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
 } 
 
 HomeView::HomeView(QEmbyCore *core, QWidget *parent) : QWidget(parent), m_core(core)
@@ -1620,8 +1643,51 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
     }
 
     
+    if (watched == m_serverSwitcherViewport && event->type() == QEvent::MouseMove)
+    {
+        // Drive hover feedback from MouseMove + itemAt() instead of
+        // QListWidget::itemEntered, which is silently suppressed when
+        // a sub-widget inside the setItemWidget() row intercepts the
+        // enter event.
+        auto *list = qobject_cast<QListWidget *>(m_serverSwitcherViewport->parent());
+        if (!list) return false;
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        QListWidgetItem *item = list->itemAt(mouse->pos());
+        if (item == m_serverSwitcherHoverItem) return false;
+        if (m_serverSwitcherHoverItem) {
+            if (auto *prevRow = qvariant_cast<QWidget *>(
+                    m_serverSwitcherHoverItem->data(Qt::UserRole + 2))) {
+                prevRow->setProperty("switcherHover", false);
+                prevRow->style()->unpolish(prevRow);
+                prevRow->style()->polish(prevRow);
+                if (auto *badge = prevRow->property("switcherBadge")
+                                      .template value<QWidget *>()) {
+                    badge->setVisible(false);
+                }
+            }
+        }
+        m_serverSwitcherHoverItem = item;
+        if (item) {
+            if (auto *row = qvariant_cast<QWidget *>(
+                    item->data(Qt::UserRole + 2))) {
+                row->setProperty("switcherHover", true);
+                row->style()->unpolish(row);
+                row->style()->polish(row);
+                if (auto *badge =
+                        row->property("switcherBadge")
+                            .template value<QWidget *>()) {
+                    badge->setVisible(true);
+                }
+            }
+        }
+        return false;
+    }
+
+    
     if (watched == m_serverSwitcherViewport && event->type() == QEvent::Leave)
     {
+        // Fallback for the rare case where the cursor leaves the viewport
+        // without triggering a final MouseMove (e.g. into the popup margin).
         if (m_serverSwitcherHoverItem)
         {
             if (auto *row = qvariant_cast<QWidget *>(
@@ -2271,6 +2337,26 @@ void HomeView::showServerSwitcher()
         item->setSizeHint(QSize(0, 40));
         list->addItem(item);
         list->setItemWidget(item, row);
+
+        // Capture left-button press anywhere in the row (the row's child
+        // QLabels would otherwise swallow MouseButtonPress, leaving the
+        // QListWidget::itemClicked signal silent). Parent the filter to
+        // the popup so it dies with the dialog.
+        const QString switchId = p.id;
+        const QString switchName = displayName;
+        auto *clickFilter = new RowClickFilter(popup);
+        clickFilter->onClick = [this, list, switchId, switchName]() {
+            list->window()->close();
+            if (switchId.isEmpty()) return;
+            // launchTask keeps the coroutine alive (via QCoro::connect)
+            // until trySwitchToServer finishes, including across the
+            // co_await on the probe network call.
+            launchTask(trySwitchToServer(switchId, switchName), this);
+        };
+        row->installEventFilter(clickFilter);
+        for (QWidget *child : row->findChildren<QWidget *>()) {
+            child->installEventFilter(clickFilter);
+        }
     }
     list->setFixedWidth(m_serverInfoWidget->width());
     list->setMinimumWidth(220);
@@ -2281,46 +2367,6 @@ void HomeView::showServerSwitcher()
     layout->setContentsMargins(6, 6, 6, 6);
     layout->addWidget(list);
     popup->setMinimumWidth(220);
-
-    connect(list, &QListWidget::itemClicked, this, [this, list](QListWidgetItem *item) {
-        const QString id = item->data(Qt::UserRole).toString();
-        const QString displayName = item->data(Qt::UserRole + 1).toString();
-        list->window()->close();
-        if (id.isEmpty()) return;
-        // launchTask keeps the coroutine alive (via QCoro::connect) until
-        // trySwitchToServer finishes, including across the co_await on the
-        // probe network call. Dropping the temporary Task directly would
-        // cancel the coroutine at its first suspension point.
-        launchTask(trySwitchToServer(id, displayName), this);
-    });
-
-    // Hover feedback (C-option): highlight the row and reveal the badge.
-    // Row background colour is driven by the "switcherHover" dynamic
-    // property so the QSS can layer it over the active-tint / divider.
-    connect(list, &QListWidget::itemEntered, this, [this](QListWidgetItem *item) {
-        if (m_serverSwitcherHoverItem && m_serverSwitcherHoverItem != item) {
-            if (auto *prevRow = qvariant_cast<QWidget *>(
-                    m_serverSwitcherHoverItem->data(Qt::UserRole + 2))) {
-                prevRow->setProperty("switcherHover", false);
-                prevRow->style()->unpolish(prevRow);
-                prevRow->style()->polish(prevRow);
-                if (auto *badge = prevRow->property("switcherBadge")
-                                      .template value<QWidget *>()) {
-                    badge->setVisible(false);
-                }
-            }
-        }
-        m_serverSwitcherHoverItem = item;
-        if (auto *row = qvariant_cast<QWidget *>(item->data(Qt::UserRole + 2))) {
-            row->setProperty("switcherHover", true);
-            row->style()->unpolish(row);
-            row->style()->polish(row);
-            if (auto *badge =
-                    row->property("switcherBadge").template value<QWidget *>()) {
-                badge->setVisible(true);
-            }
-        }
-    });
 
     // Position below the server-info widget, aligned to its left edge.
     const QPoint anchor = m_serverInfoWidget->mapToGlobal(QPoint(0, m_serverInfoWidget->height()));
