@@ -6485,3 +6485,81 @@ QTableView#webdav-snapshot-table QTableCornerButton::section {
     background-color: #F8FAFC;
     border: none;
 }
+
+/* ----- Server switcher popup (opened from sidebar server-info chip) ----- */
+
+QWidget#server-switcher-popup {
+    background-color: #FFFFFF;
+    border: 0.5px solid #CBD5E1;
+    border-radius: 10px;
+}
+
+QListWidget#server-switcher-list {
+    background-color: transparent;
+    border: none;
+    outline: 0;
+    padding: 4px 0;
+}
+
+QListWidget#server-switcher-list::item {
+    background-color: transparent;
+    border: none;
+}
+
+QListWidget#server-switcher-list QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 4px 2px 4px 0;
+}
+QListWidget#server-switcher-list QScrollBar::handle:vertical {
+    background: rgba(148, 163, 184, 0.45);
+    border-radius: 4px;
+    min-height: 24px;
+}
+QListWidget#server-switcher-list QScrollBar::handle:vertical:hover {
+    background: rgba(148, 163, 184, 0.70);
+}
+QListWidget#server-switcher-list QScrollBar::add-line:vertical,
+QListWidget#server-switcher-list QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QListWidget#server-switcher-list QWidget#server-switcher-row {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    margin: 0 4px;
+}
+
+QListWidget#server-switcher-list::item:hover QWidget#server-switcher-row {
+    background-color: rgba(241, 245, 249, 1.0);
+}
+
+QListWidget#server-switcher-list QWidget#server-switcher-row[active="true"] {
+    background-color: rgba(59, 130, 246, 0.10);
+}
+
+QListWidget#server-switcher-list::item:hover QWidget#server-switcher-row[active="true"] {
+    background-color: rgba(59, 130, 246, 0.22);
+}
+
+QLabel#server-switcher-name {
+    color: #0F172A;
+    font-size: 14px;
+    font-weight: 500;
+    background-color: transparent;
+}
+
+QLabel#server-switcher-url {
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 400;
+    background-color: transparent;
+}
+
+QLabel#server-switcher-check {
+    color: #3B82F6;
+    font-size: 16px;
+    font-weight: 500;
+    background-color: transparent;
+}

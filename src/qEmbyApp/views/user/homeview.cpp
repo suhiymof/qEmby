@@ -2153,21 +2153,89 @@ void HomeView::showServerSwitcher()
     list->setSelectionMode(QAbstractItemView::SingleSelection);
     list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list->setFocusPolicy(Qt::NoFocus);
+    list->setUniformItemSizes(true);
+    list->setSpacing(0);
+
+    // Avatar palette (matches the mockup); colour is chosen by hashing the
+    // stable server id so the same server always shows the same colour.
+    static const QList<QColor> kAvatarColors = {
+        QColor("#3B82F6"),  // blue
+        QColor("#10B981"),  // green
+        QColor("#F59E0B"),  // amber
+        QColor("#8B5CF6"),  // purple
+        QColor("#EC4899"),  // pink
+        QColor("#06B6D4"),  // cyan
+    };
+
+    auto avatarColor = [](const QString &seed) {
+        const uint h = qHash(seed);
+        return kAvatarColors.at(static_cast<int>(h % kAvatarColors.size()));
+    };
+    auto avatarChar = [](const QString &name) {
+        const QString trimmed = name.trimmed();
+        if (trimmed.isEmpty()) return QStringLiteral("?");
+        return QString(trimmed.at(0));
+    };
 
     const QList<ServerProfile> all = m_core->serverManager()->servers();
     const QString activeId = m_core->serverManager()->activeProfile().id;
     for (const ServerProfile &p : all) {
-        const QString label = p.name.isEmpty() ? p.url : p.name;
-        auto *item = new QListWidgetItem(label, list);
-        item->setData(Qt::UserRole, p.id);
-        item->setToolTip(p.url);
-        if (p.id == activeId) {
-            item->setText(QStringLiteral("\u2713 ") + label);  // checkmark prefix
-            QFont f = item->font();
+        const QString displayName = p.name.isEmpty() ? p.url : p.name;
+        const QString urlText = p.url;
+        const bool isActive = (p.id == activeId);
+        const QColor color = avatarColor(p.id);
+
+        auto *row = new QWidget(list);
+        row->setObjectName(QStringLiteral("server-switcher-row"));
+        auto *rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(8, 0, 10, 0);
+        rowLayout->setSpacing(10);
+
+        auto *avatar = new QLabel(avatarChar(displayName), row);
+        avatar->setObjectName(QStringLiteral("server-switcher-avatar"));
+        avatar->setAlignment(Qt::AlignCenter);
+        avatar->setFixedSize(24, 24);
+        avatar->setStyleSheet(
+            QStringLiteral("background-color: %1; color: #FFFFFF; border-radius: 6px;")
+                .arg(color.name()));
+
+        auto *textCol = new QWidget(row);
+        textCol->setObjectName(QStringLiteral("server-switcher-text"));
+        auto *textLayout = new QVBoxLayout(textCol);
+        textLayout->setContentsMargins(0, 0, 0, 0);
+        textLayout->setSpacing(0);
+        auto *nameLabel = new QLabel(displayName, textCol);
+        nameLabel->setObjectName(QStringLiteral("server-switcher-name"));
+        if (isActive) {
+            QFont f = nameLabel->font();
             f.setBold(true);
-            item->setFont(f);
+            nameLabel->setFont(f);
         }
+        auto *urlLabel = new QLabel(urlText, textCol);
+        urlLabel->setObjectName(QStringLiteral("server-switcher-url"));
+        textLayout->addWidget(nameLabel);
+        textLayout->addWidget(urlLabel);
+
+        rowLayout->addWidget(avatar);
+        rowLayout->addWidget(textCol, 1);
+        if (isActive) {
+            auto *check = new QLabel(row);
+            check->setObjectName(QStringLiteral("server-switcher-check"));
+            check->setText(QStringLiteral("\u2713"));
+            check->setAlignment(Qt::AlignCenter);
+            check->setFixedSize(20, 20);
+            rowLayout->addWidget(check);
+        } else {
+            rowLayout->addSpacing(20);
+        }
+
+        auto *item = new QListWidgetItem(list);
+        item->setData(Qt::UserRole, p.id);
+        item->setData(Qt::UserRole + 1, displayName);
+        item->setToolTip(urlText);
+        item->setSizeHint(QSize(0, 40));
         list->addItem(item);
+        list->setItemWidget(item, row);
     }
     list->setFixedWidth(m_serverInfoWidget->width());
     list->setMinimumWidth(220);
@@ -2179,9 +2247,10 @@ void HomeView::showServerSwitcher()
 
     connect(list, &QListWidget::itemClicked, this, [this, list](QListWidgetItem *item) {
         const QString id = item->data(Qt::UserRole).toString();
+        const QString displayName = item->data(Qt::UserRole + 1).toString();
         list->window()->close();
         if (id.isEmpty()) return;
-        trySwitchToServer(id, item->text());
+        trySwitchToServer(id, displayName);
     });
 
     // Position below the server-info widget, aligned to its left edge.
