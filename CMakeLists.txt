@@ -2,6 +2,32 @@ cmake_minimum_required(VERSION 3.19)
 
 project(qEmby VERSION 0.0.7 LANGUAGES CXX)
 
+# Capture the build commit short hash at configure time so the resulting
+# binary self-identifies which commit it was built from. Lets users verify
+# their downloaded artifact matches the latest push without checking CI
+# manually — displayed in the main window title + About dialog.
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE QEMBY_BUILD_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT QEMBY_BUILD_COMMIT)
+    set(QEMBY_BUILD_COMMIT "unknown")
+endif()
+execute_process(
+    COMMAND git rev-parse --short=8 --abbrev-ref HEAD
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE QEMBY_BUILD_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT QEMBY_BUILD_BRANCH)
+    set(QEMBY_BUILD_BRANCH "unknown")
+endif()
+message(STATUS "qEmby build identifier: ${QEMBY_BUILD_BRANCH} @ ${QEMBY_BUILD_COMMIT}")
+
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
 endif()

@@ -154,10 +154,19 @@ MainWindow::MainWindow(QWidget *parent)
     setAutoFillBackground(true);
 
     
-    auto titleLabel = new QLabel(qApp->applicationName());
-    titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop); 
+    // Show the build commit hash right in the title label so users can verify
+    // their downloaded binary matches a specific commit without checking CI
+    // manually — fixes the recurring "UI didn't update" confusion where the
+    // same-named artifact `qEmby-windows-x64` from multiple runs gets mixed up.
+    const QString appTitle =
+        QStringLiteral("%1 %2 @ %3")
+            .arg(qApp->applicationName(), QStringLiteral(APP_VERSION),
+                 QStringLiteral(APP_BUILD_COMMIT));
+    auto titleLabel = new QLabel(appTitle);
+    titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     titleLabel->setObjectName(QStringLiteral("win-title-label"));
     titleLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+    setWindowTitle(appTitle);
     titleLabel->setContentsMargins(0, 5, 0, 0);
 
     auto iconButton = new QWK::WindowButton();

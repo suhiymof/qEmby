@@ -65,6 +65,8 @@ qemby_link_libmpv(qEmbyApp)
 target_compile_definitions(qEmbyApp PRIVATE
     APP_NAME="${PROJECT_NAME}"
     APP_VERSION="${PROJECT_VERSION}"
+    APP_BUILD_COMMIT="${QEMBY_BUILD_COMMIT}"
+    APP_BUILD_BRANCH="${QEMBY_BUILD_BRANCH}"
 )
 
 target_link_libraries(qEmbyApp PRIVATE
