@@ -10,10 +10,10 @@ AggregatedSearchView::AggregatedSearchView(QEmbyCore* core, QWidget* parent)
     : AggregatedViewBase(core, parent)
 {
     // 类别 tab：全部 / 影视 / 剧集 / 演员。
-    addCategoryTab(tr("All"), /*checked=*/true);
-    addCategoryTab(tr("Movies"));
-    addCategoryTab(tr("Series"));
-    addCategoryTab(tr("People"));
+    addCategoryTab(tr("全部"), /*checked=*/true);
+    addCategoryTab(tr("电影"));
+    addCategoryTab(tr("剧集"));
+    addCategoryTab(tr("演员"));
 }
 
 void AggregatedSearchView::search(const QString& query)
@@ -55,21 +55,21 @@ void AggregatedSearchView::onCategoryTabClicked(const QString& label)
 QString AggregatedSearchView::scopedPageTitle(const ServerProfile& profile) const
 {
     Q_UNUSED(profile);
-    if (m_query.isEmpty()) return tr("Search");
-    return tr("Search: %1").arg(m_query);
+    if (m_query.isEmpty()) return tr("搜索");
+    return tr("搜索：%1").arg(m_query);
 }
 
 QString AggregatedSearchView::includeTypesForTab(const QString& label) const
 {
-    if (label == tr("Movies")) {
+    if (label == tr("电影")) {
         return QStringLiteral("Movie");
     }
-    if (label == tr("Series")) {
+    if (label == tr("剧集")) {
         return QStringLiteral("Series");
     }
-    if (label == tr("People")) {
+    if (label == tr("演员")) {
         return QStringLiteral("Person");
     }
-    // "All" / 默认：电影 + 剧集 + 合集 + 演员。
+    // "全部" / 默认：电影 + 剧集 + 合集 + 演员。
     return QStringLiteral("Movie,Series,BoxSet,Person");
 }

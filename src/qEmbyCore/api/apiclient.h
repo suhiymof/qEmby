@@ -14,6 +14,9 @@ class QEMBYCORE_EXPORT ApiClient : public QObject {
 public:
     explicit ApiClient(const ServerProfile& profile, NetworkManager* nm, QObject* parent = nullptr);
 
+    // 所属 server profile（SearchAggregator 用于结果回调定位 server）。
+    const ServerProfile& profile() const { return m_profile; }
+
     
     QCoro::Task<QJsonObject> get(const QString& path);
     // Same as get(path) but with an explicit transfer timeout (ms). Used for

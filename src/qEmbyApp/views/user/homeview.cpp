@@ -810,19 +810,19 @@ void HomeView::setupSidebar()
     // —— 聚合分组：跨服务器搜索/历史/收藏 ——
     // 布局顺序（用户确认）：服务器信息 → 聚合分组 → 当前服分组 → 媒体库。
     // 聚合搜索是输入框（跨所有已添加服务器），聚合历史/收藏是按钮（点击进入）。
-    m_aggregateGroupTitle = new QLabel(tr("AGGREGATE"), m_sidebar);
+    m_aggregateGroupTitle = new QLabel(tr("聚合"), m_sidebar);
     m_aggregateGroupTitle->setObjectName("sidebar-title");
     layout->addWidget(m_aggregateGroupTitle);
 
     m_aggregatedSearchBox = new QLineEdit(m_sidebar);
     m_aggregatedSearchBox->setObjectName("sidebar-search");
-    m_aggregatedSearchBox->setPlaceholderText(tr("Aggregate Search..."));
+    m_aggregatedSearchBox->setPlaceholderText(tr("聚合搜索..."));
     m_aggregatedSearchBox->setClearButtonEnabled(true);
     m_aggregatedSearchBox->setFocusPolicy(Qt::ClickFocus);
     layout->addWidget(m_aggregatedSearchBox);
 
-    m_btnAggregatedHistory = new QPushButton(tr("Aggregate History"), m_sidebar);
-    m_btnAggregatedFavorites = new QPushButton(tr("Aggregate Favorites"), m_sidebar);
+m_btnAggregatedHistory = new QPushButton(tr("聚合历史"), m_sidebar);
+m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
     m_btnAggregatedHistory->setObjectName("sidebar-btn");
     m_btnAggregatedFavorites->setObjectName("sidebar-btn");
     m_btnAggregatedHistory->setCursor(Qt::PointingHandCursor);
@@ -843,7 +843,7 @@ void HomeView::setupSidebar()
             [this]() { Q_EMIT aggregatedFavoritesRequested(); });
 
     // —— 当前服分组标题：显示当前 active server 名称（切服时更新）——
-    m_currentServerLabel = new QLabel(tr("CURRENT SERVER"), m_sidebar);
+    m_currentServerLabel = new QLabel(tr("当前服"), m_sidebar);
     m_currentServerLabel->setObjectName("sidebar-title");
     m_currentServerLabel->setProperty("isCurrentServerGroup", true);
     layout->addWidget(m_currentServerLabel);
@@ -1217,7 +1217,7 @@ void HomeView::setupSearchHistory()
                                                  ? profile.url
                                                  : profile.name;
                         m_currentServerLabel->setText(
-                            tr("CURRENT SERVER · %1").arg(name));
+                            tr("当前服 · %1").arg(name));
                     }
                     updateSearchCompleter(m_searchBox ? m_searchBox->text()
                                                       : QString());
@@ -1238,7 +1238,7 @@ void HomeView::setupSearchHistory()
     if (m_currentServerLabel && m_core && m_core->serverManager()) {
         const ServerProfile profile = m_core->serverManager()->activeProfile();
         const QString name = profile.name.isEmpty() ? profile.url : profile.name;
-        m_currentServerLabel->setText(tr("CURRENT SERVER · %1").arg(name));
+        m_currentServerLabel->setText(tr("当前服 · %1").arg(name));
     }
 
     updateSearchCompleter();

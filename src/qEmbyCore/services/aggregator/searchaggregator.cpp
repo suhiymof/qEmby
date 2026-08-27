@@ -121,18 +121,19 @@ void SearchAggregator::fanOut(const QString& pathTemplate,
 
         // 每个服务器一个协程：co_await 期间不阻塞 UI 线程，13+ 个协程
         // 在网络等待时交错执行 → 天然并发。
-        auto task = [this, profile, pathTemplate, gen, onServerResult,
+        //
+        // 关键：ApiClient 必须在堆上且以 SearchAggregator 为 parent。
+        // 之前栈上 IIFE 临时对象在协程挂起时立即析构，reply finished 后
+        // 协程恢复访问悬垂指针 → 崩溃。
+        auto *apiClient = new ApiClient(profile, m_network, this);
+        auto task = [this, apiClient, pathTemplate, gen, onServerResult,
                      state]() -> QCoro::Task<void> {
-            // 独立临时 ApiClient——不依赖/不切换 active server。
-            ApiClient client(profile, m_network);
-
             QList<MediaItem> items;
             try {
-                const QString uid = profile.userId;
                 QString path = pathTemplate;
-                path.replace(QStringLiteral("{uid}"), uid);
+                path.replace(QStringLiteral("{uid}"), apiClient->profile().userId);
                 const QJsonObject response =
-                    co_await client.get(path, kPerServerTimeoutMs);
+                    co_await apiClient->get(path, kPerServerTimeoutMs);
                 const QJsonArray arr =
                     response.value(QStringLiteral("Items")).toArray();
                 items.reserve(arr.size());
@@ -146,7 +147,7 @@ void SearchAggregator::fanOut(const QString& pathTemplate,
 
             // 流式回调：结果立即上抛（若本 generation 仍有效）。
             if (onServerResult && gen == this->m_generation) {
-                onServerResult(profile, items);
+                onServerResult(apiClient->profile(), items);
             }
 
             if (++state->completed == state->total) {
@@ -154,10 +155,11 @@ void SearchAggregator::fanOut(const QString& pathTemplate,
                     state->onComplete(state->total, state->succeeded.load());
                 }
             }
+            // apiClient 由 SearchAggregator(this) parent 自动 delete，无需手动 deleteLater。
             co_return;
         }();
 
-        // 保持协程存活（fire-and-forget；对象析构自动取消）。
+        // 保持协程存活（fire-and-forget；this 析构自动取消）。
         QCoro::connect(std::move(task), this, []() {});
     }
 }

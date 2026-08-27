@@ -24,7 +24,7 @@ ServerScopedView::ServerScopedView(QEmbyCore* core, QWidget* parent)
 
     auto* backBtn = new QPushButton(crumbBar);
     backBtn->setObjectName(QStringLiteral("scoped-back-btn"));
-    backBtn->setText(QStringLiteral("\u2190 %1").arg(tr("Back"))); // ← Back
+    backBtn->setText(QStringLiteral("\u2190 %1").arg(tr("返回"))); // ← 返回
     backBtn->setCursor(Qt::PointingHandCursor);
     backBtn->setFlat(true);
     connect(backBtn, &QPushButton::clicked, this, &ServerScopedView::navigateBack);

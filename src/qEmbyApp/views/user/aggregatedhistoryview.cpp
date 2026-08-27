@@ -41,5 +41,5 @@ void AggregatedHistoryView::showEvent(QShowEvent* event)
 QString AggregatedHistoryView::scopedPageTitle(const ServerProfile& profile) const
 {
     Q_UNUSED(profile);
-    return tr("Continue Watching");
+    return tr("继续观看");
 }

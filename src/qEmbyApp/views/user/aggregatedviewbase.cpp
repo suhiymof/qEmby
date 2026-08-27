@@ -50,7 +50,7 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
 
     m_loadingLabel = new QLabel(header);
     m_loadingLabel->setObjectName(QStringLiteral("aggregate-server-loading"));
-    m_loadingLabel->setText(QStringLiteral("\u23F3 %1").arg(tr("Loading...")));
+    m_loadingLabel->setText(QStringLiteral("\u23F3 %1").arg(tr("加载中...")));
     headerLayout->addWidget(m_loadingLabel);
 
     headerLayout->addStretch(1);

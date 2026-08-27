@@ -10,11 +10,11 @@ AggregatedFavoritesView::AggregatedFavoritesView(QEmbyCore* core, QWidget* paren
     : AggregatedViewBase(core, parent)
 {
     // 类别 tab：电影 / 电视剧 / 单集 / 演员 / 合集（与单服务器收藏一致）。
-    addCategoryTab(tr("Movies"), /*checked=*/true);
-    addCategoryTab(tr("TV Shows"));
-    addCategoryTab(tr("Episodes"));
-    addCategoryTab(tr("People"));
-    addCategoryTab(tr("Collections"));
+    addCategoryTab(tr("电影"), /*checked=*/true);
+    addCategoryTab(tr("电视剧"));
+    addCategoryTab(tr("单集"));
+    addCategoryTab(tr("演员"));
+    addCategoryTab(tr("合集"));
 }
 
 void AggregatedFavoritesView::startLoad()
@@ -46,10 +46,10 @@ void AggregatedFavoritesView::onCategoryTabClicked(const QString& label)
 
 QString AggregatedFavoritesView::includeTypesForTab(const QString& label) const
 {
-    if (label == tr("TV Shows")) return QStringLiteral("Series");
-    if (label == tr("Episodes")) return QStringLiteral("Episode");
-    if (label == tr("People")) return QStringLiteral("Person");
-    if (label == tr("Collections")) return QStringLiteral("BoxSet");
+    if (label == tr("电视剧")) return QStringLiteral("Series");
+    if (label == tr("单集")) return QStringLiteral("Episode");
+    if (label == tr("演员")) return QStringLiteral("Person");
+    if (label == tr("合集")) return QStringLiteral("BoxSet");
     return QStringLiteral("Movie");
 }
 
@@ -62,5 +62,5 @@ void AggregatedFavoritesView::showEvent(QShowEvent* event)
 QString AggregatedFavoritesView::scopedPageTitle(const ServerProfile& profile) const
 {
     Q_UNUSED(profile);
-    return tr("Favorites");
+    return tr("收藏");
 }
