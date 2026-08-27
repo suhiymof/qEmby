@@ -63,15 +63,14 @@ void SearchAggregator::getResumeItemsAllServers(
     int perServerLimit, ServerResultCallback onServerResult,
     CompleteCallback onComplete)
 {
-    // 聚合继续观看：和单服 dashboard 的 loadResumeSection 走同样的
-    // Filters=IsResumable + SortBy=DatePlayed Desc（按最近播放时间倒序，
-    // UserData 字段已在 mediaCardFields 加上，提供 playedPercentage 给
-    // 进度条使用）。注意 searchAggregator 里 isResumable 已经隐含
-    // played=true 过滤，但 IsResumable 是播放进度 > 0 的判定，
-    // MediaService::getResumeItems 走 IsPlayed+SortBy 路径 —— 这里跟单服保持
-    // 一致用 IsResumable 即可。
+    // 聚合继续观看：和单服 dashboard 继续观看风格一致——
+    // Filters=IsResumable + IncludeItemTypes=Episode（拉 Episode 级，这样
+    // MediaCardDelegate 能显示 S/E 副标题如"S1:E6 第 6 集"）。
+    // SortBy=DatePlayed Desc 按最近播放倒序，UserData 字段由 mediaCardFields
+    // 提供（PlayedPercentage 画进度条、LastPlayedDate 排时间）。
     QString pathTemplate =
-        QStringLiteral("/Users/%1/Items?Filters=IsResumable&Recursive=true&Fields=%2"
+        QStringLiteral("/Users/%1/Items?Filters=IsResumable&Recursive=true"
+                      "&IncludeItemTypes=Episode&Fields=%2"
                       "&SortBy=DatePlayed&SortOrder=Descending")
             .arg(QStringLiteral("{uid}"), mediaCardFields());
     if (perServerLimit > 0)
