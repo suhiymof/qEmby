@@ -981,7 +981,8 @@ QCoro::Task<void> PlayerView::requestIntroDBSegments()
     {
         try
         {
-            const MediaItem seriesDetail = co_await mediaService->getItemDetail(currentItem.seriesId);
+            const MediaItem seriesDetail = co_await mediaService->getItemDetail(
+                currentItem.seriesId, m_currentMediaItem.serverId);
             if (!safeThis || safeThis->m_currentMediaId != currentMediaId)
                 co_return;
             imdbId = providerIdValue(seriesDetail.providerIds, {"Imdb", "IMDb", "imdb", "imdbid"});
@@ -2171,7 +2172,8 @@ QCoro::Task<void> PlayerView::switchFromMediaSwitcher(QString mediaId, QString t
 
     try
     {
-        MediaItem detail = co_await m_core->mediaService()->getItemDetail(mediaId);
+        MediaItem detail = co_await m_core->mediaService()->getItemDetail(
+            mediaId, m_currentMediaItem.serverId);
 
         if (!guard)
         {
@@ -2184,7 +2186,8 @@ QCoro::Task<void> PlayerView::switchFromMediaSwitcher(QString mediaId, QString t
 
         if (detail.mediaSources.isEmpty())
         {
-            PlaybackInfo playbackInfo = co_await m_core->mediaService()->getPlaybackInfo(detail.id);
+            PlaybackInfo playbackInfo = co_await m_core->mediaService()->getPlaybackInfo(
+                detail.id, m_currentMediaItem.serverId);
 
             if (!guard)
             {
@@ -4646,12 +4649,12 @@ void PlayerView::toggleFullscreenWindow()
 }
 
 
-QCoro::Task<void> PlayerView::executeFetchLogo(QPointer<PlayerView> safeThis, QEmbyCore *core, QString mediaId)
+QCoro::Task<void> PlayerView::executeFetchLogo(QPointer<PlayerView> safeThis, QEmbyCore *core, QString mediaId, QString serverId)
 {
     try
     {
         
-        MediaItem detail = co_await core->mediaService()->getItemDetail(mediaId);
+        MediaItem detail = co_await core->mediaService()->getItemDetail(mediaId, serverId);
 
         
         if (!safeThis || safeThis->m_currentMediaId != mediaId)
@@ -4697,7 +4700,8 @@ QCoro::Task<void> PlayerView::resolveDanmakuPlaybackContext(
     }
 
     try {
-        MediaItem detail = co_await core->mediaService()->getItemDetail(mediaId);
+        MediaItem detail =
+            co_await core->mediaService()->getItemDetail(mediaId, serverId);
         if (!safeThis || safeThis->m_currentMediaId != mediaId ||
             !safeThis->m_danmakuController) {
             co_return;
@@ -4870,7 +4874,8 @@ QCoro::Task<void> PlayerView::prefetchNextEpisodeSource()
 
     try
     {
-        PlaybackInfo pb = co_await mediaService->getPlaybackInfo(nextId);
+        PlaybackInfo pb = co_await mediaService->getPlaybackInfo(
+            nextId, m_currentMediaItem.serverId);
         if (!safeThis || !mediaService)
         {
             co_return;
@@ -5086,11 +5091,13 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     else
     {
         
-        auto detectSeriesMode = [](QPointer<PlayerView> safeThis, QEmbyCore *core, QString mId) -> QCoro::Task<void>
+        auto detectSeriesMode = [](QPointer<PlayerView> safeThis, QEmbyCore *core,
+                                   QString mId, QString serverId) -> QCoro::Task<void>
         {
             try
             {
-                MediaItem detail = co_await core->mediaService()->getItemDetail(mId);
+                MediaItem detail =
+                    co_await core->mediaService()->getItemDetail(mId, serverId);
                 if (!safeThis || safeThis->m_currentMediaId != mId)
                     co_return;
                 if (detail.type == "Episode" && !detail.seriesId.isEmpty())
@@ -5119,7 +5126,8 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
             {
             }
         };
-        detectSeriesMode(QPointer<PlayerView>(this), m_core, mediaId);
+        detectSeriesMode(QPointer<PlayerView>(this), m_core, mediaId,
+                         resolvedItem.serverId);
 
         ensureMediaSwitcherDataLoaded();
     }
@@ -5133,7 +5141,8 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     
     
     
-    executeFetchLogo(QPointer<PlayerView>(this), m_core, mediaId);
+    executeFetchLogo(QPointer<PlayerView>(this), m_core, mediaId,
+                     resolvedItem.serverId);
 
     
     

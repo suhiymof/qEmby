@@ -174,22 +174,26 @@ public:
     QCoro::Task<QList<MediaItem>> getNextUp(const QString& seriesId = "",
                                             QString serverId = QString());
 
-    QCoro::Task<QList<MediaItem>> getAdditionalParts(const QString& itemId);
+    QCoro::Task<QList<MediaItem>> getAdditionalParts(const QString& itemId,
+                                                    QString serverId = QString());
 
     
-    QCoro::Task<bool> toggleFavorite(const QString& itemId, bool isFavorite);
+    QCoro::Task<bool> toggleFavorite(const QString& itemId, bool isFavorite,
+                                     QString serverId = QString());
     
     
-    QCoro::Task<void> markAsPlayed(const QString& itemId);
-    QCoro::Task<void> markAsUnplayed(const QString& itemId);
-    QCoro::Task<void> removeFromResume(const QString& itemId);
+    QCoro::Task<void> markAsPlayed(const QString& itemId, QString serverId = QString());
+    QCoro::Task<void> markAsUnplayed(const QString& itemId, QString serverId = QString());
+    QCoro::Task<void> removeFromResume(const QString& itemId, QString serverId = QString());
 
     
     void clearRecommendCache();
     void removeRecommendCacheItem(const QString& itemId);
 
-    QCoro::Task<QList<MediaItem>> getSimilarItems(const QString& itemId, int limit = 15);
-    QCoro::Task<QList<MediaItem>> getItemCollections(const QString& itemId);
+    QCoro::Task<QList<MediaItem>> getSimilarItems(const QString& itemId, int limit = 15,
+                                                   QString serverId = QString());
+    QCoro::Task<QList<MediaItem>> getItemCollections(const QString& itemId,
+                                                      QString serverId = QString());
     QCoro::Task<QList<MediaItem>> getCollectionItems(const QString& collectionId);
     QCoro::Task<MediaQueryPage> getItemsByPersonPage(const QString& personId, const QString& sortBy = "SortName", const QString& sortOrder = "Ascending", int startIndex = 0, int limit = 0);
     QCoro::Task<QList<MediaItem>> getItemsByPerson(const QString& personId, const QString& sortBy = "SortName", const QString& sortOrder = "Ascending");

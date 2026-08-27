@@ -194,7 +194,7 @@ private:
     QPointer<PlayerOverlayDialog> m_activePlayerDialog;
 
     
-    static QCoro::Task<void> executeFetchLogo(QPointer<PlayerView> safeThis, QEmbyCore* core, QString mediaId);
+    static QCoro::Task<void> executeFetchLogo(QPointer<PlayerView> safeThis, QEmbyCore* core, QString mediaId, QString serverId = QString());
     static QCoro::Task<void> resolveDanmakuPlaybackContext(
         QPointer<PlayerView> safeThis,
         QPointer<QEmbyCore> core,

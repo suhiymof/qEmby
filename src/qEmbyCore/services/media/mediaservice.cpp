@@ -2378,68 +2378,106 @@ QCoro::Task<MediaItem> MediaService::getItemDetail(const QString &itemId,
     co_return item;
 }
 
-QCoro::Task<bool> MediaService::toggleFavorite(const QString &itemId, bool isFavorite)
+QCoro::Task<bool> MediaService::toggleFavorite(const QString &itemId, bool isFavorite,
+                                                    QString serverId)
 {
-    ensureValidProfile();
-    QString path = QString("/Users/%1/FavoriteItems/%2").arg(m_serverManager->activeProfile().userId, itemId);
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return isFavorite;
+    QString path = QString("/Users/%1/FavoriteItems/%2").arg(profile.userId, itemId);
 
-    if (isFavorite)
-    {
-        co_await m_serverManager->activeClient()->post(path, QJsonObject());
-    }
-    else
-    {
-        co_await m_serverManager->activeClient()->deleteResource(path);
+    if (serverId.isEmpty()) {
+        if (isFavorite)
+            co_await m_serverManager->activeClient()->post(path, QJsonObject());
+        else
+            co_await m_serverManager->activeClient()->deleteResource(path);
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        if (isFavorite)
+            co_await client.post(path, QJsonObject());
+        else
+            co_await client.deleteResource(path);
     }
     co_return isFavorite;
 }
 
-QCoro::Task<void> MediaService::markAsPlayed(const QString &itemId)
+QCoro::Task<void> MediaService::markAsPlayed(const QString &itemId, QString serverId)
 {
-    ensureValidProfile();
-    QString path = QString("/Users/%1/PlayedItems/%2").arg(m_serverManager->activeProfile().userId, itemId);
-    co_await m_serverManager->activeClient()->post(path, QJsonObject());
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return;
+    QString path = QString("/Users/%1/PlayedItems/%2").arg(profile.userId, itemId);
+    if (serverId.isEmpty()) {
+        co_await m_serverManager->activeClient()->post(path, QJsonObject());
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        co_await client.post(path, QJsonObject());
+    }
 }
 
-QCoro::Task<void> MediaService::markAsUnplayed(const QString &itemId)
+QCoro::Task<void> MediaService::markAsUnplayed(const QString &itemId, QString serverId)
 {
-    ensureValidProfile();
-    QString path = QString("/Users/%1/PlayedItems/%2").arg(m_serverManager->activeProfile().userId, itemId);
-    co_await m_serverManager->activeClient()->deleteResource(path);
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return;
+    QString path = QString("/Users/%1/PlayedItems/%2").arg(profile.userId, itemId);
+    if (serverId.isEmpty()) {
+        co_await m_serverManager->activeClient()->deleteResource(path);
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        co_await client.deleteResource(path);
+    }
 }
 
-QCoro::Task<void> MediaService::removeFromResume(const QString &itemId)
+QCoro::Task<void> MediaService::removeFromResume(const QString &itemId, QString serverId)
 {
-    ensureValidProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return;
 
-    
-    
     QString path =
-        QString("/Users/%1/Items/%2/HideFromResume?Hide=true").arg(m_serverManager->activeProfile().userId, itemId);
+        QString("/Users/%1/Items/%2/HideFromResume?Hide=true").arg(profile.userId, itemId);
 
-    co_await m_serverManager->activeClient()->post(path, QJsonObject());
+    if (serverId.isEmpty()) {
+        co_await m_serverManager->activeClient()->post(path, QJsonObject());
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        co_await client.post(path, QJsonObject());
+    }
 }
 
-QCoro::Task<QList<MediaItem>> MediaService::getSimilarItems(const QString &itemId, int limit)
+QCoro::Task<QList<MediaItem>> MediaService::getSimilarItems(const QString &itemId, int limit,
+                                                                QString serverId)
 {
-    ensureValidProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     const QString fieldQuery = appendMediaCardTooltipFields(
         QStringLiteral("PrimaryImageAspectRatio,ProductionYear,CanDownload"));
     QString path = QString("/Items/%1/"
                            "Similar?UserId=%2&Limit=%3&Fields=%4"
                            "&EnableImageTypes=Primary,Backdrop,Thumb"
                            "&ImageTypeLimit=1")
-                       .arg(itemId, m_serverManager->activeProfile().userId)
+                       .arg(itemId, profile.userId)
                        .arg(limit)
                        .arg(fieldQuery);
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (serverId.isEmpty()) {
+        response = co_await m_serverManager->activeClient()->get(path);
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    }
     co_return parseJsonArray<MediaItem>(response["Items"].toArray());
 }
 
-QCoro::Task<QList<MediaItem>> MediaService::getItemCollections(const QString &itemId)
+QCoro::Task<QList<MediaItem>> MediaService::getItemCollections(const QString &itemId,
+                                                                  QString serverId)
 {
-    ensureValidProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     const QString fieldQuery = appendMediaCardTooltipFields(
         QStringLiteral("PrimaryImageAspectRatio,CanDownload"));
     QString path = QString("/Users/%1/"
@@ -2447,10 +2485,15 @@ QCoro::Task<QList<MediaItem>> MediaService::getItemCollections(const QString &it
                            "true&ListItemIds=%2&Fields=%3"
                            "&EnableImageTypes=Primary,Backdrop,Thumb"
                            "&ImageTypeLimit=1")
-                       .arg(m_serverManager->activeProfile().userId, itemId,
-                            fieldQuery);
+                       .arg(profile.userId, itemId, fieldQuery);
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (serverId.isEmpty()) {
+        response = co_await m_serverManager->activeClient()->get(path);
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    }
     co_return parseJsonArray<MediaItem>(response["Items"].toArray());
 }
 
@@ -2558,12 +2601,21 @@ QCoro::Task<PlaybackInfo> MediaService::getPlaybackInfo(const QString &itemId,
     co_return PlaybackInfo::fromJson(response);
 }
 
-QCoro::Task<QList<MediaItem>> MediaService::getAdditionalParts(const QString &itemId)
+QCoro::Task<QList<MediaItem>> MediaService::getAdditionalParts(const QString &itemId,
+                                                                    QString serverId)
 {
-    ensureValidProfile();
-    QString path = QString("/Videos/%1/AdditionalParts?UserId=%2").arg(itemId, m_serverManager->activeProfile().userId);
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
+    QString path = QString("/Videos/%1/AdditionalParts?UserId=%2").arg(itemId, profile.userId);
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (serverId.isEmpty()) {
+        response = co_await m_serverManager->activeClient()->get(path);
+    } else {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    }
     QList<MediaItem> parts;
     if (response.contains("Items"))
     {

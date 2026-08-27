@@ -151,8 +151,8 @@ QCoro::Task<void> BaseView::executeToggleFavorite(MediaItem item)
 
     try {
         const bool targetState = !item.isFavorite();
-        const bool actualState =
-            co_await m_core->mediaService()->toggleFavorite(item.id, targetState);
+        const bool actualState = co_await m_core->mediaService()->toggleFavorite(
+            item.id, targetState, item.serverId);
 
         if (!safeThis) {
             co_return;
@@ -188,9 +188,15 @@ QCoro::Task<void> BaseView::executePlay(MediaItem item)
         QString streamUrl;
 
         if (!detail.mediaSources.isEmpty()) {
+            // 跨服路由：源选择偏好按 item 所属 server（聚合 item 的
+            // serverId 已由 resolvePlaybackItem 保留），不用 active。
             const QString serverId =
-                m_core->serverManager() ? m_core->serverManager()->activeProfile().id
-                                        : QString();
+                !detail.serverId.isEmpty() ? detail.serverId
+                                           : (m_core->serverManager()
+                                                  ? m_core->serverManager()
+                                                        ->activeProfile()
+                                                        .id
+                                                  : QString());
             const int bestSourceIdx =
                 resolvePreferredMediaSourceIndex(detail.mediaSources, serverId,
                                                  detail.id);
@@ -238,8 +244,11 @@ QCoro::Task<void> BaseView::executeExternalPlay(MediaItem item,
         }
 
         const QString serverId =
-            m_core->serverManager() ? m_core->serverManager()->activeProfile().id
-                                    : QString();
+            !detail.serverId.isEmpty()
+                ? detail.serverId
+                : (m_core->serverManager()
+                       ? m_core->serverManager()->activeProfile().id
+                       : QString());
         const int bestSourceIdx = resolvePreferredMediaSourceIndex(
             detail.mediaSources, serverId, detail.id);
         MediaSourceInfo selectedSource = detail.mediaSources[bestSourceIdx];
@@ -296,7 +305,7 @@ QCoro::Task<void> BaseView::executeMarkPlayed(MediaItem item)
 
     
     try {
-        co_await m_core->mediaService()->markAsPlayed(item.id);
+        co_await m_core->mediaService()->markAsPlayed(item.id, item.serverId);
 
         if (shouldRemoveFromResume && !isJellyfinServer() &&
             !resumeItemId.isEmpty()) {
@@ -306,7 +315,8 @@ QCoro::Task<void> BaseView::executeMarkPlayed(MediaItem item)
                          << "| resumeItemId=" << resumeItemId
                          << "| itemType=" << item.type
                          << "| hasResumeContext=" << item.hasResumeContext;
-                co_await m_core->mediaService()->removeFromResume(resumeItemId);
+                co_await m_core->mediaService()->removeFromResume(
+                    resumeItemId, item.serverId);
             } catch (const std::exception& e) {
                 qWarning()
                     << "[BaseView] Failed to remove completed item from Continue Watching"
@@ -359,7 +369,7 @@ QCoro::Task<void> BaseView::executeMarkUnplayed(MediaItem item)
 
     
     try {
-        co_await m_core->mediaService()->markAsUnplayed(item.id);
+        co_await m_core->mediaService()->markAsUnplayed(item.id, item.serverId);
         if (!safeThis) {
             co_return;
         }
@@ -396,7 +406,8 @@ QCoro::Task<void> BaseView::executeRemoveFromResume(MediaItem item)
                  << "| resumeItemId=" << resumeItemId
                  << "| itemType=" << item.type
                  << "| hasResumeContext=" << item.hasResumeContext;
-        co_await m_core->mediaService()->removeFromResume(resumeItemId);
+        co_await m_core->mediaService()->removeFromResume(resumeItemId,
+                                                              item.serverId);
         if (!safeThis) {
             co_return;
         }

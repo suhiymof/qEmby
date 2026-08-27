@@ -1250,7 +1250,7 @@ QCoro::Task<void> DetailView::prefetchItemDetail(QString itemId, QString cacheSe
     {
         if (!mediaService)
             co_return;
-        MediaItem item = co_await mediaService->getItemDetail(targetId);
+        MediaItem item = co_await mediaService->getItemDetail(targetId, serverId);
         auto fingerprintFuture = QtConcurrent::run(
             [item]() mutable { return DetailCacheUtils::fingerprint(item); });
         const QString fetchedFingerprint = co_await fingerprintFuture;
@@ -1948,7 +1948,8 @@ QCoro::Task<void> DetailView::executeFetchSecondaries(QPointer<DetailView> safeT
         
         qDebug() << "[DetailView][network] Fetch series seasons"
                  << "seriesId=" << targetId;
-        auto seasons = co_await core->mediaService()->getSeasons(targetId);
+        auto seasons = co_await core->mediaService()->getSeasons(
+            targetId, safeThis->m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != targetId)
             co_return;
 
@@ -2059,7 +2060,8 @@ QCoro::Task<void> DetailView::executeFetchSecondaries(QPointer<DetailView> safeT
     {
         qDebug() << "[DetailView][network] Fetch similar items"
                  << "itemId=" << targetId;
-        QList<MediaItem> similar = co_await core->mediaService()->getSimilarItems(targetId, 15);
+        QList<MediaItem> similar = co_await core->mediaService()->getSimilarItems(
+            targetId, 15, safeThis->m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != targetId)
             co_return;
 
@@ -2093,7 +2095,8 @@ QCoro::Task<void> DetailView::executeFetchSecondaries(QPointer<DetailView> safeT
     {
         qDebug() << "[DetailView][network] Fetch item collections"
                  << "itemId=" << targetId;
-        QList<MediaItem> collections = co_await core->mediaService()->getItemCollections(targetId);
+        QList<MediaItem> collections = co_await core->mediaService()->getItemCollections(
+            targetId, safeThis->m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != targetId)
             co_return;
 
@@ -2128,7 +2131,8 @@ QCoro::Task<void> DetailView::executeFetchSecondaries(QPointer<DetailView> safeT
     {
         qDebug() << "[DetailView][network] Fetch additional parts"
                  << "itemId=" << targetId;
-        QList<MediaItem> additionalParts = co_await core->mediaService()->getAdditionalParts(targetId);
+        QList<MediaItem> additionalParts = co_await core->mediaService()->getAdditionalParts(
+            targetId, safeThis->m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != targetId)
             co_return;
 
@@ -2173,7 +2177,7 @@ QCoro::Task<void> DetailView::fetchSeriesNextUp(QString targetId, bool applyToUi
         MediaItem playableItem;
         qDebug() << "[DetailView][network] Fetch next-up"
                  << "seriesId=" << targetId;
-        auto nextUp = co_await mediaService->getNextUp(targetId);
+        auto nextUp = co_await mediaService->getNextUp(targetId, m_detailCacheServerId);
 
         if (!safeThis || !mediaService || safeThis->m_currentItemId != targetId)
             co_return;
@@ -2184,7 +2188,8 @@ QCoro::Task<void> DetailView::fetchSeriesNextUp(QString targetId, bool applyToUi
         {
             qDebug() << "[DetailView][network] Fetch seasons for next-up fallback"
                      << "seriesId=" << targetId;
-            auto seasons = co_await mediaService->getSeasons(targetId);
+            auto seasons = co_await mediaService->getSeasons(
+                targetId, safeThis->m_detailCacheServerId);
             if (!safeThis || !mediaService ||
                 safeThis->m_currentItemId != targetId)
                 co_return;
@@ -2193,7 +2198,10 @@ QCoro::Task<void> DetailView::fetchSeriesNextUp(QString targetId, bool applyToUi
                 qDebug() << "[DetailView][network] Fetch episodes for next-up fallback"
                          << "seriesId=" << targetId << "seasonId=" << seasons.first().id;
                 auto episodes = co_await mediaService->getEpisodes(
-                    targetId, seasons.first().id);
+                    targetId, seasons.first().id,
+                    QStringLiteral("ParentIndexNumber,IndexNumber"),
+                    QStringLiteral("Ascending"),
+                    safeThis->m_detailCacheServerId);
                 if (!safeThis || safeThis->m_currentItemId != targetId)
                     co_return;
                 if (!episodes.isEmpty())
@@ -2321,7 +2329,8 @@ QCoro::Task<void> DetailView::applySeriesPlayableItem(MediaItem playableItem, bo
 
     try
     {
-        PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(playableItemId);
+        PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(
+            playableItemId, m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != seriesId || safeThis->m_currentMediaItem.type != "Series" ||
             safeThis->m_currentPlayableItem.id != playableItemId)
             co_return;
@@ -2367,7 +2376,8 @@ QCoro::Task<void> DetailView::onVersionChanged(int index)
     {
         try
         {
-            PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(actionItemId);
+            PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(
+                actionItemId, m_detailCacheServerId);
             if (!safeThis || safeThis->m_currentItemId != expectedPageId)
                 co_return;
             if (!info.mediaSources.isEmpty())
@@ -2422,7 +2432,10 @@ QCoro::Task<void> DetailView::executePlay(MediaItem targetItem, long long startT
         MediaItem actualItem = targetItem;
         if (actualItem.mediaSources.isEmpty())
         {
-            PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(actualItem.id);
+            PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(
+                actualItem.id,
+                !actualItem.serverId.isEmpty() ? actualItem.serverId
+                                               : m_detailCacheServerId);
             actualItem.mediaSources = info.mediaSources;
         }
         if (actualItem.mediaSources.isEmpty())
@@ -2474,7 +2487,10 @@ QCoro::Task<void> DetailView::executePlay(MediaItem targetItem, long long startT
                 ConfigStore::instance()->get<QString>(ConfigKeys::PlayerSubLang, "auto"));
         }
 
-        QString streamUrl = m_core->mediaService()->getStreamUrl(actualItem.id, modifiedSource.id);
+        QString streamUrl = m_core->mediaService()->getStreamUrl(
+            actualItem.id, modifiedSource.id,
+            !actualItem.serverId.isEmpty() ? actualItem.serverId
+                                           : m_detailCacheServerId);
 
         const QString playTitle = MediaItemUtils::playbackTitle(actualItem, m_currentMediaItem.name);
 
@@ -2498,7 +2514,9 @@ QCoro::Task<void> DetailView::executePlaySeason(MediaItem seasonItem)
 
     try
     {
-        QList<MediaItem> episodes = co_await m_core->mediaService()->getEpisodes(seriesId, seasonId);
+        QList<MediaItem> episodes = co_await m_core->mediaService()->getEpisodes(
+            seriesId, seasonId, QStringLiteral("ParentIndexNumber,IndexNumber"),
+            QStringLiteral("Ascending"), m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != seriesId)
             co_return;
 
@@ -2533,7 +2551,10 @@ QCoro::Task<void> DetailView::executeExternalPlay(MediaItem targetItem, QString 
         MediaItem actualItem = targetItem;
         if (actualItem.mediaSources.isEmpty())
         {
-            PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(actualItem.id);
+            PlaybackInfo info = co_await m_core->mediaService()->getPlaybackInfo(
+                actualItem.id,
+                !actualItem.serverId.isEmpty() ? actualItem.serverId
+                                               : m_detailCacheServerId);
             actualItem.mediaSources = info.mediaSources;
         }
         if (actualItem.mediaSources.isEmpty())
@@ -2574,7 +2595,10 @@ QCoro::Task<void> DetailView::executeExternalPlay(MediaItem targetItem, QString 
                 ConfigStore::instance()->get<QString>(ConfigKeys::PlayerSubLang, "auto"));
         }
 
-        QString streamUrl = m_core->mediaService()->getStreamUrl(actualItem.id, modifiedSource.id);
+        QString streamUrl = m_core->mediaService()->getStreamUrl(
+            actualItem.id, modifiedSource.id,
+            !actualItem.serverId.isEmpty() ? actualItem.serverId
+                                           : m_detailCacheServerId);
 
         const QString playTitle = MediaItemUtils::playbackTitle(actualItem, m_currentMediaItem.name);
 
@@ -3185,7 +3209,8 @@ QCoro::Task<void> DetailView::fetchAndApplyPlaybackInfo(QString itemId)
     {
         if (!mediaService)
             co_return;
-        PlaybackInfo info = co_await mediaService->getPlaybackInfo(itemId);
+        PlaybackInfo info = co_await mediaService->getPlaybackInfo(
+            itemId, m_detailCacheServerId);
         if (!safeThis || safeThis->m_currentItemId != itemId)
             co_return;
         if (info.mediaSources.isEmpty())
@@ -3292,7 +3317,8 @@ QCoro::Task<void> DetailView::executeSilentRefresh(QPointer<DetailView> safeThis
                 if (!safeThis || safeThis->m_currentItemId != itemId)
                     co_return;
 
-                auto seasons = co_await core->mediaService()->getSeasons(itemId);
+                auto seasons = co_await core->mediaService()->getSeasons(
+                    itemId, safeThis->m_detailCacheServerId);
                 if (!safeThis || safeThis->m_currentItemId != itemId)
                     co_return;
 
@@ -3967,7 +3993,10 @@ QCoro::Task<void> DetailView::loadEpisodesForSeason(int idx, QString highlightEp
     {
         qDebug() << "[DetailView][network] Fetch season episodes"
                  << "seriesId=" << seriesId << "seasonId=" << seasonId << "seasonIndex=" << idx;
-        QList<MediaItem> episodes = co_await core->mediaService()->getEpisodes(seriesId, seasonId);
+        QList<MediaItem> episodes = co_await core->mediaService()->getEpisodes(
+            seriesId, seasonId, QStringLiteral("ParentIndexNumber,IndexNumber"),
+            QStringLiteral("Ascending"), safeThis ? safeThis->m_detailCacheServerId
+                                                  : QString());
 
         if (!safeThis || safeThis->m_currentItemId != seriesId || safeThis->m_currentSeasonIndex != idx)
             co_return;

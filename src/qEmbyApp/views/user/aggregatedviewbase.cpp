@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QListView>
 #include <QToolButton>
 #include <QFrame>
 #include <utility>
