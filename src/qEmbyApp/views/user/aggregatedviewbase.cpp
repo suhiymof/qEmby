@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QScrollBar>
 #include <QListView>
+#include <QMouseEvent>
 #include <QToolButton>
 #include <QFrame>
 #include <utility>
