@@ -19,6 +19,10 @@ public:
 
     static SearchHistoryManager *instance();
 
+    // 聚合搜索历史的保留 bucket：与单服务器历史（按 serverId 分桶）隔离，
+    // 所有服务器共享一份（跨服务器搜索的关键词记录）。
+    static QString aggregatedBucket() { return QStringLiteral("__aggregated__"); }
+
     bool isEnabled() const;
     bool isAutocompleteEnabled() const;
     void recordSearch(const QString &serverId, QString query);

@@ -32,6 +32,7 @@ class AggregatedHistoryView;
 class AggregatedFavoritesView;
 class ServerScopedView;
 class SettingsView;
+class SearchHistoryPopup;
 class SmoothScrollController;
 class SeasonView; 
 class PlaybackManager; 
@@ -123,6 +124,11 @@ private:
     void setupSearchHistory();
     void updateSearchCompleter(const QString &text = QString());
     QString currentSearchServerId() const;
+    // 阶段6：搜索历史下拉（当前服搜索框 + 聚合搜索框共用 SearchHistoryPopup）。
+    void setupSearchHistoryPopups();
+    void showHistoryPopupFor(QLineEdit *box, SearchHistoryPopup *popup,
+                             const QString &bucket);
+    void dismissHistoryPopups();
 
     
     void pushView(QWidget* view);
@@ -181,6 +187,10 @@ private:
     QAction* m_searchAction = nullptr;
     QCompleter* m_searchCompleter = nullptr;
     QStringListModel* m_searchHistoryModel = nullptr;
+
+    // 阶段6：搜索历史下拉（chip 面板，复用 SearchHistoryPopup 组件）。
+    SearchHistoryPopup* m_searchHistoryPopup = nullptr;          // 当前服搜索框
+    SearchHistoryPopup* m_aggregatedSearchHistoryPopup = nullptr; // 聚合搜索框
 
     QPushButton* m_btnHome = nullptr;
     QPushButton* m_btnFavorites = nullptr;

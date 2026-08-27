@@ -1,6 +1,7 @@
 #include "homeview.h"
 #include "../../utils/qcoroutil.h"
 #include "../../components/searchcompleterpopup.h"
+#include "../../components/searchhistorypopup.h"
 #include "../../components/downloadmanagerdialog.h"
 #include "../../components/elidedlabel.h"
 #include "../../components/moderntoast.h"
@@ -54,6 +55,7 @@
 #include <QShowEvent>
 #include <QStringListModel>
 #include <QTimer>
+#include <QKeyEvent>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <models/profile/serverprofile.h>
@@ -346,11 +348,16 @@ void HomeView::setupUi()
     connect(this, &HomeView::aggregatedSearchRequested, this,
             [this](const QString& query) {
                 if (!m_aggregatedSearchView) return;
+                const QString trimmed = query.trimmed();
+                if (trimmed.isEmpty()) return;
+                // 记录聚合搜索历史（__aggregated__ 桶，所有服务器共享）。
+                SearchHistoryManager::instance()->recordSearch(
+                    SearchHistoryManager::aggregatedBucket(), trimmed);
                 if (m_contentSwitcher->currentWidget() != m_aggregatedSearchView) {
                     // pushView 保留返回栈：聚合结果 → 返回箭头 → 搜索前页面。
                     pushView(m_aggregatedSearchView);
                 }
-                m_aggregatedSearchView->search(query);
+                m_aggregatedSearchView->search(trimmed);
             });
     connect(this, &HomeView::aggregatedHistoryRequested, this,
             [this]() {
@@ -871,6 +878,7 @@ void HomeView::setupSidebar()
                 }
             });
     setupSearchHistory();
+    setupSearchHistoryPopups();
 
     m_btnHome = new QPushButton(tr("Home"), m_navArea);
     m_btnFavorites = new QPushButton(tr("Favorites"), m_navArea);
@@ -1278,6 +1286,128 @@ QString HomeView::currentSearchServerId() const
         return {};
     }
     return m_core->serverManager()->activeProfile().id;
+}
+
+void HomeView::setupSearchHistoryPopups()
+{
+    if (!m_searchBox && !m_aggregatedSearchBox) {
+        return;
+    }
+
+    // —— 当前服搜索框历史（按 active server 分桶）——
+    m_searchHistoryPopup = new SearchHistoryPopup(this);
+    connect(m_searchHistoryPopup, &SearchHistoryPopup::termActivated, this,
+            [this](const QString &term) {
+                if (!m_searchBox) return;
+                m_searchBox->setText(term);
+                triggerSearch(term); // 内含 recordSearch(currentSearchServerId())
+            });
+    connect(m_searchHistoryPopup, &SearchHistoryPopup::clearHistoryRequested, this,
+            [this]() {
+                SearchHistoryManager::instance()->clearHistory(currentSearchServerId());
+            });
+    connect(m_searchHistoryPopup, &SearchHistoryPopup::removeHistoryTermRequested, this,
+            [this](const QString &term) {
+                SearchHistoryManager::instance()->removeHistoryTerm(
+                    currentSearchServerId(), term);
+            });
+
+    // —— 聚合搜索框历史（__aggregated__ 桶，所有服务器共享）——
+    m_aggregatedSearchHistoryPopup = new SearchHistoryPopup(this);
+    connect(m_aggregatedSearchHistoryPopup, &SearchHistoryPopup::termActivated, this,
+            [this](const QString &term) {
+                if (!m_aggregatedSearchBox) return;
+                m_aggregatedSearchBox->setText(term);
+                Q_EMIT aggregatedSearchRequested(term);
+                // 记录在 aggregatedSearchRequested 处理器内统一执行。
+            });
+    connect(m_aggregatedSearchHistoryPopup,
+            &SearchHistoryPopup::clearHistoryRequested, this,
+            [this]() {
+                SearchHistoryManager::instance()->clearHistory(
+                    SearchHistoryManager::aggregatedBucket());
+            });
+    connect(m_aggregatedSearchHistoryPopup,
+            &SearchHistoryPopup::removeHistoryTermRequested, this,
+            [this](const QString &term) {
+                SearchHistoryManager::instance()->removeHistoryTerm(
+                    SearchHistoryManager::aggregatedBucket(), term);
+            });
+
+    // 监听两个搜索框：聚焦/点击（空文本）显示历史，打字隐藏（让补全接管）。
+    if (m_searchBox) {
+        m_searchBox->installEventFilter(this);
+        connect(m_searchBox, &QLineEdit::textEdited, this,
+                [this]() { dismissHistoryPopups(); });
+    }
+    if (m_aggregatedSearchBox) {
+        m_aggregatedSearchBox->installEventFilter(this);
+        connect(m_aggregatedSearchBox, &QLineEdit::textEdited, this,
+                [this]() { dismissHistoryPopups(); });
+    }
+
+    // 历史变更时刷新正在显示的下拉。
+    connect(SearchHistoryManager::instance(), &SearchHistoryManager::historyChanged,
+            this, [this](const QString &serverId) {
+                if (m_searchHistoryPopup && m_searchHistoryPopup->isVisible()
+                    && m_searchBox && m_searchBox->hasFocus()
+                    && serverId == currentSearchServerId()) {
+                    showHistoryPopupFor(m_searchBox, m_searchHistoryPopup,
+                                        serverId);
+                } else if (m_aggregatedSearchHistoryPopup
+                           && m_aggregatedSearchHistoryPopup->isVisible()
+                           && m_aggregatedSearchBox
+                           && m_aggregatedSearchBox->hasFocus()
+                           && serverId
+                                  == SearchHistoryManager::aggregatedBucket()) {
+                    showHistoryPopupFor(m_aggregatedSearchBox,
+                                        m_aggregatedSearchHistoryPopup,
+                                        SearchHistoryManager::aggregatedBucket());
+                }
+            });
+}
+
+void HomeView::showHistoryPopupFor(QLineEdit *box, SearchHistoryPopup *popup,
+                                   const QString &bucket)
+{
+    if (!box || !popup || !SearchHistoryManager::instance()->isEnabled()) {
+        dismissHistoryPopups();
+        return;
+    }
+    if (!box->isVisible() || !box->hasFocus()) {
+        dismissHistoryPopups();
+        return;
+    }
+
+    const auto entries = SearchHistoryManager::instance()->historyEntries(bucket);
+    popup->setEntries(entries);
+    if (!popup->hasContent()) {
+        dismissHistoryPopups();
+        return;
+    }
+
+    // 避免与另一个 popup / 补全下拉叠层。
+    if (m_searchHistoryPopup && popup != m_searchHistoryPopup) {
+        m_searchHistoryPopup->dismiss(true);
+    }
+    if (m_aggregatedSearchHistoryPopup && popup != m_aggregatedSearchHistoryPopup) {
+        m_aggregatedSearchHistoryPopup->dismiss(true);
+    }
+    if (m_searchCompleter && m_searchCompleter->popup()) {
+        m_searchCompleter->popup()->hide();
+    }
+
+    popup->showBelow(box);
+}
+
+void HomeView::dismissHistoryPopups()
+{
+    if (m_searchHistoryPopup) {
+        m_searchHistoryPopup->dismiss(true);
+    }
+    if (m_aggregatedSearchHistoryPopup) {
+        m_aggregatedSearchHistoryPopup->dismiss(true);
+    }
 }
 
 
@@ -1772,6 +1902,7 @@ void HomeView::hideEvent(QHideEvent *event)
         m_sidebar->hide();
     }
 
+    dismissHistoryPopups();
     QWidget::hideEvent(event);
 }
 
@@ -1872,6 +2003,45 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                 row->style()->polish(row);
             }
             m_serverSwitcherHoverItem = nullptr;
+        }
+    }
+
+    // —— 搜索历史下拉：聚焦/点击（空文本）显示，↓ 键显示，Esc 隐藏 ——
+    if (watched == m_searchBox || watched == m_aggregatedSearchBox) {
+        const bool isAggregated = (watched == m_aggregatedSearchBox);
+        auto *box = isAggregated ? m_aggregatedSearchBox : m_searchBox;
+        SearchHistoryPopup *popup = isAggregated ? m_aggregatedSearchHistoryPopup
+                                                 : m_searchHistoryPopup;
+        const QString bucket = isAggregated
+                                   ? SearchHistoryManager::aggregatedBucket()
+                                   : currentSearchServerId();
+
+        if (event->type() == QEvent::FocusIn) {
+            if (box && box->text().trimmed().isEmpty()) {
+                QTimer::singleShot(0, this, [this, box, popup, bucket]() {
+                    showHistoryPopupFor(box, popup, bucket);
+                });
+            }
+            return false;
+        }
+        if (event->type() == QEvent::MouseButtonPress) {
+            if (box && box->text().trimmed().isEmpty()) {
+                QTimer::singleShot(0, this, [this, box, popup, bucket]() {
+                    showHistoryPopupFor(box, popup, bucket);
+                });
+            }
+            return false;
+        }
+        if (event->type() == QEvent::KeyPress) {
+            auto *keyEvent = static_cast<QKeyEvent *>(event);
+            if (keyEvent->key() == Qt::Key_Down) {
+                showHistoryPopupFor(box, popup, bucket);
+                return false;
+            }
+            if (keyEvent->key() == Qt::Key_Escape) {
+                dismissHistoryPopups();
+                return false;
+            }
         }
     }
 
