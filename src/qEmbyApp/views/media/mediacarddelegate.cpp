@@ -638,19 +638,36 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
         painter->drawText(targetImgRect, Qt::AlignCenter, tr("No Image"));
     }
 
+    // —— 剧集 S/E 标签（进度条上方，半透明黑底白字）——
+    // 无论是否有进度条都显示——S/E 是剧集内容的关键信息，应稳定可见。
+    const bool isEpisode = (item.type == "Episode");
+    const bool hasSeasonEpisode =
+        isEpisode && item.parentIndexNumber >= 0 && item.indexNumber >= 0;
+    QRect sxeRect;
+    if (hasSeasonEpisode) {
+        const int sxeHeight = qMax(18, qRound(18 * fontScale));
+        const int sxeMargin = 4;
+        // 默认放在图片底部（即使没有进度条也能显示）；有进度条时贴在 barRect 上方。
+        sxeRect = QRect(targetImgRect.left() + sxeMargin,
+                        targetImgRect.bottom() - sxeHeight - sxeMargin,
+                        targetImgRect.width() - sxeMargin * 2,
+                        sxeHeight);
+    }
+
     // —— 播放进度条 ——
     // 已播（UserData.PlayedPercentage > 0）时在图片底部画一条进度条；
     // "下一集待播"（playedPercentage == 0，服务器只记录了下集）不画。
     const double playedPct = item.userData.playedPercentage;
+    QRect barRect;
     if (playedPct > 0.0)
     {
         const qreal pct = qBound(0.0, playedPct / 100.0, 1.0);
         const int barHeight = qMax(3, qRound(4 * fontScale));
         const int barMargin = 4;
-        QRect barRect(targetImgRect.left() + barMargin,
-                      targetImgRect.bottom() - barHeight - barMargin,
-                      targetImgRect.width() - barMargin * 2,
-                      barHeight);
+        barRect = QRect(targetImgRect.left() + barMargin,
+                        targetImgRect.bottom() - barHeight - barMargin,
+                        targetImgRect.width() - barMargin * 2,
+                        barHeight);
 
         // 底槽（半透明黑）
         painter->setPen(Qt::NoPen);
@@ -665,6 +682,43 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
             painter->setBrush(QColor(232, 46, 62, 230));
             painter->drawRoundedRect(filledRect, barHeight / 2, barHeight / 2);
         }
+    }
+
+    // S/E 行：定位 + 绘制（必须在进度条之后画，才知道 barRect 真实位置）
+    if (hasSeasonEpisode) {
+        if (!barRect.isNull()) {
+            // 有进度条：S/E 行贴在 barRect 上方
+            sxeRect.moveTop(barRect.top() - sxeRect.height() - 4);
+        }
+        // 半透明黑底（alpha 170 适配浅色封面）
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(0, 0, 0, 170));
+        painter->drawRoundedRect(sxeRect, 4, 4);
+
+        // 文字：S01E02 · 玉坠风波（单集名缺失时只显示 S01E02）
+        const QString season =
+            item.parentIndexNumber >= 10
+                ? QStringLiteral("S%1").arg(item.parentIndexNumber)
+                : QStringLiteral("S0%1").arg(item.parentIndexNumber);
+        const QString episode =
+            item.indexNumber >= 10
+                ? QStringLiteral("E%1").arg(item.indexNumber)
+                : QStringLiteral("E0%1").arg(item.indexNumber);
+        QString sxeText = QStringLiteral("%1E%2").arg(season).arg(episode);
+        if (!item.name.trimmed().isEmpty()) {
+            sxeText += QStringLiteral(" \u00B7 %1").arg(item.name);
+        }
+
+        QFont sxeFont = option.font;
+        sxeFont.setPixelSize(qMax(10, qRound(12 * fontScale)));
+        sxeFont.setBold(true);
+        painter->setFont(sxeFont);
+        painter->setPen(QColor(255, 255, 255, 235));
+        QFontMetrics fm(sxeFont);
+        const QString elidedSxe =
+            fm.elidedText(sxeText, Qt::ElideRight, sxeRect.width() - 12);
+        painter->drawText(sxeRect.adjusted(6, 0, -6, 0),
+                           Qt::AlignVCenter | Qt::AlignLeft, elidedSxe);
     }
 
     
@@ -809,14 +863,8 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
 
     QFontMetrics fm(titleFont);
     
+    // 标题只显示纯名字——剧集 S/E 已在进度条上方独立画出（避免重复）。
     QString displayTitle = item.name;
-    if (item.type == "Episode" && item.parentIndexNumber >= 0 && item.indexNumber >= 0)
-    {
-        displayTitle = QString("S%1E%2  %3")
-                           .arg(item.parentIndexNumber, 2, 10, QChar('0'))
-                           .arg(item.indexNumber, 2, 10, QChar('0'))
-                           .arg(item.name);
-    }
     QString elidedTitle = fm.elidedText(displayTitle, Qt::ElideRight, titleRect.width());
     Qt::Alignment titleAlign =
         (m_style == Poster) ? (Qt::AlignHCenter | Qt::AlignVCenter) : (Qt::AlignHCenter | Qt::AlignVCenter);
