@@ -155,7 +155,10 @@ void SearchAggregator::fanOut(const QString& pathTemplate,
                     state->onComplete(state->total, state->succeeded.load());
                 }
             }
-            // apiClient 由 SearchAggregator(this) parent 自动 delete，无需手动 deleteLater。
+            // 本次请求已结束，释放临时 ApiClient（延迟到事件循环，此时
+            // 所有回调已完成）。避免反复 startLoad 时对象在
+            // SearchAggregator 上无限累积。
+            apiClient->deleteLater();
             co_return;
         }();
 

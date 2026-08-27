@@ -86,6 +86,13 @@ void AggregatedServerSection::setItems(const QList<MediaItem>& items)
     setLoading(false);
 }
 
+void AggregatedServerSection::clearItems()
+{
+    m_items.clear();
+    m_gallery->setItems({});
+    m_countLabel->setText(QString());
+}
+
 void AggregatedServerSection::setLoading(bool loading)
 {
     if (m_loadingLabel) {
@@ -147,32 +154,50 @@ AggregatedViewBase::~AggregatedViewBase() = default;
 
 void AggregatedViewBase::createSkeletonSections()
 {
-    clearSections();
     if (!m_core || !m_core->serverManager()) return;
 
     const QList<ServerProfile> servers = m_core->serverManager()->servers();
+
+    // Sections 常驻：只在服务器列表变化时重建 widget（避免反复
+    // deleteLater/重建 gallery + QScroller grab 引发的时序风险）；
+    // 相同列表时仅重置为加载中态。
+    QStringList currentIds;
     for (const ServerProfile& profile : servers) {
-        if (!profile.isValid()) continue;
-        auto* section = new AggregatedServerSection(m_core, profile, this);
+        if (profile.isValid()) currentIds.append(profile.id);
+    }
+    QStringList existingIds;
+    for (const AggregatedServerSection* section : std::as_const(m_sections)) {
+        existingIds.append(section->serverId());
+    }
+    if (existingIds != currentIds) {
+        clearSections();
+        for (const ServerProfile& profile : servers) {
+            if (!profile.isValid()) continue;
+            auto* section = new AggregatedServerSection(m_core, profile, this);
+            connect(section, &AggregatedServerSection::sectionClicked, this,
+                    [this](const ServerProfile& p) {
+                        Q_EMIT serverScopedRequested(p);
+                    });
+            // 卡片交互 → BaseView 统一处理（播放/收藏/详情/更多菜单）。
+            connect(section, &AggregatedServerSection::itemActivated, this,
+                    [this](const MediaItem& item) {
+                        Q_EMIT navigateToDetail(item.id, item.name, item);
+                    });
+            connect(section, &AggregatedServerSection::playRequested, this,
+                    &BaseView::handlePlayRequested);
+            connect(section, &AggregatedServerSection::favoriteRequested, this,
+                    &BaseView::handleFavoriteRequested);
+            connect(section, &AggregatedServerSection::moreMenuRequested, this,
+                    &BaseView::handleMoreMenuRequested);
+            m_sectionsLayout->insertWidget(m_sectionsLayout->count() - 1, section);
+            m_sections.append(section);
+        }
+    }
+
+    // 重置全部 section 为加载中态。
+    for (AggregatedServerSection* section : std::as_const(m_sections)) {
+        section->clearItems();
         section->setLoading(true);
-        connect(section, &AggregatedServerSection::sectionClicked, this,
-                [this](const ServerProfile& p) {
-                    // 阶段5 实现 Server Scoped 跳转；当前占位 emit。
-                    Q_EMIT serverScopedRequested(p);
-                });
-        // 卡片交互 → BaseView 统一处理（播放/收藏/详情/更多菜单）。
-        connect(section, &AggregatedServerSection::itemActivated, this,
-                [this](const MediaItem& item) {
-                    Q_EMIT navigateToDetail(item.id, item.name, item);
-                });
-        connect(section, &AggregatedServerSection::playRequested, this,
-                &BaseView::handlePlayRequested);
-        connect(section, &AggregatedServerSection::favoriteRequested, this,
-                &BaseView::handleFavoriteRequested);
-        connect(section, &AggregatedServerSection::moreMenuRequested, this,
-                &BaseView::handleMoreMenuRequested);
-        m_sectionsLayout->insertWidget(m_sectionsLayout->count() - 1, section);
-        m_sections.append(section);
     }
 }
 

@@ -3,7 +3,8 @@
 #include <services/manager/servermanager.h>
 
 namespace {
-constexpr int kPerServerFavoritesLimit = 50;
+// 聚合视图每 server 预览条数（防图片请求风暴，见 aggregatedsearchview.cpp 注释）。
+constexpr int kPerServerFavoritesLimit = 12;
 }
 
 AggregatedFavoritesView::AggregatedFavoritesView(QEmbyCore* core, QWidget* parent)

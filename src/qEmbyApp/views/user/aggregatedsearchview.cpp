@@ -3,7 +3,10 @@
 #include <services/manager/servermanager.h>
 
 namespace {
-constexpr int kPerServerSearchLimit = 50;
+// 聚合视图每 server 预览条数：刻意保持小值。8+ server × limit 张卡片
+// 同时渲染会触发海量图片请求（400+ 并发涌入 MediaService 图片调度队列，
+// 实测崩溃）；要看该服全部结果点击 section header 进 Server Scoped 页。
+constexpr int kPerServerSearchLimit = 12;
 }
 
 AggregatedSearchView::AggregatedSearchView(QEmbyCore* core, QWidget* parent)

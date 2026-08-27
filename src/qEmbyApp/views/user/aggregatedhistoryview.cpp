@@ -3,7 +3,8 @@
 #include <services/manager/servermanager.h>
 
 namespace {
-constexpr int kPerServerHistoryLimit = 50;
+// 聚合视图每 server 预览条数（防图片请求风暴，见 aggregatedsearchview.cpp 注释）。
+constexpr int kPerServerHistoryLimit = 12;
 }
 
 AggregatedHistoryView::AggregatedHistoryView(QEmbyCore* core, QWidget* parent)
