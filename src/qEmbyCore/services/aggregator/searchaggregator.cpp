@@ -63,15 +63,16 @@ void SearchAggregator::getResumeItemsAllServers(
     int perServerLimit, ServerResultCallback onServerResult,
     CompleteCallback onComplete)
 {
-    // 聚合继续观看：和单服 dashboard 继续观看风格一致——
-    // Filters=IsResumable + IncludeItemTypes=Episode（拉 Episode 级，这样
-    // MediaCardDelegate 能显示 S/E 副标题如"S1:E6 第 6 集"）。
-    // SortBy=DatePlayed Desc 按最近播放倒序，UserData 字段由 mediaCardFields
-    // 提供（PlayedPercentage 画进度条、LastPlayedDate 排时间）。
+    // 聚合继续观看：与主页 dashboard 完全同源——Emby 专用
+    // /Users/{uid}/Items/Resume 端点（MediaTypes=Video，Movie + Episode
+    // 混合）。之前误用 /Items?Filters=IsResumable&IncludeItemTypes=Episode，
+    // 把电影条目全部过滤掉，导致聚合历史和主页继续观看对不上。
+    // S/E 标签（S01E02）由 MediaCardDelegate 按 item.type==Episode 自动
+    // 绘制，电影不显示 S/E，无需在查询层过滤。
     QString pathTemplate =
-        QStringLiteral("/Users/%1/Items?Filters=IsResumable&Recursive=true"
-                      "&IncludeItemTypes=Episode&Fields=%2"
-                      "&SortBy=DatePlayed&SortOrder=Descending")
+        QStringLiteral("/Users/%1/Items/Resume?Recursive=true&MediaTypes=Video"
+                      "&Fields=%2&EnableImageTypes=Primary,Backdrop,Thumb"
+                      "&ImageTypeLimit=1")
             .arg(QStringLiteral("{uid}"), mediaCardFields());
     if (perServerLimit > 0)
         pathTemplate += QStringLiteral("&Limit=%1").arg(perServerLimit);
