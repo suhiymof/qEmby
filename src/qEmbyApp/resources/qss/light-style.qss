@@ -6658,3 +6658,46 @@ QLabel#aggregate-server-chevron {
 #aggregate-server-gallery {
     background-color: transparent;
 }
+
+/* ================= Server Scoped 页面（阶段5） ================= */
+#scoped-crumb-bar {
+    background-color: transparent;
+}
+
+QPushButton#scoped-back-btn {
+    background-color: rgba(59, 130, 246, 0.10);
+    color: #1D4ED8;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#scoped-back-btn:hover {
+    background-color: rgba(59, 130, 246, 0.18);
+    color: #1E3A8A;
+}
+
+QPushButton#scoped-back-btn:pressed {
+    background-color: rgba(59, 130, 246, 0.26);
+}
+
+QLabel#scoped-crumb-sep {
+    color: #CBD5E1;
+    font-size: 14px;
+}
+
+QLabel#scoped-title {
+    color: #111827;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#scoped-sep-line {
+    color: rgba(100, 116, 139, 0.20);
+}
+
+#scoped-grid {
+    background-color: transparent;
+}

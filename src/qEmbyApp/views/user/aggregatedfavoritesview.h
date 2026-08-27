@@ -19,6 +19,8 @@ public:
 protected:
     void onCategoryTabClicked(const QString& label) override;
     void showEvent(QShowEvent* event) override;
+    // 面包屑标题：收藏
+    QString scopedPageTitle(const ServerProfile& profile) const override;
 
 private:
     QString includeTypesForTab(const QString& label) const;

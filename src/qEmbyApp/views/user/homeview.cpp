@@ -23,9 +23,11 @@
 #include "config/webdavprofilestore.h"
 #include "dashboardview.h"
 #include "favoritesview.h"
+#include "aggregatedviewbase.h"
 #include "aggregatedsearchview.h"
 #include "aggregatedhistoryview.h"
 #include "aggregatedfavoritesview.h"
+#include "serverscopedview.h"
 #include <QAction>
 #include <QApplication>
 #include <QAbstractItemView>
@@ -276,6 +278,28 @@ void HomeView::setupUi()
     connect(m_aggregatedFavoritesView, &BaseView::navigateToPlayer, this, navigateToPlayerSlot);
     connect(m_aggregatedFavoritesView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
 
+    // 阶段5：点击聚合结果中的服务器 section header → 打开该服务器的全部结果页。
+    // 数据直接复用聚合视图已加载的结果（不重新请求），面包屑标题由子类提供
+    // （搜索：xxx / 继续观看 / 收藏）。
+    auto openServerScoped = [this](AggregatedViewBase* src,
+                                   const ServerProfile& profile) {
+        pushView(createServerScopedView(
+            profile, src->itemsForServer(profile),
+            src->scopedPageTitle(profile)));
+    };
+    connect(m_aggregatedSearchView, &AggregatedViewBase::serverScopedRequested, this,
+            [this, openServerScoped](const ServerProfile& p) {
+                openServerScoped(m_aggregatedSearchView, p);
+            });
+    connect(m_aggregatedHistoryView, &AggregatedViewBase::serverScopedRequested, this,
+            [this, openServerScoped](const ServerProfile& p) {
+                openServerScoped(m_aggregatedHistoryView, p);
+            });
+    connect(m_aggregatedFavoritesView, &AggregatedViewBase::serverScopedRequested, this,
+            [this, openServerScoped](const ServerProfile& p) {
+                openServerScoped(m_aggregatedFavoritesView, p);
+            });
+
     m_contentSwitcher->addWidget(m_dashboardView);
     m_contentSwitcher->addWidget(m_favoritesView);
     m_contentSwitcher->addWidget(m_aggregatedSearchView);
@@ -397,6 +421,36 @@ QWidget *HomeView::createDetailView(const QString &itemId, const QString &itemNa
     connect(view, &BaseView::navigateToFilteredView, this,
             [this](const QString &type, const QString &value)
             { pushView(createFilteredView(type, value)); });
+
+    return view;
+}
+
+QWidget *HomeView::createServerScopedView(const ServerProfile& profile,
+                                          const QList<MediaItem>& items,
+                                          const QString& title)
+{
+    auto *view = new ServerScopedView(m_core, this);
+    view->setProperty("isDynamic", true);
+    view->setProperty("routeType", "ServerScopedView");
+    view->setProperty("routeId", profile.id);
+    view->setProperty("routeTitle", title);
+
+    view->setContext(profile, items, title);
+
+    // 详情/播放/剧季/返回复用 BaseView 统一路由（不切服）。
+    connect(view, &BaseView::navigateToDetail, this,
+            [this](const QString &id, const QString &name, const MediaItem &seed) { pushView(createDetailView(id, name, seed)); });
+    connect(view, &BaseView::navigateToFolder, this,
+            [this](const QString &id, const QString &name) { pushView(createLibraryView(id, name)); });
+    connect(view, &BaseView::navigateToPerson, this,
+            [this](const QString &id, const QString &name) { pushView(createPersonView(id, name)); });
+    connect(view, &BaseView::navigateToPlayer, this,
+            [this](const QString &id, const QString &title, const QString &url, long long ticks,
+                   const QVariant &extraData) { launchPlayer(id, title, url, ticks, extraData); });
+    connect(view, &BaseView::navigateToSeason, this,
+            [this](const QString &seriesId, const QString &seasonId, const QString &seasonName)
+            { pushView(createSeasonView(seriesId, seasonId, seasonName)); });
+    connect(view, &BaseView::navigateBack, this, &HomeView::navigateBack);
 
     return view;
 }

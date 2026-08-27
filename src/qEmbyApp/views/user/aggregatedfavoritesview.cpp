@@ -58,3 +58,9 @@ void AggregatedFavoritesView::showEvent(QShowEvent* event)
     QWidget::showEvent(event);
     startLoad();
 }
+
+QString AggregatedFavoritesView::scopedPageTitle(const ServerProfile& profile) const
+{
+    Q_UNUSED(profile);
+    return tr("Favorites");
+}

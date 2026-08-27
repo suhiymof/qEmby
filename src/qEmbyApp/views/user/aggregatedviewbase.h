@@ -35,6 +35,8 @@ public:
     void setLoading(bool loading);                // 加载中状态（header 右侧提示）
     QString serverId() const { return m_profile.id; }
     const ServerProfile& profile() const { return m_profile; }
+    // 当前 section 已加载的结果（阶段5 Server Scoped 页面复用）。
+    const QList<MediaItem>& items() const { return m_items; }
 
 Q_SIGNALS:
     void sectionClicked(const ServerProfile& profile);
@@ -48,6 +50,7 @@ Q_SIGNALS:
 private:
     QEmbyCore* m_core;
     ServerProfile m_profile;
+    QList<MediaItem> m_items;       // 已加载结果（setItems 时保存）
     QLabel* m_headerLabel = nullptr;   // "◆ 服名"
     QLabel* m_countLabel = nullptr;    // "(N 项)"
     QLabel* m_loadingLabel = nullptr;  // "⏳ 加载中..."
@@ -76,6 +79,14 @@ public:
 
     // 清空全部 section（新查询/切 tab 时调用）。
     void clearSections();
+
+    // 取某个服务器当前已加载的结果（阶段5 Server Scoped 页面复用；
+    // 未匹配到则返回空列表）。
+    QList<MediaItem> itemsForServer(const ServerProfile& profile) const;
+
+    // Server Scoped 页面的面包屑标题（子类覆盖，如"搜索：九门"/"继续观看"/
+    // "收藏"）；默认返回服务器名。
+    virtual QString scopedPageTitle(const ServerProfile& profile) const;
 
 Q_SIGNALS:
     // 点击某个服务器的 section header → 跳转 Server Scoped 页面（阶段5）。

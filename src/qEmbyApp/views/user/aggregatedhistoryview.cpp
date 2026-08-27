@@ -37,3 +37,9 @@ void AggregatedHistoryView::showEvent(QShowEvent* event)
     // 每次进入视图刷新一次（历史进度随时在变）。
     startLoad();
 }
+
+QString AggregatedHistoryView::scopedPageTitle(const ServerProfile& profile) const
+{
+    Q_UNUSED(profile);
+    return tr("Continue Watching");
+}

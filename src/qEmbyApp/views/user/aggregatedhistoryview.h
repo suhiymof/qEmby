@@ -18,6 +18,8 @@ public:
 
 protected:
     void showEvent(QShowEvent* event) override;
+    // 面包屑标题：继续观看
+    QString scopedPageTitle(const ServerProfile& profile) const override;
 };
 
 #endif // AGGREGATEDHISTORYVIEW_H

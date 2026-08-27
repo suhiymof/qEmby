@@ -25,6 +25,8 @@ public:
 
 protected:
     void onCategoryTabClicked(const QString& label) override;
+    // 面包屑标题：搜索：<query>
+    QString scopedPageTitle(const ServerProfile& profile) const override;
 
 private:
     QString includeTypesForTab(const QString& label) const;

@@ -80,6 +80,7 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
 
 void AggregatedServerSection::setItems(const QList<MediaItem>& items)
 {
+    m_items = items;
     m_gallery->setItems(items);
     m_countLabel->setText(tr("(%1)").arg(items.size()));
     setLoading(false);
@@ -200,6 +201,23 @@ void AggregatedViewBase::clearSections()
         section->deleteLater();
     }
     m_sections.clear();
+}
+
+QList<MediaItem> AggregatedViewBase::itemsForServer(
+    const ServerProfile& profile) const
+{
+    for (AggregatedServerSection* section : std::as_const(m_sections)) {
+        if (section->serverId() == profile.id) {
+            return section->items();
+        }
+    }
+    return {};
+}
+
+QString AggregatedViewBase::scopedPageTitle(const ServerProfile& profile) const
+{
+    const QString name = profile.name.isEmpty() ? profile.url : profile.name;
+    return name;
 }
 
 QPushButton* AggregatedViewBase::addCategoryTab(const QString& label, bool checked)

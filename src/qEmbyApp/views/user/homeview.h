@@ -30,6 +30,7 @@ class FavoritesView;
 class AggregatedSearchView;
 class AggregatedHistoryView;
 class AggregatedFavoritesView;
+class ServerScopedView;
 class SettingsView;
 class SmoothScrollController;
 class SeasonView; 
@@ -136,6 +137,10 @@ private:
     QWidget* createPlayerView(const QString& mediaId, const QString& title, const QString& streamUrl, long long startPositionTicks, const QVariant &extraData);
     QWidget* createSettingsView();
     QWidget* createManageView();
+    // 阶段5：单个服务器的全部结果页（从聚合视图点击 section header 进入）。
+    QWidget* createServerScopedView(const ServerProfile& profile,
+                                    const QList<MediaItem>& items,
+                                    const QString& title);
 
 
     QWidget* createSeasonView(const QString& seriesId, const QString& seasonId, const QString& seasonName);

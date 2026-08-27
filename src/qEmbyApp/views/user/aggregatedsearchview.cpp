@@ -52,6 +52,13 @@ void AggregatedSearchView::onCategoryTabClicked(const QString& label)
     startLoad();
 }
 
+QString AggregatedSearchView::scopedPageTitle(const ServerProfile& profile) const
+{
+    Q_UNUSED(profile);
+    if (m_query.isEmpty()) return tr("Search");
+    return tr("Search: %1").arg(m_query);
+}
+
 QString AggregatedSearchView::includeTypesForTab(const QString& label) const
 {
     if (label == tr("Movies")) {
