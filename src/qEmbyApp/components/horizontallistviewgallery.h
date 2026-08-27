@@ -52,6 +52,14 @@ public:
     void setHoverControls(MediaCardDelegate::HoverControls controls);
     void scrollToItemId(const QString &itemId);
 
+    // 按卡片步数滚动（正=右，负=左；每步 2 张卡片，供 section header
+    // 常驻左右箭头调用）。
+    void scrollByCardSteps(int steps);
+
+    // 常驻箭头模式（聚合视图用）：左右箭头始终显示（按滚动位置显示/
+    // 隐藏），不依赖鼠标 hover；dashboard 等保持原 hover 行为。
+    void setPersistentArrows(bool persistent);
+
     
     void setHighlightedItemId(const QString &id);
 
@@ -101,6 +109,7 @@ private:
     
     ShimmerWidget* m_shimmer = nullptr;
     bool m_imageRequestsSuspendedForVisibility = false;
+    bool m_persistentArrows = false;
 };
 
 #endif 

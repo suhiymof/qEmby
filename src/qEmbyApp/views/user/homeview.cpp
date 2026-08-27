@@ -56,6 +56,7 @@
 #include <QStringListModel>
 #include <QTimer>
 #include <QKeyEvent>
+#include <QHoverEvent>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <models/profile/serverprofile.h>
@@ -1950,23 +1951,29 @@ void HomeView::resizeEvent(QResizeEvent *event)
 
 bool HomeView::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == m_serverSwitcherViewport && event->type() == QEvent::MouseMove)
+    if (watched == m_serverSwitcherViewport
+        && (event->type() == QEvent::MouseMove
+            || event->type() == QEvent::HoverMove))
     {
-        // Drive hover feedback from MouseMove + indexAt() instead of
+        // Drive hover feedback from HoverMove/MouseMove + itemAt() instead of
         // QListWidget::itemEntered, which is silently suppressed when
         // a sub-widget inside the setItemWidget() row intercepts the
         // enter event.
+        // HoverMove 优先：viewport 已设 WA_Hover，鼠标在行内子 widget 上
+        // 也持续触发（不需要 mouseTracking），响应最灵敏。
         auto *list = qobject_cast<QListWidget *>(m_serverSwitcherViewport->parent());
         if (!list) return false;
-        auto *mouse = static_cast<QMouseEvent *>(event);
+        QPoint viewportPos;
+        if (event->type() == QEvent::HoverMove) {
+            viewportPos = static_cast<QHoverEvent *>(event)->position().toPoint();
+        } else {
+            viewportPos = static_cast<QMouseEvent *>(event)->pos();
+        }
         // QListWidget::itemAt expects coordinates RELATIVE TO THE VIEWPORT,
         // not the list widget — see Qt docs:
         //   "Returns a pointer to the item at the coordinates p. These
         //    coordinates are relative to the list widget's viewport."
-        // Earlier revisions wrongly ran list->mapFrom(viewport, ...) which
-        // added an offset and made itemAt land on the wrong row (or none),
-        // so the hover highlight trailed the cursor by one row.
-        QListWidgetItem *item = list->itemAt(mouse->pos());
+        QListWidgetItem *item = list->itemAt(viewportPos);
         if (item == m_serverSwitcherHoverItem) return false;
         if (m_serverSwitcherHoverItem) {
             if (auto *prevRow = qvariant_cast<QWidget *>(

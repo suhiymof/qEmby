@@ -143,22 +143,8 @@ HorizontalListViewGallery::HorizontalListViewGallery(QEmbyCore* core, QWidget* p
     m_btnLeft->hide();
     m_btnRight->hide();
 
-    auto scrollAction = [this](int directionMultiplier) {
-        QScrollBar* bar = m_listView->horizontalScrollBar();
-        int step = this->width() / 2;
-        int targetValue = bar->value() + directionMultiplier * step;
-        targetValue = qBound(0, targetValue, bar->maximum());
-
-        auto* anim = new QPropertyAnimation(bar, "value", this);
-        anim->setDuration(400);
-        anim->setEasingCurve(QEasingCurve::OutCubic);
-        anim->setStartValue(bar->value());
-        anim->setEndValue(targetValue);
-        anim->start(QAbstractAnimation::DeleteWhenStopped);
-    };
-
-    connect(m_btnLeft, &QPushButton::clicked, [scrollAction]() { scrollAction(-1); });
-    connect(m_btnRight, &QPushButton::clicked, [scrollAction]() { scrollAction(1); });
+    connect(m_btnLeft, &QPushButton::clicked, this, [this]() { scrollByCardSteps(-1); });
+    connect(m_btnRight, &QPushButton::clicked, this, [this]() { scrollByCardSteps(1); });
 
     connect(m_listView->horizontalScrollBar(), &QScrollBar::valueChanged, this,
             [this]() {
@@ -390,6 +376,44 @@ void HorizontalListViewGallery::setHighlightedItemId(const QString &id)
     }
 }
 
+void HorizontalListViewGallery::scrollByCardSteps(int steps)
+{
+    if (!m_listView || !m_listModel) {
+        return;
+    }
+    QScrollBar *bar = m_listView->horizontalScrollBar();
+    if (!bar) {
+        return;
+    }
+
+    // 单卡片像素宽：优先取第 0 个 item 的实际布局宽度，回退 220。
+    int cardWidth = 220;
+    if (m_listModel->rowCount() > 0) {
+        const QModelIndex idx = m_listModel->index(0, 0);
+        if (idx.isValid()) {
+            const QRect r = m_listView->visualRect(idx);
+            if (r.width() > 0) {
+                cardWidth = r.width();
+            }
+        }
+    }
+
+    // 用户要求：点击一次移动 2 张卡片。
+    const int step = qMax(1, cardWidth) * 2;
+    const int targetValue =
+        qBound(0, bar->value() + steps * step, bar->maximum());
+
+    auto *anim = new QPropertyAnimation(bar, "value", this);
+    anim->setDuration(400);
+    anim->setEasingCurve(QEasingCurve::OutCubic);
+    anim->setStartValue(bar->value());
+    anim->setEndValue(targetValue);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+
+    // 滚动后同步按钮可见性（常驻箭头：左可见=有内容可滚回，右可见=还有内容）。
+    updateButtonsVisibility();
+}
+
 void HorizontalListViewGallery::setLoading(bool loading)
 {
     if (!m_shimmer) {
@@ -534,6 +558,19 @@ bool HorizontalListViewGallery::eventFilter(QObject* obj, QEvent* event)
 
 void HorizontalListViewGallery::updateButtonsVisibility()
 {
+    if (m_persistentArrows) {
+        // 聚合视图常驻箭头：有内容可滚即显示，不依赖鼠标位置。
+        QScrollBar* bar = m_listView->horizontalScrollBar();
+        if (!bar) {
+            m_btnLeft->hide();
+            m_btnRight->hide();
+            return;
+        }
+        m_btnLeft->setVisible(bar->value() > 0);
+        m_btnRight->setVisible(bar->value() < bar->maximum());
+        return;
+    }
+
     QPoint globalPos = QCursor::pos();
     QPoint localPos = this->mapFromGlobal(globalPos);
 
@@ -550,6 +587,12 @@ void HorizontalListViewGallery::updateButtonsVisibility()
 
     m_btnLeft->setVisible(isLeftHalf && bar->value() > 0);
     m_btnRight->setVisible(!isLeftHalf && bar->value() < bar->maximum());
+}
+
+void HorizontalListViewGallery::setPersistentArrows(bool persistent)
+{
+    m_persistentArrows = persistent;
+    updateButtonsVisibility();
 }
 
 void HorizontalListViewGallery::updateVisibleImagePriority()

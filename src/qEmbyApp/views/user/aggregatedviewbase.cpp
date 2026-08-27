@@ -66,6 +66,8 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     // —— 横向卡片 gallery ——
     m_gallery = new HorizontalListViewGallery(core, this);
     m_gallery->setObjectName(QStringLiteral("aggregate-server-gallery"));
+    // 聚合视图：常驻左右箭头（按内容可滚性显示），点击移动 2 张卡片。
+    m_gallery->setPersistentArrows(true);
     // 转发 gallery 信号到上层（由 AggregatedViewBase 统一接 BaseView 槽）。
     connect(m_gallery, &HorizontalListViewGallery::itemClicked, this,
             [this](const MediaItem& item) { Q_EMIT itemActivated(item); });
