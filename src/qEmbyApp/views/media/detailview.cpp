@@ -11,7 +11,7 @@
 #include "../../components/modernmenubutton.h"
 #include "../../components/moderntoast.h"
 #include "../../managers/playbackmanager.h"
-#include "../../models/media/playerlaunchcontext.h"
+#include <models/media/playerlaunchcontext.h>
 #include "../../managers/thememanager.h"
 #include "../../utils/detailcacheutils.h"
 #include "../../utils/mediaitemutils.h"
