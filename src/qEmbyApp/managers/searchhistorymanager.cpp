@@ -508,8 +508,11 @@ void SearchHistoryManager::migrateLegacyPerServerBuckets()
         for (const QJsonValue& v : arr) {
             const QJsonObject obj = v.toObject();
             SearchHistoryEntry entry;
-            entry.term = obj.value("term").toString();
-            entry.timestamp = obj.value("timestamp").toVariant().toLongLong();
+            entry.term = obj.value(QStringLiteral("term")).toString();
+            // 历史存储格式为 term/count/last（与 loadHistory 反序列化一致）
+            entry.searchCount = qMax(1, obj.value(QStringLiteral("count")).toInt(1));
+            entry.lastSearchedAtMs =
+                obj.value(QStringLiteral("last")).toVariant().toLongLong();
             if (entry.term.isEmpty())
                 continue;
             entry.normalizedTerm = normalizeQuery(entry.term);
@@ -524,7 +527,7 @@ void SearchHistoryManager::migrateLegacyPerServerBuckets()
     // 去重（按 normalizedTerm 保留最新），最多 20 条
     std::sort(mergedEntries.begin(), mergedEntries.end(),
               [](const SearchHistoryEntry& a, const SearchHistoryEntry& b) {
-                  return a.timestamp > b.timestamp;
+                  return a.lastSearchedAtMs > b.lastSearchedAtMs;
               });
     QList<SearchHistoryEntry> unique;
     QSet<QString> seenTerms;
@@ -553,8 +556,10 @@ void SearchHistoryManager::migrateLegacyPerServerBuckets()
         if (existingNormalized.contains(e.normalizedTerm))
             continue;
         QJsonObject obj;
-        obj.insert("term", e.term);
-        obj.insert("timestamp", e.timestamp);
+        obj.insert(QStringLiteral("term"), e.term);
+        obj.insert(QStringLiteral("count"), e.searchCount);
+        obj.insert(QStringLiteral("last"),
+                   QString::number(e.lastSearchedAtMs));
         existingArr.append(obj);
         existingNormalized.insert(e.normalizedTerm);
     }
