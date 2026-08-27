@@ -4,13 +4,26 @@
 #include "../../qEmbyCore_global.h"
 #include "../../models/media/mediaitem.h"
 #include "../../models/profile/serverprofile.h"
+#include <qcorotask.h>
 #include <QObject>
 #include <QList>
+#include <QSharedPointer>
+#include <atomic>
 #include <functional>
 
 class ServerManager;
 class NetworkManager;
 class ApiClient;
+
+// fan-out 完成状态：由 fanOut() 与各协程共享，QSharedPointer 保证
+// 最后一个协程结束后才释放。
+struct FanOutState {
+    std::atomic<int> completed{0};
+    std::atomic<int> succeeded{0};
+    int total = 0;
+    int generation = 0;
+    std::function<void(int attempted, int succeeded)> onComplete;
+};
 
 // =============================================================================
 // SearchAggregator — 跨服务器聚合查询抽象层
@@ -74,6 +87,19 @@ private:
     void fanOut(const QString& pathTemplate,
                 ServerResultCallback onServerResult,
                 CompleteCallback onComplete);
+
+    // 单个服务器的查询协程。
+    //
+    // 关键：必须用「协程成员函数 + 按值参数」，不能用捕获 lambda——
+    // C++ 协程 frame 只拷贝参数（含闭包对象的 this 指针），IIFE 临时
+    // lambda 的闭包在表达式结束后销毁，协程恢复后访问捕获即悬垂
+    // （searchaggregator.cpp:153 曾因此崩溃）。按值参数会被拷贝进
+    // frame，与协程同生命周期。
+    QCoro::Task<void> fetchFromServer(ServerProfile profile,
+                                      QString pathTemplate,
+                                      int gen,
+                                      ServerResultCallback onServerResult,
+                                      QSharedPointer<FanOutState> state);
 
     ServerManager* m_serverManager = nullptr;
     NetworkManager* m_network = nullptr;

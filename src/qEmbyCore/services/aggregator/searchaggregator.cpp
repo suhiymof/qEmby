@@ -24,16 +24,6 @@ QString mediaCardFields()
 }
 } // namespace
 
-// 共享的 fan-out 完成状态：fanOut() 返回后由协程完成回调继续使用，
-// 用 QSharedPointer 避免悬垂引用。
-struct FanOutState {
-    std::atomic<int> completed{0};
-    std::atomic<int> succeeded{0};
-    int total = 0;
-    int generation = 0;
-    SearchAggregator::CompleteCallback onComplete;
-};
-
 SearchAggregator::SearchAggregator(ServerManager* serverManager,
                                    NetworkManager* network,
                                    QObject* parent)
@@ -122,47 +112,57 @@ void SearchAggregator::fanOut(const QString& pathTemplate,
         // 每个服务器一个协程：co_await 期间不阻塞 UI 线程，13+ 个协程
         // 在网络等待时交错执行 → 天然并发。
         //
-        // 关键：ApiClient 必须在堆上且以 SearchAggregator 为 parent。
-        // 之前栈上 IIFE 临时对象在协程挂起时立即析构，reply finished 后
-        // 协程恢复访问悬垂指针 → 崩溃。
-        auto *apiClient = new ApiClient(profile, m_network, this);
-        auto task = [this, apiClient, pathTemplate, gen, onServerResult,
-                     state]() -> QCoro::Task<void> {
-            QList<MediaItem> items;
-            try {
-                QString path = pathTemplate;
-                path.replace(QStringLiteral("{uid}"), apiClient->profile().userId);
-                const QJsonObject response =
-                    co_await apiClient->get(path, kPerServerTimeoutMs);
-                const QJsonArray arr =
-                    response.value(QStringLiteral("Items")).toArray();
-                items.reserve(arr.size());
-                for (const QJsonValue& v : arr)
-                    items.append(MediaItem::fromJson(v.toObject()));
-                ++state->succeeded;
-            } catch (...) {
-                // 单服务器失败/超时不阻塞其他（失败隔离）。
-                items.clear();
-            }
-
-            // 流式回调：结果立即上抛（若本 generation 仍有效）。
-            if (onServerResult && gen == this->m_generation) {
-                onServerResult(apiClient->profile(), items);
-            }
-
-            if (++state->completed == state->total) {
-                if (state->onComplete && gen == this->m_generation) {
-                    state->onComplete(state->total, state->succeeded.load());
-                }
-            }
-            // 本次请求已结束，释放临时 ApiClient（延迟到事件循环，此时
-            // 所有回调已完成）。避免反复 startLoad 时对象在
-            // SearchAggregator 上无限累积。
-            apiClient->deleteLater();
-            co_return;
-        }();
-
-        // 保持协程存活（fire-and-forget；this 析构自动取消）。
-        QCoro::connect(std::move(task), this, []() {});
+        // 关键：fetchFromServer 是协程成员函数，所有数据通过按值参数
+        // 传入 —— C++ 标准保证协程参数拷贝进 frame，与协程同生命周期。
+        // （之前用 IIFE 捕获 lambda：闭包对象在表达式结束后销毁，协程
+        // 恢复后访问捕获悬垂 → searchaggregator.cpp:153 写 NULL 崩溃，
+        // PDB 符号化确认。）
+        QCoro::connect(
+            fetchFromServer(profile, pathTemplate, gen, onServerResult, state),
+            this, []() {});
     }
+}
+
+QCoro::Task<void> SearchAggregator::fetchFromServer(
+    ServerProfile profile, QString pathTemplate, int gen,
+    ServerResultCallback onServerResult,
+    QSharedPointer<FanOutState> state)
+{
+    // 独立临时 ApiClient——不依赖/不切换 active server。
+    // 堆分配 + parent=SearchAggregator：析构自动回收，且 deleteLater
+    // 之前协程一定已结束。
+    auto *apiClient = new ApiClient(profile, m_network, this);
+
+    QList<MediaItem> items;
+    try {
+        QString path = pathTemplate;
+        path.replace(QStringLiteral("{uid}"), profile.userId);
+        const QJsonObject response =
+            co_await apiClient->get(path, kPerServerTimeoutMs);
+        const QJsonArray arr =
+            response.value(QStringLiteral("Items")).toArray();
+        items.reserve(arr.size());
+        for (const QJsonValue& v : arr)
+            items.append(MediaItem::fromJson(v.toObject()));
+        ++state->succeeded;
+    } catch (...) {
+        // 单服务器失败/超时不阻塞其他（失败隔离）。
+        items.clear();
+    }
+
+    // 流式回调：结果立即上抛（若本 generation 仍有效）。
+    if (onServerResult && gen == m_generation) {
+        onServerResult(profile, items);
+    }
+
+    if (++state->completed == state->total) {
+        if (state->onComplete && gen == m_generation) {
+            state->onComplete(state->total, state->succeeded.load());
+        }
+    }
+
+    // 本次请求已结束，释放临时 ApiClient（延迟到事件循环，此时所有
+    // 回调已完成）。避免反复 startLoad 时对象在 SearchAggregator 上累积。
+    apiClient->deleteLater();
+    co_return;
 }
