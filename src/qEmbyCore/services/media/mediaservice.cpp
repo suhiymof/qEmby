@@ -2828,7 +2828,10 @@ QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo 
         }
     }
 
-    return getStreamUrl(itemId, sourceInfo.id);
+    // 跨服路由：/stream fallback 必须继承本次调用的 serverId，
+    // 否则无 DirectStreamUrl/TranscodingUrl 的 source 会静默回退到
+    // active server 拼接。
+    return getStreamUrl(itemId, sourceInfo.id, serverId);
 }
 
 QCoro::Task<QString> MediaService::reportPlaybackStart(QString itemId, QString mediaSourceId, long long positionTicks)

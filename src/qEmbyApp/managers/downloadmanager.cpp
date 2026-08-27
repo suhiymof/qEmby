@@ -1025,7 +1025,8 @@ QCoro::Task<void> DownloadManager::startDownload(
     QPointer<DownloadManager> safeThis(this);
     MediaItem detail;
     try {
-        detail = co_await m_core->mediaService()->getItemDetail(item.id);
+        // 跨服路由：详情与下载 URL 都按条目所属服务器请求。
+        detail = co_await m_core->mediaService()->getItemDetail(item.id, item.serverId);
     } catch (const std::exception& e) {
         if (safeThis) {
             qWarning() << "[DownloadManager] Failed to fetch media detail before"
@@ -1098,7 +1099,7 @@ QCoro::Task<void> DownloadManager::startDownload(
     }
 
     const QString downloadUrl =
-        m_core->mediaService()->getStreamUrl(detail.id, mediaSourceId);
+        m_core->mediaService()->getStreamUrl(detail.id, mediaSourceId, detail.serverId);
 
     if (downloadUrl.trimmed().isEmpty()) {
         qWarning() << "[DownloadManager] Failed to resolve download url"

@@ -765,7 +765,7 @@ QCoro::Task<void> SeasonView::executeExternalPlay(MediaItem targetItem, QString 
             ConfigStore::instance()->get<QString>(ConfigKeys::PlayerAudioLang, "auto"),
             ConfigStore::instance()->get<QString>(ConfigKeys::PlayerSubLang, "auto"));
 
-        QString streamUrl = m_core->mediaService()->getStreamUrl(actualItem.id, modifiedSource.id);
+        QString streamUrl = m_core->mediaService()->getStreamUrl(actualItem.id, modifiedSource.id, actualItem.serverId);
 
         const QString playTitle =
             MediaItemUtils::playbackTitle(actualItem, m_seriesTitleLabel->text());
@@ -815,7 +815,7 @@ QCoro::Task<void> SeasonView::executeInternalPlay(MediaItem targetItem)
             ConfigStore::instance()->get<QString>(ConfigKeys::PlayerAudioLang, "auto"),
             ConfigStore::instance()->get<QString>(ConfigKeys::PlayerSubLang, "auto"));
 
-        QString streamUrl = m_core->mediaService()->getStreamUrl(actualItem.id, modifiedSource.id);
+        QString streamUrl = m_core->mediaService()->getStreamUrl(actualItem.id, modifiedSource.id, actualItem.serverId);
 
         const QString playTitle =
             MediaItemUtils::playbackTitle(actualItem, m_seriesTitleLabel->text());

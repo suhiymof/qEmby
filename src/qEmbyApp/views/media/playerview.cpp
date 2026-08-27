@@ -1096,7 +1096,9 @@ void PlayerView::restoreAfterWindowShow(bool shouldResumePlaying)
         else if (m_currentSourceInfoVar.canConvert<MediaSourceInfo>())
             sourceInfo = m_currentSourceInfoVar.value<MediaSourceInfo>();
 
-        const QString refreshedUrl = m_core->mediaService()->getStreamUrl(m_currentMediaId, sourceInfo);
+        // 跨服路由：恢复播放按当前 item 所属服务器重算 URL。
+        const QString refreshedUrl = m_core->mediaService()->getStreamUrl(
+            m_currentMediaId, sourceInfo, m_currentMediaItem.serverId);
         if (!refreshedUrl.isEmpty())
             streamUrl = refreshedUrl;
     }
@@ -2231,8 +2233,8 @@ QCoro::Task<void> PlayerView::switchFromMediaSwitcher(QString mediaId, QString t
         }
 
         QString streamUrl = selectedSource.id.isEmpty()
-                                ? m_core->mediaService()->getStreamUrl(detail.id, mediaSourceId)
-                                : m_core->mediaService()->getStreamUrl(detail.id, selectedSource);
+                                ? m_core->mediaService()->getStreamUrl(detail.id, mediaSourceId, detail.serverId)
+                                : m_core->mediaService()->getStreamUrl(detail.id, selectedSource, detail.serverId);
         const QString titleFallback = detail.seriesId == m_seriesId ? m_seriesName : QString();
         QString resolvedTitle = MediaItemUtils::playbackTitle(detail, titleFallback);
         if (resolvedTitle.isEmpty())

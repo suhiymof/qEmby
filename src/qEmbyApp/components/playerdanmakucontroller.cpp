@@ -539,7 +539,7 @@ DanmakuMediaContext PlayerDanmakuController::buildMediaContext(
     mediaContext.genres = item.genres;
     if (m_core->mediaService() && !item.id.isEmpty() && !source.id.isEmpty()) {
         mediaContext.mediaUrl =
-            m_core->mediaService()->getStreamUrl(item.id, source);
+            m_core->mediaService()->getStreamUrl(item.id, source, item.serverId);
     }
     mediaContext.providerIds = item.providerIds;
     return mediaContext;
