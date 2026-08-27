@@ -638,6 +638,37 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
         painter->drawText(targetImgRect, Qt::AlignCenter, tr("No Image"));
     }
 
+    // —— 播放进度条 ——
+    // 已播（positionTicks > 0）且有总时长时，在图片底部画一条进度条；
+    // "下一集待播"（positionTicks == 0，服务器只记录了下集）不画。
+    if (item.playbackPositionTicks > 0 && item.runTimeTicks > 0)
+    {
+        const qreal pct = qBound(0.0,
+                                 double(item.playbackPositionTicks)
+                                     / double(item.runTimeTicks),
+                                 1.0);
+        const int barHeight = qMax(3, qRound(4 * fontScale));
+        const int barMargin = 4;
+        QRect barRect(targetImgRect.left() + barMargin,
+                      targetImgRect.bottom() - barHeight - barMargin,
+                      targetImgRect.width() - barMargin * 2,
+                      barHeight);
+
+        // 底槽（半透明黑）
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(0, 0, 0, 140));
+        painter->drawRoundedRect(barRect, barHeight / 2, barHeight / 2);
+
+        // 已播填充（Emby 红）
+        if (pct > 0.0)
+        {
+            QRect filledRect = barRect;
+            filledRect.setWidth(qRound(barRect.width() * pct));
+            painter->setBrush(QColor(232, 46, 62, 230));
+            painter->drawRoundedRect(filledRect, barHeight / 2, barHeight / 2);
+        }
+    }
+
     
     
     
