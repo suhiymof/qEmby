@@ -4773,6 +4773,7 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
     }
 
     MediaSourceInfo source = currentSource;
+    MediaItem detailItem;
     try
     {
         // Stage 0: background-prefetched source (continuous play) is richer
@@ -4796,6 +4797,10 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
             {
                 source = detail.mediaSources.first();
             }
+            // Keep the fetched detail so playMedia can see this item's
+            // serverId — without it m_currentMediaItem.serverId is empty and
+            // every downstream URL join falls back to the active server.
+            detailItem = detail;
         }
 
         // Stage 2: source present but DirectStreamUrl missing and the path
@@ -4833,9 +4838,20 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
 
     if (safeThis)
     {
+        // 跨服路由：回调必须带 serverId。只传 MediaSourceInfo 时 playMedia
+        // 解析不出 mediaItem，m_currentMediaItem.serverId 为空，导致
+        // getStreamUrl / 播放上报 / 弹幕上下文全部 fallback 到 active server
+        // （PlaybackInfo 协商到了正确服务器的相对 DirectStreamUrl，却被拼上
+        // active server 的 host 播放）。
+        PlayerLaunchContext context;
+        context.mediaItem = detailItem;
+        if (context.mediaItem.serverId.isEmpty())
+        {
+            context.mediaItem.serverId = serverId;
+        }
+        context.selectedSource = source;
         safeThis->playMedia(mediaId, title, streamUrl, startPositionTicks,
-                            source.id.isEmpty() ? QVariant() : QVariant::fromValue(source),
-                            false);
+                            QVariant::fromValue(context), false);
     }
 }
 
