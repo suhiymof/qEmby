@@ -122,14 +122,14 @@ PageAppearance::PageAppearance(QEmbyCore *core, QWidget *parent) : SettingsPageB
     auto *searchHistorySwitch = new ModernSwitch(this);
     m_mainLayout->addWidget(new SettingsCard(":/svg/dark/search.svg", tr("Enable Search History"),
                                              tr("Save recent searches locally for quick reuse"), searchHistorySwitch,
-                                             ConfigKeys::SearchHistoryEnabled, this, QVariant(false)));
+                                             ConfigKeys::SearchHistoryEnabled, this, QVariant(true)));
 
     auto *searchAutocompletePanel = new SettingsSubPanel(":/svg/dark/search-autocomplete.svg", this);
     auto *searchAutocompleteLabel = new QLabel(tr("Enable Search Autocomplete"), this);
     searchAutocompleteLabel->setObjectName("SettingsCardDesc");
     auto *searchAutocompleteSwitch = new ModernSwitch(this);
     searchAutocompleteSwitch->setChecked(
-        ConfigStore::instance()->get<bool>(ConfigKeys::SearchAutocompleteEnabled, false));
+        ConfigStore::instance()->get<bool>(ConfigKeys::SearchAutocompleteEnabled, true));
     searchAutocompletePanel->contentLayout()->addWidget(searchAutocompleteLabel, 1);
     searchAutocompletePanel->contentLayout()->addWidget(searchAutocompleteSwitch, 0, Qt::AlignVCenter);
     m_mainLayout->addWidget(searchAutocompletePanel);
@@ -145,7 +145,7 @@ PageAppearance::PageAppearance(QEmbyCore *core, QWidget *parent) : SettingsPageB
     clearHistoryPanel->contentLayout()->addWidget(clearHistoryBtn, 0, Qt::AlignVCenter);
     m_mainLayout->addWidget(clearHistoryPanel);
 
-    if (ConfigStore::instance()->get<bool>(ConfigKeys::SearchHistoryEnabled, false))
+    if (ConfigStore::instance()->get<bool>(ConfigKeys::SearchHistoryEnabled, true))
     {
         searchAutocompletePanel->initExpanded();
         clearHistoryPanel->initExpanded();

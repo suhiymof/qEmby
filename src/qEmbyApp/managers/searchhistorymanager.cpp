@@ -107,13 +107,13 @@ SearchHistoryManager::SearchHistoryManager(QObject *parent) : QObject(parent)
 
 bool SearchHistoryManager::isEnabled() const
 {
-    return ConfigStore::instance()->get<bool>(ConfigKeys::SearchHistoryEnabled, false);
+    return ConfigStore::instance()->get<bool>(ConfigKeys::SearchHistoryEnabled, true);
 }
 
 bool SearchHistoryManager::isAutocompleteEnabled() const
 {
     return isEnabled() && ConfigStore::instance()->get<bool>(
-                              ConfigKeys::SearchAutocompleteEnabled, false);
+                              ConfigKeys::SearchAutocompleteEnabled, true);
 }
 
 void SearchHistoryManager::recordSearch(const QString &serverId, QString query)
