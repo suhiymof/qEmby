@@ -1,8 +1,8 @@
 #include "searchaggregator.h"
 #include "../../api/apiclient.h"
 #include "../manager/servermanager.h"
-#include <QCoroCore>
-#include <QCoroNetwork>
+#include <qcorotask.h>
+#include <qcoronetwork.h>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QUrl>
