@@ -1231,6 +1231,10 @@ void HomeView::setupSearchHistory()
                     }
                     updateSearchCompleter(m_searchBox ? m_searchBox->text()
                                                       : QString());
+                    // 切服刷新 sidebar 三部分：服务器卡片（icon/name/url）、
+                    // 媒体库列表（getUserViews）、用户名/头像、按钮可见性。
+                    // 之前只刷新了「当前服」标题，导致切服后 sidebar 仍是旧服。
+                    scheduleProfileRefresh();
                 });
 
         // Forward the unreachable signal to whichever view is currently shown.
