@@ -2,6 +2,8 @@
 #include "shimmerwidget.h"
 #include "../utils/textwraputils.h"
 #include "../views/media/medialistmodel.h"
+#include <QApplication>
+#include <QAbstractScrollArea>
 #include <QListView>
 #include <QVBoxLayout>
 #include <QPushButton>
@@ -552,9 +554,19 @@ bool HorizontalListViewGallery::eventFilter(QObject* obj, QEvent* event)
             }
             return true; 
         } else {
-            
-            wheelEvent->ignore();
-            return false;
+            // 垂直滚轮：不消费成 gallery 水平滚动——QAbstractScrollArea
+            // 默认会把垂直滚轮 fallback 到水平 scrollbar（水平 bar 可滚时），
+            // 吞掉事件导致外层滚动区（聚合结果页/dashboard）无法上下滚动。
+            // 转发给最近的 QAbstractScrollArea 祖先实现页面滚动。
+            QWidget *w = parentWidget();
+            while (w && !qobject_cast<QAbstractScrollArea *>(w))
+                w = w->parentWidget();
+            if (w) {
+                QApplication::sendEvent(w, event);
+            } else {
+                wheelEvent->ignore();
+            }
+            return true;
         }
     }
     return QWidget::eventFilter(obj, event);

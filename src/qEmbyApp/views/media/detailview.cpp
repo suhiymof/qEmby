@@ -11,6 +11,7 @@
 #include "../../components/modernmenubutton.h"
 #include "../../components/moderntoast.h"
 #include "../../managers/playbackmanager.h"
+#include "../../models/media/playerlaunchcontext.h"
 #include "../../managers/thememanager.h"
 #include "../../utils/detailcacheutils.h"
 #include "../../utils/mediaitemutils.h"
@@ -2495,8 +2496,16 @@ QCoro::Task<void> DetailView::executePlay(MediaItem targetItem, long long startT
         const QString playTitle = MediaItemUtils::playbackTitle(actualItem, m_currentMediaItem.name);
 
         
+        // 跨服路由：必须传完整 PlayerLaunchContext（含 mediaItem.serverId）。
+        // 之前只传 MediaSourceInfo——PlayerView::playMedia 的
+        // canConvert<PlayerLaunchContext>() 失败走 MediaSourceInfo 分支，
+        // resolvedItem 为空 → serverId 空 → 播放/详情请求全走 active server
+        // （聚合 item 播放 404 或错播同 id 的其他 server 资源）。
+        PlayerLaunchContext launchContext;
+        launchContext.mediaItem = actualItem;
+        launchContext.selectedSource = modifiedSource;
         PlaybackManager::instance()->startInternalPlayback(actualItem.id, playTitle, streamUrl, startTicks,
-                                                           QVariant::fromValue(modifiedSource));
+                                                           QVariant::fromValue(launchContext));
     }
     catch (...)
     {
