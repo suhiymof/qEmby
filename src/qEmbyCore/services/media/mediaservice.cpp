@@ -16,6 +16,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <memory>
 #include <QNetworkAccessManager>
 #include <QAbstractNetworkCache>
 #include <QNetworkDiskCache>
@@ -2916,13 +2917,30 @@ QCoro::Task<QString> MediaService::reportPlaybackStart(QString itemId, QString m
 }
 
 QCoro::Task<void> MediaService::reportPlaybackProgress(QString itemId, QString mediaSourceId, long long positionTicks,
-                                                       bool isPaused, QString playSessionId)
+                                                       bool isPaused, QString playSessionId, QString serverId)
 {
     if (playSessionId.isEmpty())
         co_return;
-    ensureValidProfile();
 
-    ApiClient *client = m_serverManager->activeClient();
+    // 跨服路由：聚合 item 的播放进度上报走所属 server（空 = active 老路径）。
+    ApiClient *client = nullptr;
+    const std::unique_ptr<ApiClient> tmpClient =
+        serverId.isEmpty()
+            ? nullptr
+            : [&]() {
+                  const ServerProfile profile = resolveProfile(serverId);
+                  return profile.isValid()
+                             ? std::make_unique<ApiClient>(profile, m_serverManager->network())
+                             : nullptr;
+              }();
+    if (serverId.isEmpty()) {
+        ensureValidProfile();
+        client = m_serverManager->activeClient();
+    } else if (tmpClient) {
+        client = tmpClient.get();
+    } else {
+        co_return;
+    }
     if (!client)
     {
         qWarning() << "[API Warning] Playback Progress skipped: active client is "
@@ -2957,13 +2975,30 @@ QCoro::Task<void> MediaService::reportPlaybackProgress(QString itemId, QString m
 }
 
 QCoro::Task<void> MediaService::reportPlaybackStopped(QString itemId, QString mediaSourceId, long long positionTicks,
-                                                      QString playSessionId)
+                                                      QString playSessionId, QString serverId)
 {
     if (playSessionId.isEmpty())
         co_return;
-    ensureValidProfile();
 
-    ApiClient *client = m_serverManager->activeClient();
+    // 跨服路由：同 reportPlaybackProgress。
+    ApiClient *client = nullptr;
+    const std::unique_ptr<ApiClient> tmpClient =
+        serverId.isEmpty()
+            ? nullptr
+            : [&]() {
+                  const ServerProfile profile = resolveProfile(serverId);
+                  return profile.isValid()
+                             ? std::make_unique<ApiClient>(profile, m_serverManager->network())
+                             : nullptr;
+              }();
+    if (serverId.isEmpty()) {
+        ensureValidProfile();
+        client = m_serverManager->activeClient();
+    } else if (tmpClient) {
+        client = tmpClient.get();
+    } else {
+        co_return;
+    }
     if (!client)
     {
         qWarning() << "[API Warning] Playback Stopped skipped: active client is no "

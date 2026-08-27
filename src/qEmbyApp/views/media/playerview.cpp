@@ -2063,7 +2063,8 @@ QCoro::Task<void> PlayerView::ensureMediaSwitcherDataLoaded()
     {
         if (seriesMode)
         {
-            const QList<MediaItem> seasons = co_await m_core->mediaService()->getSeasons(seriesId);
+            const QList<MediaItem> seasons = co_await m_core->mediaService()->getSeasons(
+                    seriesId, m_currentMediaItem.serverId);
             if (!guard || guard->m_currentMediaId != currentMediaId)
             {
                 co_return;
@@ -2072,7 +2073,10 @@ QCoro::Task<void> PlayerView::ensureMediaSwitcherDataLoaded()
             guard->m_switcherSeriesSeasons = seasons;
             for (const MediaItem &season : seasons)
             {
-                const QList<MediaItem> episodes = co_await m_core->mediaService()->getEpisodes(seriesId, season.id);
+                const QList<MediaItem> episodes = co_await m_core->mediaService()->getEpisodes(
+                        seriesId, season.id,
+                        QStringLiteral("ParentIndexNumber,IndexNumber"),
+                        QStringLiteral("Ascending"), m_currentMediaItem.serverId);
                 if (!guard || guard->m_currentMediaId != currentMediaId)
                 {
                     co_return;
@@ -2494,7 +2498,8 @@ void PlayerView::stopAndReport()
         {
             try
             {
-                co_await s->reportPlaybackProgress(mId, sId, ticks, true, sessId);
+                co_await s->reportPlaybackProgress(mId, sId, ticks, true, sessId,
+                                                   m_currentMediaItem.serverId);
             }
             catch (const std::exception &e)
             {
@@ -2502,7 +2507,8 @@ void PlayerView::stopAndReport()
             }
             try
             {
-                co_await s->reportPlaybackStopped(mId, sId, ticks, sessId);
+                co_await s->reportPlaybackStopped(mId, sId, ticks, sessId,
+                                                  m_currentMediaItem.serverId);
             }
             catch (const std::exception &e)
             {

@@ -3553,7 +3553,10 @@ QCoro::Task<void> DetailView::executeLoadImages(QPointer<DetailView> safeThis, Q
     {
         try
         {
-            QPixmap pix = co_await core->mediaService()->fetchImage(posterId, posterType, posterTag, posterMaxWidth);
+            QPixmap pix = co_await core->mediaService()->fetchImage(
+                posterId, posterType, posterTag, posterMaxWidth, -1,
+                ImageRequestPriority::Normal, nullptr, ImageFetchPolicy::CachePreferred,
+                cacheServerId);
             if (safeThis && safeThis->m_currentItemId == item.id && !pix.isNull())
             {
                 safeThis->m_currentPosterPix = pix;
@@ -3616,7 +3619,10 @@ QCoro::Task<void> DetailView::executeLoadImages(QPointer<DetailView> safeThis, Q
     {
         try
         {
-            QPixmap pix = co_await core->mediaService()->fetchImage(backdropId, backdropType, backdropTag, 1920);
+            QPixmap pix = co_await core->mediaService()->fetchImage(
+                backdropId, backdropType, backdropTag, 1920, -1,
+                ImageRequestPriority::Normal, nullptr, ImageFetchPolicy::CachePreferred,
+                cacheServerId);
             if (safeThis && safeThis->m_currentItemId == item.id && !pix.isNull())
             {
                 safeThis->m_currentBackdropPix = pix;
@@ -3636,7 +3642,10 @@ QCoro::Task<void> DetailView::executeLoadImages(QPointer<DetailView> safeThis, Q
     {
         try
         {
-            QPixmap pix = co_await core->mediaService()->fetchImage(logoId, logoType, logoTag, logoMaxWidth);
+            QPixmap pix = co_await core->mediaService()->fetchImage(
+                logoId, logoType, logoTag, logoMaxWidth, -1,
+                ImageRequestPriority::Normal, nullptr, ImageFetchPolicy::CachePreferred,
+                cacheServerId);
             if (safeThis && safeThis->m_currentItemId == item.id && !pix.isNull())
             {
                 const QString currentItemId = item.id;
