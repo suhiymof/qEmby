@@ -3254,7 +3254,12 @@ QCoro::Task<void> DetailView::executeSilentRefresh(QPointer<DetailView> safeThis
 {
     QString cacheServerId;
     QString cacheUserId;
-    if (core && core->serverManager())
+    if (safeThis)
+    {
+        cacheServerId = safeThis->m_detailCacheServerId;
+        cacheUserId = safeThis->m_detailCacheUserId;
+    }
+    else if (core && core->serverManager())
     {
         const ServerProfile profile = core->serverManager()->activeProfile();
         cacheServerId = profile.id;
@@ -3263,7 +3268,10 @@ QCoro::Task<void> DetailView::executeSilentRefresh(QPointer<DetailView> safeThis
 
     try
     {
-        MediaItem item = co_await core->mediaService()->getItemDetail(itemId);
+        // 跨服路由：silent refresh 按 detail 缓存归属的 server 拉数据
+        // （聚合 item 不 404），serverId 为空时走 active。
+        MediaItem item = co_await core->mediaService()->getItemDetail(
+            itemId, cacheServerId);
         if (!cacheServerId.isEmpty() && !cacheUserId.isEmpty())
         {
             auto fingerprintFuture = QtConcurrent::run(

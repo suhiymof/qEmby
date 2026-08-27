@@ -513,6 +513,22 @@ void MediaService::ensureValidProfile() const
     }
 }
 
+ServerProfile MediaService::resolveProfile(QString serverId) const
+{
+    if (!m_serverManager)
+        return {};
+    if (!serverId.isEmpty()) {
+        for (const ServerProfile& p : m_serverManager->servers()) {
+            if (p.id == serverId)
+                return p;
+        }
+        qWarning() << "[MediaService] resolveProfile: serverId not found, "
+                      "fallback to active"
+                   << "| serverId=" << serverId;
+    }
+    return m_serverManager->activeProfile();
+}
+
 QCoro::Task<QList<MediaItem>> MediaService::getUserViews(bool includeHidden)
 {
     ensureValidProfile();
@@ -651,18 +667,26 @@ QCoro::Task<QList<MediaItem>> MediaService::searchMedia(const QString &searchTer
 
 
 
-QCoro::Task<QList<MediaItem>> MediaService::getSeasons(const QString &seriesId)
+QCoro::Task<QList<MediaItem>> MediaService::getSeasons(const QString &seriesId,
+                                                       QString serverId)
 {
-    ensureValidProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     const QString fieldQuery = appendMediaCardTooltipFields(
         QStringLiteral("PrimaryImageAspectRatio,RecursiveItemCount,CanDownload"));
     QString path = QString("/Shows/%1/"
                            "Seasons?UserId=%2&Fields=%3&"
                            "EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1")
-                       .arg(seriesId, m_serverManager->activeProfile().userId,
-                            fieldQuery);
+                       .arg(seriesId, profile.userId, fieldQuery);
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (!serverId.isEmpty()) {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    } else {
+        response = co_await m_serverManager->activeClient()->get(path);
+    }
     co_return parseJsonArray<MediaItem>(response["Items"].toArray());
 }
 
@@ -670,44 +694,62 @@ QCoro::Task<QList<MediaItem>> MediaService::getSeasons(const QString &seriesId)
 
 
 QCoro::Task<QList<MediaItem>> MediaService::getEpisodes(const QString &seriesId, const QString &seasonId,
-                                                        const QString &sortBy, const QString &sortOrder)
+                                                        const QString &sortBy, const QString &sortOrder,
+                                                        QString serverId)
 {
-    ensureValidProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     const QString fieldQuery = appendMediaCardTooltipFields(
         QStringLiteral("PrimaryImageAspectRatio,Overview,CanDownload"));
     QString path = QString("/Shows/%1/"
                            "Episodes?SeasonId=%2&UserId=%3&Fields=%4&EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1")
                        .arg(seriesId, seasonId,
-                            m_serverManager->activeProfile().userId, fieldQuery);
+                            profile.userId, fieldQuery);
 
     if (!sortBy.isEmpty())
         path += QString("&SortBy=%1").arg(sortBy);
     if (!sortOrder.isEmpty())
         path += QString("&SortOrder=%1").arg(sortOrder);
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (!serverId.isEmpty()) {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    } else {
+        response = co_await m_serverManager->activeClient()->get(path);
+    }
     co_return parseJsonArray<MediaItem>(response["Items"].toArray());
 }
 
 
 
 
-QCoro::Task<QList<MediaItem>> MediaService::getNextUp(const QString &seriesId)
+QCoro::Task<QList<MediaItem>> MediaService::getNextUp(const QString &seriesId,
+                                                      QString serverId)
 {
-    ensureValidProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     const QString fieldQuery = appendMediaCardTooltipFields(
         QStringLiteral("PrimaryImageAspectRatio,Overview,CanDownload"));
     QString path = QString("/Shows/"
                            "NextUp?UserId=%1&Fields=%2&"
                            "EnableImageTypes=Primary,Backdrop,Thumb&ImageTypeLimit=1")
-                       .arg(m_serverManager->activeProfile().userId, fieldQuery);
+                       .arg(profile.userId, fieldQuery);
 
     if (!seriesId.isEmpty())
     {
         path += QString("&SeriesId=%1").arg(seriesId);
     }
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (!serverId.isEmpty()) {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    } else {
+        response = co_await m_serverManager->activeClient()->get(path);
+    }
     co_return parseJsonArray<MediaItem>(response["Items"].toArray());
 }
 
@@ -2297,17 +2339,41 @@ QCoro::Task<QList<MediaItem>> MediaService::getFavoritePeople(int limit, const Q
 }
 
 
-QCoro::Task<MediaItem> MediaService::getItemDetail(const QString &itemId)
+QCoro::Task<MediaItem> MediaService::getItemDetail(const QString &itemId,
+                                                   QString serverId)
 {
-    ensureValidProfile();
-    const ServerProfile profile = m_serverManager->activeProfile();
+    // 跨服路由：serverId 非空（聚合 item）时用对应 server 的临时 ApiClient，
+    // 空（单服）时走 activeClient（老路径）。
+    ServerProfile profile;
+    if (!serverId.isEmpty()) {
+        for (const ServerProfile& p : m_serverManager->servers()) {
+            if (p.id == serverId) { profile = p; break; }
+        }
+        if (!profile.isValid()) {
+            qWarning() << "[MediaService] getItemDetail: serverId not found, "
+                          "fallback to active"
+                       << "| itemId=" << itemId << "| serverId=" << serverId;
+            profile = m_serverManager->activeProfile();
+        }
+    } else {
+        ensureValidProfile();
+        profile = m_serverManager->activeProfile();
+    }
+
     QString path = QString("/Users/%1/Items/"
                            "%2?Fields=MediaStreams,MediaSources,People,Overview,Genres,"
                            "ProductionYear,OfficialRating,Tags,Studios,ExternalUrls,ProviderIds,CanDownload")
                        .arg(profile.userId, itemId);
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
+    QJsonObject response;
+    if (!serverId.isEmpty()) {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    } else {
+        response = co_await m_serverManager->activeClient()->get(path);
+    }
     MediaItem item = MediaItem::fromJson(response);
+    item.serverId = profile.id;
     updateUserViewsCache(item, profile.id, profile.userId);
     co_return item;
 }
@@ -2468,10 +2534,12 @@ QJsonObject MediaService::buildDeviceProfile()
     return dp;
 }
 
-QCoro::Task<PlaybackInfo> MediaService::getPlaybackInfo(const QString &itemId)
+QCoro::Task<PlaybackInfo> MediaService::getPlaybackInfo(const QString &itemId,
+                                                        QString serverId)
 {
-    ensureValidProfile();
-    ServerProfile profile = m_serverManager->activeProfile();
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     QString path = QString("/Items/%1/PlaybackInfo?UserId=%2").arg(itemId, profile.userId);
 
     QJsonObject payload;
@@ -2480,7 +2548,13 @@ QCoro::Task<PlaybackInfo> MediaService::getPlaybackInfo(const QString &itemId)
     payload["IsPlayback"] = true;
     payload["DeviceProfile"] = buildDeviceProfile();
 
-    QJsonObject response = co_await m_serverManager->activeClient()->post(path, payload);
+    QJsonObject response;
+    if (!serverId.isEmpty()) {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.post(path, payload);
+    } else {
+        response = co_await m_serverManager->activeClient()->post(path, payload);
+    }
     co_return PlaybackInfo::fromJson(response);
 }
 
@@ -2598,9 +2672,10 @@ QCoro::Task<MediaQueryPage> MediaService::getItemsByFilterPage(const QString &ge
     co_return page;
 }
 
-QString MediaService::getStreamUrl(const QString &itemId, const QString &mediaSourceId) const
+QString MediaService::getStreamUrl(const QString &itemId, const QString &mediaSourceId,
+                                   QString serverId) const
 {
-    ServerProfile profile = m_serverManager->activeProfile();
+    ServerProfile profile = resolveProfile(serverId);
     if (!profile.isValid() || itemId.isEmpty() || mediaSourceId.isEmpty())
     {
         return QString();
@@ -2627,9 +2702,10 @@ bool MediaService::isDirectPlayablePath(const QString& path)
     return !isLoopback;
 }
 
-QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo &sourceInfo) const
+QString MediaService::getStreamUrl(const QString &itemId, const MediaSourceInfo &sourceInfo,
+                                   QString serverId) const
 {
-    ServerProfile profile = m_serverManager->activeProfile();
+    ServerProfile profile = resolveProfile(serverId);
     if (!profile.isValid() || itemId.isEmpty() || sourceInfo.id.isEmpty())
     {
         return QString();

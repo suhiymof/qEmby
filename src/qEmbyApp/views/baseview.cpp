@@ -74,19 +74,21 @@ QCoro::Task<MediaItem> BaseView::resolvePlaybackItem(MediaItem item)
 
     QPointer<BaseView> safeThis(this);
     MediaItem detail = item;
+    const QString itemServerId = item.serverId;  // 跨服路由：聚合 item 带 serverId
 
     if (detail.type == "Series") {
         QList<MediaItem> nextUpList =
-            co_await m_core->mediaService()->getNextUp(detail.id);
+            co_await m_core->mediaService()->getNextUp(detail.id, itemServerId);
         if (!safeThis) {
             co_return {};
         }
 
         if (!nextUpList.isEmpty()) {
             detail = nextUpList.first();
+            detail.serverId = itemServerId;
         } else {
             QList<MediaItem> seasons =
-                co_await m_core->mediaService()->getSeasons(detail.id);
+                co_await m_core->mediaService()->getSeasons(detail.id, itemServerId);
             if (!safeThis) {
                 co_return {};
             }
@@ -94,13 +96,15 @@ QCoro::Task<MediaItem> BaseView::resolvePlaybackItem(MediaItem item)
             if (!seasons.isEmpty()) {
                 QList<MediaItem> episodes =
                     co_await m_core->mediaService()->getEpisodes(
-                        detail.id, seasons.first().id);
+                        detail.id, seasons.first().id, "ParentIndexNumber,IndexNumber",
+                        "Ascending", itemServerId);
                 if (!safeThis) {
                     co_return {};
                 }
 
                 if (!episodes.isEmpty()) {
                     detail = episodes.first();
+                    detail.serverId = itemServerId;
                 } else {
                     qDebug() << "Series has no episodes, cannot play.";
                     co_return {};
@@ -113,7 +117,8 @@ QCoro::Task<MediaItem> BaseView::resolvePlaybackItem(MediaItem item)
     }
 
     if (detail.mediaSources.isEmpty()) {
-        detail = co_await m_core->mediaService()->getItemDetail(detail.id);
+        detail = co_await m_core->mediaService()->getItemDetail(
+            detail.id, itemServerId);
         if (!safeThis) {
             co_return {};
         }
@@ -124,7 +129,7 @@ QCoro::Task<MediaItem> BaseView::resolvePlaybackItem(MediaItem item)
     
     if (detail.mediaSources.size() > 1) {
         PlaybackInfo playbackInfo =
-            co_await m_core->mediaService()->getPlaybackInfo(detail.id);
+            co_await m_core->mediaService()->getPlaybackInfo(detail.id, itemServerId);
         if (!safeThis) {
             co_return {};
         }
@@ -203,10 +208,10 @@ QCoro::Task<void> BaseView::executePlay(MediaItem item)
             launchContext.selectedSource = selectedSource;
             sourceInfoVar = QVariant::fromValue(launchContext);
             streamUrl =
-                m_core->mediaService()->getStreamUrl(detail.id, selectedSource);
+                m_core->mediaService()->getStreamUrl(detail.id, selectedSource, detail.serverId);
         } else {
             streamUrl =
-                m_core->mediaService()->getStreamUrl(detail.id, mediaSourceId);
+                m_core->mediaService()->getStreamUrl(detail.id, mediaSourceId, detail.serverId);
         }
 
         const long long ticks = detail.userData.playbackPositionTicks;
@@ -245,7 +250,7 @@ QCoro::Task<void> BaseView::executeExternalPlay(MediaItem item,
             ConfigStore::instance()->get<QString>(
                 ConfigKeys::PlayerSubLang, "auto"));
         const QString streamUrl =
-            m_core->mediaService()->getStreamUrl(detail.id, selectedSource);
+            m_core->mediaService()->getStreamUrl(detail.id, selectedSource, detail.serverId);
         const long long ticks = detail.userData.playbackPositionTicks;
 
         PlaybackManager::instance()->startExternalPlayback(

@@ -143,9 +143,11 @@ public:
     
     QCoro::Task<QList<MediaItem>> searchMedia(const QString& searchTerm, const QString& includeItemTypes = "Movie,Series,BoxSet,Person", const QString& sortBy = "", const QString& sortOrder = "Ascending", int limit = 50);
 
-    QCoro::Task<MediaItem> getItemDetail(const QString& itemId);
+    QCoro::Task<MediaItem> getItemDetail(const QString& itemId,
+                                         QString serverId = QString());
 
-    QCoro::Task<PlaybackInfo> getPlaybackInfo(const QString& itemId);
+    QCoro::Task<PlaybackInfo> getPlaybackInfo(const QString& itemId,
+                                              QString serverId = QString());
 
     // Player capability declaration sent with PlaybackInfo. Official clients
     // always include one; servers (and emby2Alist-style proxies that rewrite
@@ -163,11 +165,13 @@ public:
     
     
     
-    QCoro::Task<QList<MediaItem>> getSeasons(const QString& seriesId);
-    QCoro::Task<QList<MediaItem>> getEpisodes(const QString& seriesId, const QString& seasonId, const QString& sortBy = "ParentIndexNumber,IndexNumber", const QString& sortOrder = "Ascending");
+    QCoro::Task<QList<MediaItem>> getSeasons(const QString& seriesId,
+                                             QString serverId = QString());
+    QCoro::Task<QList<MediaItem>> getEpisodes(const QString& seriesId, const QString& seasonId, const QString& sortBy = "ParentIndexNumber,IndexNumber", const QString& sortOrder = "Ascending", QString serverId = QString());
     
     
-    QCoro::Task<QList<MediaItem>> getNextUp(const QString& seriesId = "");
+    QCoro::Task<QList<MediaItem>> getNextUp(const QString& seriesId = "",
+                                            QString serverId = QString());
 
     QCoro::Task<QList<MediaItem>> getAdditionalParts(const QString& itemId);
 
@@ -216,8 +220,10 @@ public:
     
     QCoro::Task<QList<MediaItem>> getFavoritePeople(int limit = 50, const QString& sortBy = "SortName", const QString& sortOrder = "Ascending");
 
-    QString getStreamUrl(const QString& itemId, const QString& mediaSourceId) const;
-    QString getStreamUrl(const QString& itemId, const MediaSourceInfo& sourceInfo) const;
+    QString getStreamUrl(const QString& itemId, const QString& mediaSourceId,
+                         QString serverId = QString()) const;
+    QString getStreamUrl(const QString& itemId, const MediaSourceInfo& sourceInfo,
+                         QString serverId = QString()) const;
 
     QCoro::Task<QString> reportPlaybackStart(QString itemId, QString mediaSourceId, long long positionTicks);
     QCoro::Task<void> reportPlaybackProgress(QString itemId, QString mediaSourceId, long long positionTicks, bool isPaused, QString playSessionId);
@@ -284,6 +290,10 @@ private:
         quint64* outRequestId);
     void releaseImageNetworkSlot(quint64 requestId);
     void dispatchPendingImageNetworkSlots();
+
+    // 跨服路由：按 serverId 从 servers() 找 profile；空或找不到回退 active。
+    // fetchImage / getItemDetail / getPlaybackInfo 等跨服入口共用。
+    ServerProfile resolveProfile(QString serverId) const;
 };
 
 #endif 
