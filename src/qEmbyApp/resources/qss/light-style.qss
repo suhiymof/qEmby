@@ -6591,3 +6591,70 @@ QLabel#server-switcher-check {
     font-weight: 500;
     background-color: transparent;
 }
+
+/* ================= 聚合视图 ================= */
+#aggregate-tab-bar {
+    background-color: transparent;
+}
+
+QPushButton#aggregate-category-tab {
+    background-color: transparent;
+    color: #64748B;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 4px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+QPushButton#aggregate-category-tab:hover {
+    color: #111827;
+}
+
+QPushButton#aggregate-category-tab:checked {
+    color: #3B82F6;
+    border-bottom-color: #3B82F6;
+    font-weight: 600;
+}
+
+#aggregate-scroll {
+    background-color: transparent;
+}
+
+#aggregate-container {
+    background-color: transparent;
+}
+
+#aggregate-server-header {
+    border-radius: 8px;
+    background-color: transparent;
+}
+
+#aggregate-server-header:hover {
+    background-color: rgba(59, 130, 246, 0.08);
+}
+
+QLabel#aggregate-server-name {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QLabel#aggregate-server-count {
+    color: #94A3B8;
+    font-size: 12px;
+}
+
+QLabel#aggregate-server-loading {
+    color: #3B82F6;
+    font-size: 12px;
+}
+
+QLabel#aggregate-server-chevron {
+    color: #94A3B8;
+    font-size: 18px;
+}
+
+#aggregate-server-gallery {
+    background-color: transparent;
+}

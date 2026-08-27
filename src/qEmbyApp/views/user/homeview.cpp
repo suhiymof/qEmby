@@ -23,6 +23,7 @@
 #include "config/webdavprofilestore.h"
 #include "dashboardview.h"
 #include "favoritesview.h"
+#include "aggregatedsearchview.h"
 #include <QAction>
 #include <QApplication>
 #include <QAbstractItemView>
@@ -186,6 +187,13 @@ void HomeView::setupUi()
     m_dashboardView = new DashboardView(m_core, this);
     m_favoritesView = new FavoritesView(m_core, this);
 
+    // —— 聚合视图（跨服务器搜索/历史/收藏），常驻 viewstack 保留状态 ——
+    m_aggregatedSearchView = new AggregatedSearchView(m_core, this);
+    m_aggregatedSearchView->setProperty("routeType", "AggregatedSearchView");
+    m_aggregatedSearchView->setProperty("showGlobalBack", true);
+    m_aggregatedSearchView->setProperty("showGlobalHome", true);
+    m_aggregatedSearchView->setProperty("showGlobalFav", true);
+
     connect(m_dashboardView, &DashboardView::navigateToLibrary, this,
             [this](const QString &id, const QString &name)
             {
@@ -243,8 +251,14 @@ void HomeView::setupUi()
     connect(m_dashboardView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
     connect(m_favoritesView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
 
+    // 聚合搜索视图的导航信号复用同一套路由。
+    connect(m_aggregatedSearchView, &BaseView::navigateToDetail, this, navigateToDetailSlot);
+    connect(m_aggregatedSearchView, &BaseView::navigateToPlayer, this, navigateToPlayerSlot);
+    connect(m_aggregatedSearchView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
+
     m_contentSwitcher->addWidget(m_dashboardView);
     m_contentSwitcher->addWidget(m_favoritesView);
+    m_contentSwitcher->addWidget(m_aggregatedSearchView);
     m_lastRouteType = m_contentSwitcher->currentWidget()
                           ? m_contentSwitcher->currentWidget()->property("routeType").toString()
                           : QString();
@@ -280,6 +294,28 @@ void HomeView::setupUi()
     m_navStack.clear();
 
     setupSidebar();
+
+    // 聚合侧边栏入口 → 切换到聚合视图。
+    // 阶段3：聚合搜索。阶段4：聚合历史/收藏视图（挂到对应信号后实现）。
+    connect(this, &HomeView::aggregatedSearchRequested, this,
+            [this](const QString& query) {
+                if (!m_aggregatedSearchView) return;
+                if (m_contentSwitcher->currentWidget() != m_aggregatedSearchView) {
+                    // pushView 保留返回栈：聚合结果 → 返回箭头 → 搜索前页面。
+                    pushView(m_aggregatedSearchView);
+                }
+                m_aggregatedSearchView->search(query);
+            });
+    connect(this, &HomeView::aggregatedHistoryRequested, this,
+            [this]() {
+                // 阶段4：聚合历史视图。当前先提示未实现。
+                ModernToast::showMessage(tr("Aggregate History: coming soon"), 1500);
+            });
+    connect(this, &HomeView::aggregatedFavoritesRequested, this,
+            [this]() {
+                // 阶段4：聚合收藏视图。当前先提示未实现。
+                ModernToast::showMessage(tr("Aggregate Favorites: coming soon"), 1500);
+            });
 
     m_edgeTrigger = new QWidget(this);
     m_edgeTrigger->setFixedWidth(15);
