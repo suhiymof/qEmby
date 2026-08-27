@@ -4,6 +4,7 @@
 #include "../../qEmbyCore_global.h"
 #include "../../models/media/mediaitem.h"
 #include "../../models/media/playbackinfo.h"
+#include "../../models/profile/serverprofile.h"
 #include <QHash>
 #include <QCache>
 #include <QImage>
