@@ -639,14 +639,12 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     }
 
     // —— 播放进度条 ——
-    // 已播（positionTicks > 0）且有总时长时，在图片底部画一条进度条；
-    // "下一集待播"（positionTicks == 0，服务器只记录了下集）不画。
-    if (item.playbackPositionTicks > 0 && item.runTimeTicks > 0)
+    // 已播（UserData.PlayedPercentage > 0）时在图片底部画一条进度条；
+    // "下一集待播"（playedPercentage == 0，服务器只记录了下集）不画。
+    const double playedPct = item.userData.playedPercentage;
+    if (playedPct > 0.0)
     {
-        const qreal pct = qBound(0.0,
-                                 double(item.playbackPositionTicks)
-                                     / double(item.runTimeTicks),
-                                 1.0);
+        const qreal pct = qBound(0.0, playedPct / 100.0, 1.0);
         const int barHeight = qMax(3, qRound(4 * fontScale));
         const int barMargin = 4;
         QRect barRect(targetImgRect.left() + barMargin,
