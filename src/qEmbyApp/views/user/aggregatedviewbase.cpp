@@ -30,13 +30,14 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     layout->setSpacing(4);
 
     // —— header 行：◆ 服名 (N 项) [加载中...]  [◀][▶]  › ——
-    // 用 QPushButton 承载（点空白处 emit sectionClicked 进入 Scoped；
-    // 箭头按钮 QToolButton 拦截自己的 mouse press 不冒泡到 header）。
-    // 宽度按内容紧凑（去掉 addStretch），section 主 layout 把它 AlignLeft。
-    auto* header = new QPushButton(this);
+    // 用 QWidget 容器（不用 QPushButton——QPushButton 默认 vertical
+    // sizeHint 高度为 0，整块被压扁看不到文字）。点击进入 Scoped 用
+    // widget 自身 mousePressEvent 实现（见事件处理实现）。
+    auto* header = new QWidget(this);
     header->setObjectName(QStringLiteral("aggregate-server-header"));
     header->setCursor(Qt::PointingHandCursor);
-    header->setFlat(true);
+    // 强制最小高度 28px，避免 QVBoxLayout 把 header 压扁。
+    header->setMinimumHeight(28);
 
     auto* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(8, 4, 8, 4);
@@ -82,8 +83,7 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     // header 紧凑左对齐（不再 addStretch）
     layout->addWidget(header, 0, Qt::AlignLeft);
 
-    connect(header, &QPushButton::clicked, this,
-            [this]() { Q_EMIT sectionClicked(m_profile); });
+    // 点击进入 Scoped：mousePressEvent 拦截（QToolButton 箭头自动吞 mouse press 不冒泡）
     connect(m_btnScrollLeft, &QToolButton::clicked, this,
             [this]() { m_gallery->scrollByCardSteps(-1); });
     connect(m_btnScrollRight, &QToolButton::clicked, this,
@@ -336,4 +336,16 @@ void AggregatedViewBase::onCategoryTabClicked(const QString& label)
         tab->setChecked(tab->text() == label);
     }
     // 子类重写并调用 startLoad()。
+}
+
+void AggregatedServerSection::mousePressEvent(QMouseEvent *event)
+{
+    // header 区域点击：emit sectionClicked 进入 Scoped 页（箭头按钮
+    // 自己处理 mouse press，不冒泡到这里——QToolButton 默认吞掉）。
+    if (event->button() == Qt::LeftButton) {
+        Q_EMIT sectionClicked(m_profile);
+        event->accept();
+        return;
+    }
+    QWidget::mousePressEvent(event);
 }

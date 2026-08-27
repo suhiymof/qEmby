@@ -34,6 +34,8 @@ public:
 
     void setItems(const QList<MediaItem>& items); // 填充结果（同时更新计数）
     void clearItems();                            // 清空结果（保留 widget，重置为空态）
+
+    void mousePressEvent(QMouseEvent *event) override; // header 区域点击 emit sectionClicked
     void setLoading(bool loading);                // 加载中状态（header 右侧提示）
     QString serverId() const { return m_profile.id; }
     const ServerProfile& profile() const { return m_profile; }
