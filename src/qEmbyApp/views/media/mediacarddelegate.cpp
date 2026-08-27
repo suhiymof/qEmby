@@ -640,9 +640,15 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
 
     // —— 剧集 S/E 标签（进度条上方，半透明黑底白字）——
     // 无论是否有进度条都显示——S/E 是剧集内容的关键信息，应稳定可见。
+    // 覆盖两种卡片：
+    //  1) Episode 卡片：显示 "S01E02 · 单集名"
+    //  2) Series 折叠卡（继续观看折叠为整部剧）：显示 "下一集 S01E02 · 单集名"
     const bool isEpisode = (item.type == "Episode");
+    const bool isSeriesResumeFallback =
+        item.type == "Series" && item.isResumeDisplayFallback;
     const bool hasSeasonEpisode =
-        isEpisode && item.parentIndexNumber >= 0 && item.indexNumber >= 0;
+        (isEpisode || isSeriesResumeFallback) &&
+        item.parentIndexNumber >= 0 && item.indexNumber >= 0;
     QRect sxeRect;
     if (hasSeasonEpisode) {
         const int sxeHeight = qMax(18, qRound(18 * fontScale));
@@ -695,7 +701,8 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
         painter->setBrush(QColor(0, 0, 0, 170));
         painter->drawRoundedRect(sxeRect, 4, 4);
 
-        // 文字：S01E02 · 玉坠风波（单集名缺失时只显示 S01E02）
+        // 文字：S01E02 · 玉坠风波（单集名缺失时只显示 S01E02）；
+        // Series 折叠卡加「下一集」前缀。
         const QString season =
             item.parentIndexNumber >= 10
                 ? QStringLiteral("S%1").arg(item.parentIndexNumber)
@@ -705,7 +712,13 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
                 ? QStringLiteral("E%1").arg(item.indexNumber)
                 : QStringLiteral("E0%1").arg(item.indexNumber);
         QString sxeText = QStringLiteral("%1E%2").arg(season).arg(episode);
-        if (!item.name.trimmed().isEmpty()) {
+        if (isSeriesResumeFallback) {
+            sxeText.prepend(tr("下一集 "));
+            const QString epName = item.resumeEpisodeName.trimmed();
+            if (!epName.isEmpty()) {
+                sxeText += QStringLiteral(" \u00B7 %1").arg(epName);
+            }
+        } else if (!item.name.trimmed().isEmpty()) {
             sxeText += QStringLiteral(" \u00B7 %1").arg(item.name);
         }
 

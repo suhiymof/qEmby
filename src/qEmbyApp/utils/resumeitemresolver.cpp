@@ -50,8 +50,11 @@ QList<MediaItem> ResumeItemResolver::buildFallbackItems(
             }
             fallbackItem.seriesId.clear();
             fallbackItem.seriesName.clear();
-            fallbackItem.parentIndexNumber = -1;
-            fallbackItem.indexNumber = -1;
+            // 保留「最新一集」的 S/E 信息（parentIndexNumber/indexNumber +
+            // 单集名），供卡片在进度条上方显示「下一集 S01E02 · 单集名」。
+            fallbackItem.parentIndexNumber = item.parentIndexNumber;
+            fallbackItem.indexNumber = item.indexNumber;
+            fallbackItem.resumeEpisodeName = item.name.trimmed();
             fallbackItem.userData = MediaUserDataInfo {};
 
             MediaImageInfo seriesImages;

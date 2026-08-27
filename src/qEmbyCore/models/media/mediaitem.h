@@ -233,9 +233,11 @@ public:
     QString resumeItemId;
     MediaUserDataInfo resumeUserData;
     bool hasResumeContext = false;
-    
-    
-    
+
+    // 折叠的 Series 继续观看卡片：保留「最新一集」的 S/E 信息
+    // （parentIndexNumber/indexNumber 复用，单集名单独存此字段），
+    // 供卡片在进度条上方显示「下一集 S01E02 · 单集名」。
+    QString resumeEpisodeName;
     bool isResumeDisplayFallback = false;
 
     QList<MediaPersonInfo> people;
