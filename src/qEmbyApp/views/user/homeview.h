@@ -28,6 +28,8 @@ class QVBoxLayout;
 class DashboardView;
 class FavoritesView;
 class AggregatedSearchView;
+class AggregatedHistoryView;
+class AggregatedFavoritesView;
 class SettingsView;
 class SmoothScrollController;
 class SeasonView; 
@@ -158,6 +160,8 @@ private:
     DashboardView* m_dashboardView = nullptr;
     FavoritesView* m_favoritesView = nullptr;
     AggregatedSearchView* m_aggregatedSearchView = nullptr;
+    AggregatedHistoryView* m_aggregatedHistoryView = nullptr;
+    AggregatedFavoritesView* m_aggregatedFavoritesView = nullptr;
 
     QWidget* m_sidebar = nullptr;
     QWidget* m_edgeTrigger = nullptr;

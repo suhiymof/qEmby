@@ -24,6 +24,8 @@
 #include "dashboardview.h"
 #include "favoritesview.h"
 #include "aggregatedsearchview.h"
+#include "aggregatedhistoryview.h"
+#include "aggregatedfavoritesview.h"
 #include <QAction>
 #include <QApplication>
 #include <QAbstractItemView>
@@ -194,6 +196,18 @@ void HomeView::setupUi()
     m_aggregatedSearchView->setProperty("showGlobalHome", true);
     m_aggregatedSearchView->setProperty("showGlobalFav", true);
 
+    m_aggregatedHistoryView = new AggregatedHistoryView(m_core, this);
+    m_aggregatedHistoryView->setProperty("routeType", "AggregatedHistoryView");
+    m_aggregatedHistoryView->setProperty("showGlobalBack", true);
+    m_aggregatedHistoryView->setProperty("showGlobalHome", true);
+    m_aggregatedHistoryView->setProperty("showGlobalFav", true);
+
+    m_aggregatedFavoritesView = new AggregatedFavoritesView(m_core, this);
+    m_aggregatedFavoritesView->setProperty("routeType", "AggregatedFavoritesView");
+    m_aggregatedFavoritesView->setProperty("showGlobalBack", true);
+    m_aggregatedFavoritesView->setProperty("showGlobalHome", true);
+    m_aggregatedFavoritesView->setProperty("showGlobalFav", true);
+
     connect(m_dashboardView, &DashboardView::navigateToLibrary, this,
             [this](const QString &id, const QString &name)
             {
@@ -255,10 +269,18 @@ void HomeView::setupUi()
     connect(m_aggregatedSearchView, &BaseView::navigateToDetail, this, navigateToDetailSlot);
     connect(m_aggregatedSearchView, &BaseView::navigateToPlayer, this, navigateToPlayerSlot);
     connect(m_aggregatedSearchView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
+    connect(m_aggregatedHistoryView, &BaseView::navigateToDetail, this, navigateToDetailSlot);
+    connect(m_aggregatedHistoryView, &BaseView::navigateToPlayer, this, navigateToPlayerSlot);
+    connect(m_aggregatedHistoryView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
+    connect(m_aggregatedFavoritesView, &BaseView::navigateToDetail, this, navigateToDetailSlot);
+    connect(m_aggregatedFavoritesView, &BaseView::navigateToPlayer, this, navigateToPlayerSlot);
+    connect(m_aggregatedFavoritesView, &BaseView::navigateToSeason, this, navigateToSeasonSlot);
 
     m_contentSwitcher->addWidget(m_dashboardView);
     m_contentSwitcher->addWidget(m_favoritesView);
     m_contentSwitcher->addWidget(m_aggregatedSearchView);
+    m_contentSwitcher->addWidget(m_aggregatedHistoryView);
+    m_contentSwitcher->addWidget(m_aggregatedFavoritesView);
     m_lastRouteType = m_contentSwitcher->currentWidget()
                           ? m_contentSwitcher->currentWidget()->property("routeType").toString()
                           : QString();
@@ -308,13 +330,17 @@ void HomeView::setupUi()
             });
     connect(this, &HomeView::aggregatedHistoryRequested, this,
             [this]() {
-                // 阶段4：聚合历史视图。当前先提示未实现。
-                ModernToast::showMessage(tr("Aggregate History: coming soon"), 1500);
+                if (!m_aggregatedHistoryView) return;
+                if (m_contentSwitcher->currentWidget() != m_aggregatedHistoryView) {
+                    pushView(m_aggregatedHistoryView);
+                }
             });
     connect(this, &HomeView::aggregatedFavoritesRequested, this,
             [this]() {
-                // 阶段4：聚合收藏视图。当前先提示未实现。
-                ModernToast::showMessage(tr("Aggregate Favorites: coming soon"), 1500);
+                if (!m_aggregatedFavoritesView) return;
+                if (m_contentSwitcher->currentWidget() != m_aggregatedFavoritesView) {
+                    pushView(m_aggregatedFavoritesView);
+                }
             });
 
     m_edgeTrigger = new QWidget(this);
