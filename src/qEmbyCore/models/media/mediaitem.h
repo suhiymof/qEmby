@@ -166,6 +166,11 @@ struct QEMBYCORE_EXPORT MediaItem {
     Q_PROPERTY(int parentIndexNumber MEMBER parentIndexNumber)   
     Q_PROPERTY(int indexNumber MEMBER indexNumber)               
 
+    // 聚合视图跨服务器路由用：item 所属 server 的 id（聚合视图专用）。
+    // 单服视图（dashboard / favorites / 单服搜索）一般为空，fetchImage
+    // / DetailView 走 activeClient 路径。
+    Q_PROPERTY(QString serverId MEMBER serverId)
+
 public:
     
     QString id;
@@ -205,8 +210,11 @@ public:
     int partCount = 1;     
     int childCount = 0;    
     int recursiveItemCount = 0; 
-    int parentIndexNumber = -1; 
-    int indexNumber = -1;       
+    int parentIndexNumber = -1;
+    int indexNumber = -1;
+
+    // 聚合视图跨服务器路由：item 所属 server 的 id（默认空 = 单服路由）。
+    QString serverId;
 
     
     QStringList genres;

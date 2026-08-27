@@ -142,8 +142,13 @@ QCoro::Task<void> SearchAggregator::fetchFromServer(
         const QJsonArray arr =
             response.value(QStringLiteral("Items")).toArray();
         items.reserve(arr.size());
-        for (const QJsonValue& v : arr)
-            items.append(MediaItem::fromJson(v.toObject()));
+        for (const QJsonValue& v : arr) {
+            // 跨服路由：标记 item 所属 server，详情/图片/播放按这个路由
+            // 到对应 server（避免用 active server 404）。
+            MediaItem item = MediaItem::fromJson(v.toObject());
+            item.serverId = profile.id;
+            items.append(item);
+        }
         ++state->succeeded;
     } catch (...) {
         // 单服务器失败/超时不阻塞其他（失败隔离）。

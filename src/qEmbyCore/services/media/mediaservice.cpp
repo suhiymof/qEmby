@@ -717,14 +717,32 @@ QCoro::Task<QPixmap> MediaService::fetchImage(QString itemId,
                                               int maxWidth, int imageIndex,
                                               ImageRequestPriority priority,
                                               QObject *requestContext,
-                                              ImageFetchPolicy fetchPolicy)
+                                              ImageFetchPolicy fetchPolicy,
+                                              QString serverId)
 {
-    ServerProfile profile = m_serverManager->activeProfile();
+    // 跨服路由：聚合视图的 item 属于非 active server，传 serverId 走对应 server
+    // 拿图片；空 = 走 active（单服路径，老行为）。
+    ServerProfile profile;
+    if (!serverId.isEmpty()) {
+        for (const ServerProfile& p : m_serverManager->servers()) {
+            if (p.id == serverId) { profile = p; break; }
+        }
+        if (!profile.isValid()) {
+            qWarning() << "[MediaService] fetchImage: serverId not found, "
+                          "fallback to active"
+                       << "| itemId=" << itemId
+                       << "| serverId=" << serverId;
+            profile = m_serverManager->activeProfile();
+        }
+    } else {
+        profile = m_serverManager->activeProfile();
+    }
     if (!profile.isValid())
     {
         qWarning() << "[MediaService] fetchImage skipped: invalid active profile"
                    << "| itemId=" << itemId
-                   << "| imageType=" << imageType;
+                   << "| imageType=" << imageType
+                   << "| requestedServerId=" << serverId;
         co_return QPixmap();
     }
     const bool hasRequestContext = requestContext != nullptr;

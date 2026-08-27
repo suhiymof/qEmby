@@ -198,7 +198,8 @@ public:
                                         ImageRequestPriority::Normal,
                                     QObject* requestContext = nullptr,
                                     ImageFetchPolicy fetchPolicy =
-                                        ImageFetchPolicy::CachePreferred);
+                                        ImageFetchPolicy::CachePreferred,
+                                    QString serverId = QString());
     QCoro::Task<QPixmap> fetchImageByUrl(QString imageUrl);
     QCoro::Task<DownloadedImageData> downloadImageByUrl(QString imageUrl);
     void clearImageCaches();

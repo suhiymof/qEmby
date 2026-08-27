@@ -992,7 +992,22 @@ void DetailView::loadItem(QString itemId, MediaItem seedItem)
 
     if (m_core && m_core->serverManager())
     {
-        const ServerProfile profile = m_core->serverManager()->activeProfile();
+        // 跨服路由：聚合 item 可能来自非 active server —— 按 seedItem
+        // 的 serverId 选 profile（单服 item 走 seedItem.serverId 沿用
+        // active 行为）。
+        ServerProfile profile = m_core->serverManager()->activeProfile();
+        if (!seedItem.serverId.isEmpty()) {
+            for (const ServerProfile& p : m_core->serverManager()->servers()) {
+                if (p.id == seedItem.serverId) { profile = p; break; }
+            }
+            if (!profile.isValid()) {
+                qWarning() << "[DetailView] seedItem.serverId not found, "
+                              "fallback to active"
+                           << "| itemId=" << itemId
+                           << "| serverId=" << seedItem.serverId;
+                profile = m_core->serverManager()->activeProfile();
+            }
+        }
         m_detailCacheServerId = profile.id;
         m_detailCacheUserId = profile.userId;
     }

@@ -65,6 +65,8 @@ private:
         QString imageType;
         QString imageTag;
         int maxWidth = 0;
+        // 跨服路由：item 所属 server id（聚合视图专用）。
+        QString serverId;
     };
 
     struct PendingImageRequest {

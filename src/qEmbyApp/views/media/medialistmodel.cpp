@@ -585,6 +585,7 @@ void MediaListModel::ensureImageRequested(const MediaItem& item,
         candidate.imageType = trimmedType;
         candidate.imageTag = trimmedTag;
         candidate.maxWidth = m_imageMaxWidth;
+        candidate.serverId = item.serverId;
         request.candidates.append(candidate);
     };
 
@@ -749,7 +750,8 @@ QCoro::Task<void> MediaListModel::executeImageFetch(
             candidate.maxWidth, -1,
             request.highPriority ? ImageRequestPriority::High
                                  : ImageRequestPriority::Normal,
-            requestContext.data(), fetchPolicy);
+            requestContext.data(), fetchPolicy,
+            candidate.serverId);
         
         
         if (!safeThis) {
