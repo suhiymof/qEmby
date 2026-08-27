@@ -687,7 +687,11 @@ QCoro::Task<QList<MediaItem>> MediaService::getSeasons(const QString &seriesId,
     } else {
         response = co_await m_serverManager->activeClient()->get(path);
     }
-    co_return parseJsonArray<MediaItem>(response["Items"].toArray());
+    // 跨服路由：fromJson 不含 serverId（Emby 不返回），统一补上——
+    // 否则下游 fetchImage/详情跳转全 fallback 到 active server。
+    auto items = parseJsonArray<MediaItem>(response["Items"].toArray());
+    for (auto& it : items) it.serverId = profile.id;
+    co_return items;
 }
 
 
@@ -719,7 +723,11 @@ QCoro::Task<QList<MediaItem>> MediaService::getEpisodes(const QString &seriesId,
     } else {
         response = co_await m_serverManager->activeClient()->get(path);
     }
-    co_return parseJsonArray<MediaItem>(response["Items"].toArray());
+    // 跨服路由：fromJson 不含 serverId（Emby 不返回），统一补上——
+    // 否则下游 fetchImage/详情跳转全 fallback 到 active server。
+    auto items = parseJsonArray<MediaItem>(response["Items"].toArray());
+    for (auto& it : items) it.serverId = profile.id;
+    co_return items;
 }
 
 
@@ -750,7 +758,11 @@ QCoro::Task<QList<MediaItem>> MediaService::getNextUp(const QString &seriesId,
     } else {
         response = co_await m_serverManager->activeClient()->get(path);
     }
-    co_return parseJsonArray<MediaItem>(response["Items"].toArray());
+    // 跨服路由：fromJson 不含 serverId（Emby 不返回），统一补上——
+    // 否则下游 fetchImage/详情跳转全 fallback 到 active server。
+    auto items = parseJsonArray<MediaItem>(response["Items"].toArray());
+    for (auto& it : items) it.serverId = profile.id;
+    co_return items;
 }
 
 QCoro::Task<QPixmap> MediaService::fetchImage(QString itemId,
@@ -2469,7 +2481,9 @@ QCoro::Task<QList<MediaItem>> MediaService::getSimilarItems(const QString &itemI
         ApiClient client(profile, m_serverManager->network());
         response = co_await client.get(path);
     }
-    co_return parseJsonArray<MediaItem>(response["Items"].toArray());
+    auto items = parseJsonArray<MediaItem>(response["Items"].toArray());
+    for (auto& it : items) it.serverId = profile.id;
+    co_return items;
 }
 
 QCoro::Task<QList<MediaItem>> MediaService::getItemCollections(const QString &itemId,
@@ -2494,7 +2508,9 @@ QCoro::Task<QList<MediaItem>> MediaService::getItemCollections(const QString &it
         ApiClient client(profile, m_serverManager->network());
         response = co_await client.get(path);
     }
-    co_return parseJsonArray<MediaItem>(response["Items"].toArray());
+    auto items = parseJsonArray<MediaItem>(response["Items"].toArray());
+    for (auto& it : items) it.serverId = profile.id;
+    co_return items;
 }
 
 QCoro::Task<QList<MediaItem>> MediaService::getCollectionItems(const QString &collectionId)
@@ -2625,6 +2641,7 @@ QCoro::Task<QList<MediaItem>> MediaService::getAdditionalParts(const QString &it
     {
         parts = parseJsonArray<MediaItem>(response["data"].toArray());
     }
+    for (auto& it : parts) it.serverId = profile.id;
     co_return parts;
 }
 

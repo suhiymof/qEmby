@@ -54,6 +54,7 @@
 #include <QSize>
 #include <QShowEvent>
 #include <QStringListModel>
+#include <QDateTime>
 #include <QTimer>
 #include <QKeyEvent>
 #include <QHoverEvent>
@@ -844,9 +845,17 @@ m_btnAggregatedFavorites = new QPushButton(tr("聚合收藏"), m_sidebar);
                 Q_EMIT aggregatedSearchRequested(query);
             });
     connect(m_btnAggregatedHistory, &QPushButton::clicked, this,
-            [this]() { Q_EMIT aggregatedHistoryRequested(); });
+            [this]() {
+                // 历史条目点击穿透保护：popup 收起动画期间 release 可能
+                // 落到本按钮（用户点历史条目却被误触发跳聚合历史）。
+                if (QDateTime::currentMSecsSinceEpoch() - m_historyTermActivatedMs < 300)
+                    return;
+                Q_EMIT aggregatedHistoryRequested(); });
     connect(m_btnAggregatedFavorites, &QPushButton::clicked, this,
-            [this]() { Q_EMIT aggregatedFavoritesRequested(); });
+            [this]() {
+                if (QDateTime::currentMSecsSinceEpoch() - m_historyTermActivatedMs < 300)
+                    return;
+                Q_EMIT aggregatedFavoritesRequested(); });
 
     // —— 当前服分组标题：显示当前 active server 名称（切服时更新）——
     m_currentServerLabel = new QLabel(tr("当前服"), m_sidebar);
@@ -1314,7 +1323,9 @@ void HomeView::setupSearchHistoryPopups()
             [this](const QString &term) {
                 if (!m_searchBox) return;
                 m_searchBox->setText(term);
-                triggerSearch(term); // 内含 recordSearch("", trimmedQuery) — 单服共享 __global__ 桶
+                // 同聚合 popup：记录穿透保护时间戳 + 延迟一拍搜索。
+                m_historyTermActivatedMs = QDateTime::currentMSecsSinceEpoch();
+                QTimer::singleShot(0, this, [this, term]() { triggerSearch(term); });
             });
     connect(m_searchHistoryPopup, &SearchHistoryPopup::clearHistoryRequested, this,
             [this]() {
@@ -1333,8 +1344,14 @@ void HomeView::setupSearchHistoryPopups()
             [this](const QString &term) {
                 if (!m_aggregatedSearchBox) return;
                 m_aggregatedSearchBox->setText(term);
-                Q_EMIT aggregatedSearchRequested(term);
-                // 记录在 aggregatedSearchRequested 处理器内统一执行。
+                // 记录时间戳：popup 收起动画期间 release 可能穿透到侧栏
+                // 按钮（聚合历史/收藏），300ms 内的按钮点击忽略。
+                m_historyTermActivatedMs = QDateTime::currentMSecsSinceEpoch();
+                const QString q = term;
+                // 延迟一拍：popup dismiss/动画收尾后再切视图搜索。
+                QTimer::singleShot(0, this, [this, q]() {
+                    Q_EMIT aggregatedSearchRequested(q);
+                });
             });
     connect(m_aggregatedSearchHistoryPopup,
             &SearchHistoryPopup::clearHistoryRequested, this,

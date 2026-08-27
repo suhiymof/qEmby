@@ -185,7 +185,8 @@ private:
     QVBoxLayout* m_sidebarFooterActionsLayout = nullptr;
     QLineEdit* m_searchBox = nullptr;
     QAction* m_searchAction = nullptr;
-    QCompleter* m_searchCompleter = nullptr;
+    QCompleter* m_searchCompleter = nullptr;    qint64 m_historyTermActivatedMs = 0;  // 历史条目点击时间（穿透保护窗口起点）
+
     QStringListModel* m_searchHistoryModel = nullptr;
 
     // 阶段6：搜索历史下拉（chip 面板，复用 SearchHistoryPopup 组件）。

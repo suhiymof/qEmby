@@ -557,12 +557,15 @@ bool HorizontalListViewGallery::eventFilter(QObject* obj, QEvent* event)
             // 垂直滚轮：不消费成 gallery 水平滚动——QAbstractScrollArea
             // 默认会把垂直滚轮 fallback 到水平 scrollbar（水平 bar 可滚时），
             // 吞掉事件导致外层滚动区（聚合结果页/dashboard）无法上下滚动。
-            // 转发给最近的 QAbstractScrollArea 祖先实现页面滚动。
+            // 转发给最近 QAbstractScrollArea 祖先的 viewport 实现页面滚动
+            //（wheel 处理逻辑挂在 viewportEvent 上，发给 scrollarea 本身
+            // 不会被处理）。
             QWidget *w = parentWidget();
             while (w && !qobject_cast<QAbstractScrollArea *>(w))
                 w = w->parentWidget();
             if (w) {
-                QApplication::sendEvent(w, event);
+                QApplication::sendEvent(
+                    static_cast<QAbstractScrollArea *>(w)->viewport(), event);
             } else {
                 wheelEvent->ignore();
             }
