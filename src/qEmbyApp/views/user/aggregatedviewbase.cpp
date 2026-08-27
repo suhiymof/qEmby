@@ -4,6 +4,7 @@
 #include <qembycore.h>
 #include <services/aggregator/searchaggregator.h>
 #include <services/manager/servermanager.h>
+#include <config/config_keys.h>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -93,6 +94,19 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     // 常驻箭头——箭头已移至 header 行，避免重复）——
     m_gallery = new HorizontalListViewGallery(core, this);
     m_gallery->setObjectName(QStringLiteral("aggregate-server-gallery"));
+    // 与主界面 dashboard 卡片保持一致：同样的 CardStyle（默认 Poster，
+    // 用户设置 DefaultLibraryView=tile 时 LibraryTile）+ 同样的固定高度。
+    // 之前聚合页用 gallery 构造默认（Poster 160x270）且不设高度，若用户
+    // 在主界面选了 tile 视图，聚合页仍是竖卡，视觉不一致。
+    {
+        const bool isTile =
+            ConfigStore::instance()->get<QString>(ConfigKeys::DefaultLibraryView,
+                                                  "poster") == "tile";
+        const MediaCardDelegate::CardStyle style =
+            isTile ? MediaCardDelegate::LibraryTile : MediaCardDelegate::Poster;
+        m_gallery->setCardStyle(style);
+        m_gallery->setFixedHeight(isTile ? 230 : 300);
+    }
     // 宽度撑满 section（默认 Preferred 在部分父布局里只给 sizeHint 宽度，
     // 导致一行只显示 1-2 张卡片的假"显示不全"）。
     m_gallery->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
