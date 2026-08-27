@@ -2487,19 +2487,22 @@ void PlayerView::stopAndReport()
         auto *service = m_core->mediaService();
         QString mediaId = m_currentMediaId;
         QString sourceId = m_currentMediaSourceId;
-        
-        QString sessionId = m_currentPlaySessionId;
-        m_currentPlaySessionId.clear(); 
 
-        
-        
+        QString sessionId = m_currentPlaySessionId;
+        m_currentPlaySessionId.clear();
+
+        // 跨服路由：上报走所属 server（lambda 无捕获，通过参数传入）。
+        const QString reportServerId = m_currentMediaItem.serverId;
+
+
+
         auto taskRoutine = [](MediaService *s, QString mId, QString sId, long long ticks,
-                              QString sessId) -> QCoro::Task<void>
+                              QString sessId, QString serverId) -> QCoro::Task<void>
         {
             try
             {
                 co_await s->reportPlaybackProgress(mId, sId, ticks, true, sessId,
-                                                   m_currentMediaItem.serverId);
+                                                   serverId);
             }
             catch (const std::exception &e)
             {
@@ -2508,7 +2511,7 @@ void PlayerView::stopAndReport()
             try
             {
                 co_await s->reportPlaybackStopped(mId, sId, ticks, sessId,
-                                                  m_currentMediaItem.serverId);
+                                                  serverId);
             }
             catch (const std::exception &e)
             {
@@ -2518,7 +2521,9 @@ void PlayerView::stopAndReport()
 
         
         
-        auto *lingeringTask = new QCoro::Task<void>(taskRoutine(service, mediaId, sourceId, currentTicks, sessionId));
+        auto *lingeringTask = new QCoro::Task<void>(
+            taskRoutine(service, mediaId, sourceId, currentTicks, sessionId,
+                        reportServerId));
 
         
         
