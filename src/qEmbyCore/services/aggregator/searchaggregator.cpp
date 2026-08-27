@@ -14,13 +14,16 @@ namespace {
 constexpr int kPerServerTimeoutMs = 5000;
 
 // 与 MediaService 卡片 tooltip 字段保持一致，保证年份/集数/可下载等齐全。
+// UserData 加进来：聚合继续观看需要 PlayedPercentage 画进度条、PlaybackPositionTicks
+// 算剩余、LastPlayedDate 按时间倒序。
 QString mediaCardFields()
 {
     return QStringLiteral(
         "ProductionYear,RecursiveItemCount,CanDownload,"
         "Overview,Genres,CommunityRating,CriticRating,"
         "OfficialRating,RunTimeTicks,People,Studios,"
-        "ProviderIds,ChildCount,ParentId,Path,MediaStreams");
+        "ProviderIds,ChildCount,ParentId,Path,MediaStreams,"
+        "UserData");
 }
 } // namespace
 
@@ -60,8 +63,16 @@ void SearchAggregator::getResumeItemsAllServers(
     int perServerLimit, ServerResultCallback onServerResult,
     CompleteCallback onComplete)
 {
+    // 聚合继续观看：和单服 dashboard 的 loadResumeSection 走同样的
+    // Filters=IsResumable + SortBy=DatePlayed Desc（按最近播放时间倒序，
+    // UserData 字段已在 mediaCardFields 加上，提供 playedPercentage 给
+    // 进度条使用）。注意 searchAggregator 里 isResumable 已经隐含
+    // played=true 过滤，但 IsResumable 是播放进度 > 0 的判定，
+    // MediaService::getResumeItems 走 IsPlayed+SortBy 路径 —— 这里跟单服保持
+    // 一致用 IsResumable 即可。
     QString pathTemplate =
-        QStringLiteral("/Users/%1/Items?Filters=IsResumable&Recursive=true&Fields=%2")
+        QStringLiteral("/Users/%1/Items?Filters=IsResumable&Recursive=true&Fields=%2"
+                      "&SortBy=DatePlayed&SortOrder=Descending")
             .arg(QStringLiteral("{uid}"), mediaCardFields());
     if (perServerLimit > 0)
         pathTemplate += QStringLiteral("&Limit=%1").arg(perServerLimit);

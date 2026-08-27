@@ -142,7 +142,8 @@ private:
                                                  QString title,
                                                  QString streamUrl,
                                                  long long startPositionTicks,
-                                                 MediaSourceInfo currentSource);
+                                                 MediaSourceInfo currentSource,
+                                                 QString serverId = QString());
     // Continuous-play optimization: negotiate the next episode's playback
     // source in the background while the current one plays, so the
     // auto-advance starts without waiting for another PlaybackInfo round trip.
@@ -199,7 +200,8 @@ private:
         QPointer<QEmbyCore> core,
         QString mediaId,
         QString fallbackTitle,
-        MediaSourceInfo sourceInfo);
+        MediaSourceInfo sourceInfo,
+        QString serverId = QString());
 
     MpvWidget *m_mpvWidget;
     NativeDanmakuOverlay *m_nativeDanmakuOverlay = nullptr;

@@ -7,6 +7,7 @@
 #include <models/profile/serverprofile.h>
 
 class HorizontalListViewGallery;
+class MediaGridWidget;
 class QScrollArea;
 class QVBoxLayout;
 class QHBoxLayout;
@@ -56,6 +57,7 @@ private:
     QLabel* m_countLabel = nullptr;    // "(N 项)"
     QLabel* m_loadingLabel = nullptr;  // "⏳ 加载中..."
     HorizontalListViewGallery* m_gallery = nullptr;
+    MediaGridWidget* m_grid = nullptr;       // 当前实际用：垂直 grid（所有结果可见）
 };
 
 // =============================================================================

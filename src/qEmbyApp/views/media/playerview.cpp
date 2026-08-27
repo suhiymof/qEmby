@@ -4689,7 +4689,8 @@ QCoro::Task<void> PlayerView::resolveDanmakuPlaybackContext(
     QPointer<QEmbyCore> core,
     QString mediaId,
     QString fallbackTitle,
-    MediaSourceInfo sourceInfo)
+    MediaSourceInfo sourceInfo,
+    QString serverId)
 {
     if (!safeThis || !core || !core->mediaService() || mediaId.isEmpty()) {
         co_return;
@@ -4744,7 +4745,8 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
                                                          QString title,
                                                          QString streamUrl,
                                                          long long startPositionTicks,
-                                                         MediaSourceInfo currentSource)
+                                                         MediaSourceInfo currentSource,
+                                                         QString serverId)
 {
     QPointer<PlayerView> safeThis(this);
     QPointer<MediaService> mediaService(m_core ? m_core->mediaService() : nullptr);
@@ -4772,7 +4774,7 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
         // Stage 1: no source at all -> lightweight item-detail API.
         if (source.id.isEmpty())
         {
-            MediaItem detail = co_await mediaService->getItemDetail(mediaId);
+            MediaItem detail = co_await mediaService->getItemDetail(mediaId, serverId);
             if (!safeThis || !mediaService)
                 co_return;
             if (!detail.mediaSources.isEmpty())
@@ -4791,7 +4793,7 @@ QCoro::Task<void> PlayerView::ensureMediaSourcesThenPlay(QString mediaId,
         if (!source.id.isEmpty() && source.directStreamUrl.isEmpty()
             && !MediaService::isDirectPlayablePath(source.path))
         {
-            PlaybackInfo pb = co_await mediaService->getPlaybackInfo(mediaId);
+            PlaybackInfo pb = co_await mediaService->getPlaybackInfo(mediaId, serverId);
             if (!safeThis || !mediaService)
                 co_return;
             if (!pb.mediaSources.isEmpty())
@@ -4928,7 +4930,8 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
         if (needSourceFetch || needPlaybackNegotiation)
         {
             launchTask(ensureMediaSourcesThenPlay(mediaId, title, streamUrl,
-                                                      startPositionTicks, resolvedSourceInfo), this);
+                                                      startPositionTicks, resolvedSourceInfo,
+                                                      resolvedItem.serverId), this);
             return;
         }
     }
@@ -5165,7 +5168,7 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
             << "| sourceInfoValid:" << sourceInfoVar.isValid();
         launchTask(resolveDanmakuPlaybackContext(
                            QPointer<PlayerView>(this), QPointer<QEmbyCore>(m_core),
-                           mediaId, title, resolvedSourceInfo), this);
+                           mediaId, title, resolvedSourceInfo, resolvedItem.serverId), this);
     }
     else
     {

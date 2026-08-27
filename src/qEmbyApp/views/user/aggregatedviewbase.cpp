@@ -1,5 +1,6 @@
 #include "aggregatedviewbase.h"
 #include "../../components/horizontallistviewgallery.h"
+#include "../../components/mediagridwidget.h"
 #include "../../utils/smoothscrollcontroller.h"
 #include <qembycore.h>
 #include <services/aggregator/searchaggregator.h>
@@ -63,27 +64,27 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     connect(header, &QPushButton::clicked, this,
             [this]() { Q_EMIT sectionClicked(m_profile); });
 
-    // —— 横向卡片 gallery ——
-    m_gallery = new HorizontalListViewGallery(core, this);
-    m_gallery->setObjectName(QStringLiteral("aggregate-server-gallery"));
-    // 聚合视图：常驻左右箭头（按内容可滚性显示），点击移动 2 张卡片。
-    m_gallery->setPersistentArrows(true);
-    // 转发 gallery 信号到上层（由 AggregatedViewBase 统一接 BaseView 槽）。
-    connect(m_gallery, &HorizontalListViewGallery::itemClicked, this,
+    // —— 垂直网格 grid（参考 dashboard 继续观看：自适应窗口宽度多列显示，
+    // 所有结果可见，无需左右箭头）——
+    m_grid = new MediaGridWidget(core, this);
+    m_grid->setObjectName(QStringLiteral("aggregate-server-grid"));
+    m_grid->setBasePadding(0);
+    // 转发 grid 信号到上层（由 AggregatedViewBase 统一接 BaseView 槽）。
+    connect(m_grid, &MediaGridWidget::itemClicked, this,
             [this](const MediaItem& item) { Q_EMIT itemActivated(item); });
-    connect(m_gallery, &HorizontalListViewGallery::playRequested, this,
+    connect(m_grid, &MediaGridWidget::playRequested, this,
             &AggregatedServerSection::playRequested);
-    connect(m_gallery, &HorizontalListViewGallery::favoriteRequested, this,
+    connect(m_grid, &MediaGridWidget::favoriteRequested, this,
             &AggregatedServerSection::favoriteRequested);
-    connect(m_gallery, &HorizontalListViewGallery::moreMenuRequested, this,
+    connect(m_grid, &MediaGridWidget::moreMenuRequested, this,
             &AggregatedServerSection::moreMenuRequested);
-    layout->addWidget(m_gallery);
+    layout->addWidget(m_grid, 1);
 }
 
 void AggregatedServerSection::setItems(const QList<MediaItem>& items)
 {
     m_items = items;
-    m_gallery->setItems(items);
+    m_grid->setItems(items);
     m_countLabel->setText(tr("(%1)").arg(items.size()));
     setLoading(false);
 }
@@ -91,7 +92,7 @@ void AggregatedServerSection::setItems(const QList<MediaItem>& items)
 void AggregatedServerSection::clearItems()
 {
     m_items.clear();
-    m_gallery->setItems({});
+    m_grid->setItems({});
     m_countLabel->setText(QString());
 }
 
