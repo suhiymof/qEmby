@@ -28,6 +28,14 @@ if(NOT QEMBY_BUILD_BRANCH)
 endif()
 message(STATUS "qEmby build identifier: ${QEMBY_BUILD_BRANCH} @ ${QEMBY_BUILD_COMMIT}")
 
+# Release 也生成 PDB 调试符号：用户崩溃时 WER 自动产 dump
+# （C:/Users/<u>/AppData/Local/CrashDumps），有 PDB 才能把崩溃 offset
+# 符号化到函数名/代码行。PDB 随 artifact 一起打包（bin/Release 目录）。
+if(MSVC)
+    add_compile_options("$<$<CONFIG:Release>:/Zi>")
+    add_link_options("$<$<CONFIG:Release>:/DEBUG>")
+endif()
+
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
 endif()
