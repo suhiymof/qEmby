@@ -12,6 +12,7 @@ class QVBoxLayout;
 class QHBoxLayout;
 class QLabel;
 class QPushButton;
+class QToolButton;
 class QEmbyCore;
 class SearchAggregator;
 class SmoothScrollController;
@@ -55,6 +56,8 @@ private:
     QLabel* m_headerLabel = nullptr;   // "◆ 服名"
     QLabel* m_countLabel = nullptr;    // "(N 项)"
     QLabel* m_loadingLabel = nullptr;  // "⏳ 加载中..."
+    QToolButton* m_btnScrollLeft = nullptr;  // 头行左箭头（按内容可滚性启用）
+    QToolButton* m_btnScrollRight = nullptr; // 头行右箭头
     HorizontalListViewGallery* m_gallery = nullptr;  // 实际使用：横向 gallery（dashboard 同款）
 };
 

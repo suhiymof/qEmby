@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QToolButton>
 #include <QFrame>
 #include <utility>
 
@@ -26,8 +27,10 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     layout->setContentsMargins(0, 4, 0, 4);
     layout->setSpacing(4);
 
-    // —— header 行：◆ 服名 (N 项) [加载中...]  › ——
-    // 用 QPushButton 承载（可点击 emit sectionClicked，样式 QSS 控制）。
+    // —— header 行：◆ 服名 (N 项) [加载中...]  [◀][▶]  › ——
+    // 用 QPushButton 承载（点空白处 emit sectionClicked 进入 Scoped；
+    // 箭头按钮 QToolButton 拦截自己的 mouse press 不冒泡到 header）。
+    // 宽度按内容紧凑（去掉 addStretch），section 主 layout 把它 AlignLeft。
     auto* header = new QPushButton(this);
     header->setObjectName(QStringLiteral("aggregate-server-header"));
     header->setCursor(Qt::PointingHandCursor);
@@ -53,26 +56,56 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
     m_loadingLabel->setText(QStringLiteral("\u23F3 %1").arg(tr("加载中...")));
     headerLayout->addWidget(m_loadingLabel);
 
-    headerLayout->addStretch(1);
+    // 头行左右箭头（按 gallery 可滚性启用/禁用）
+    m_btnScrollLeft = new QToolButton(header);
+    m_btnScrollLeft->setObjectName("aggregate-header-arrow");
+    m_btnScrollLeft->setText(QStringLiteral("\u25C0")); // ◀
+    m_btnScrollLeft->setAutoRaise(true);
+    m_btnScrollLeft->setCursor(Qt::PointingHandCursor);
+    m_btnScrollLeft->setEnabled(false);
+    headerLayout->addWidget(m_btnScrollLeft);
+
+    m_btnScrollRight = new QToolButton(header);
+    m_btnScrollRight->setObjectName("aggregate-header-arrow");
+    m_btnScrollRight->setText(QStringLiteral("\u25B6")); // ▶
+    m_btnScrollRight->setAutoRaise(true);
+    m_btnScrollRight->setCursor(Qt::PointingHandCursor);
+    m_btnScrollRight->setEnabled(false);
+    headerLayout->addWidget(m_btnScrollRight);
+
     auto* chevron = new QLabel(QStringLiteral("\u203A"), header); // ›
     chevron->setObjectName(QStringLiteral("aggregate-server-chevron"));
     headerLayout->addWidget(chevron);
 
-    layout->addWidget(header);
+    // header 紧凑左对齐（不再 addStretch）
+    layout->addWidget(header, 0, Qt::AlignLeft);
 
     connect(header, &QPushButton::clicked, this,
             [this]() { Q_EMIT sectionClicked(m_profile); });
+    connect(m_btnScrollLeft, &QToolButton::clicked, this,
+            [this]() { m_gallery->scrollByCardSteps(-1); });
+    connect(m_btnScrollRight, &QToolButton::clicked, this,
+            [this]() { m_gallery->scrollByCardSteps(1); });
 
     // —— 横向卡片 gallery（参考 dashboard 继续观看：按窗口宽度自适应
-    // 一行显示 N 张，超出用常驻左右箭头滑动切换）——
+    // 一行显示 N 张，超出用头行左右箭头滑动切换；gallery 内不再放
+    // 常驻箭头——箭头已移至 header 行，避免重复）——
     m_gallery = new HorizontalListViewGallery(core, this);
     m_gallery->setObjectName(QStringLiteral("aggregate-server-gallery"));
     // 宽度撑满 section（默认 Preferred 在部分父布局里只给 sizeHint 宽度，
     // 导致一行只显示 1-2 张卡片的假"显示不全"）。
     m_gallery->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    // 聚合视图：常驻左右箭头（按内容可滚性显示），点击移动 2 张卡片。
-    m_gallery->setPersistentArrows(true);
-    // 转发 gallery 信号到上层（由 AggregatedViewBase 统一接 BaseView 槽）。
+
+    // 头行箭头 enabled 状态跟随 gallery 滚动位置（按内容可滚性启用/禁用）
+    auto updateHeaderArrows = [this]() {
+        if (!m_gallery || !m_btnScrollLeft || !m_btnScrollRight) return;
+        QScrollBar *bar = m_gallery->listView()->horizontalScrollBar();
+        m_btnScrollLeft->setEnabled(bar->value() > 0);
+        m_btnScrollRight->setEnabled(bar->value() < bar->maximum());
+    };
+    auto *hbar = m_gallery->listView()->horizontalScrollBar();
+    connect(hbar, &QScrollBar::valueChanged, this, updateHeaderArrows);
+    connect(hbar, &QScrollBar::rangeChanged, this, updateHeaderArrows);
     connect(m_gallery, &HorizontalListViewGallery::itemClicked, this,
             [this](const MediaItem& item) { Q_EMIT itemActivated(item); });
     connect(m_gallery, &HorizontalListViewGallery::playRequested, this,

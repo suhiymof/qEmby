@@ -299,6 +299,10 @@ void HorizontalListViewGallery::setTileSize(const QSize &size)
         m_listDelegate->setTileSize(size);
         m_listView->doItemsLayout();
         m_listView->viewport()->update();
+        // 防高度裁切：tileSize 高度不含 QListView frame(≈2px×2) + 滚动条(≈15px)，
+        // 若 gallery 总高度 = tileSize.height()，item 底部会被裁约 19px。
+        // 加 24px 缓冲保证 delegate paint 区域完整。
+        m_listView->setMinimumHeight(size.height() + 24);
     }
     updateImageRequestSize();
     updateButtonPositions();
