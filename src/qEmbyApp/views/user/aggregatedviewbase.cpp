@@ -115,12 +115,26 @@ AggregatedServerSection::AggregatedServerSection(QEmbyCore* core,
             &AggregatedServerSection::favoriteRequested);
     connect(m_gallery, &HorizontalListViewGallery::moreMenuRequested, this,
             &AggregatedServerSection::moreMenuRequested);
-    layout->addWidget(m_gallery);
+    // gallery 给 vertical stretch=1，避免在 items 极少时 vertical layout
+    // 把 gallery 高度压缩成窄条（头像被压成 1px 竖线 bug）。AlignTop 让
+    // gallery 按 sizeHint 完整显示卡片，下方留白。
+    layout->addWidget(m_gallery, 1, Qt::AlignTop);
 }
 
 void AggregatedServerSection::setItems(const QList<MediaItem>& items)
 {
     m_items = items;
+    // 空结果时整 section 隐藏（不显示 header/gallery，避免
+    // "0 项"的空 section 堆在聚合视图里；同时解决 gallery 在 0/1 张
+    // 卡片时高度被布局误压缩成窄条的 bug）。
+    if (items.isEmpty()) {
+        hide();
+        m_gallery->setItems({});
+        m_countLabel->setText(QString());
+        setLoading(false);
+        return;
+    }
+    show();
     m_gallery->setItems(items);
     m_countLabel->setText(tr("(%1)").arg(items.size()));
     setLoading(false);
@@ -129,6 +143,7 @@ void AggregatedServerSection::setItems(const QList<MediaItem>& items)
 void AggregatedServerSection::clearItems()
 {
     m_items.clear();
+    hide();
     m_gallery->setItems({});
     m_countLabel->setText(QString());
 }

@@ -87,6 +87,12 @@ SearchHistoryManager *SearchHistoryManager::instance()
 
 SearchHistoryManager::SearchHistoryManager(QObject *parent) : QObject(parent)
 {
+    // 一次性迁移：旧版本单服历史按 serverId 分桶存储（key 形如
+    // search/<serverUuid>/history_records），44fc82e 改为所有服共享
+    // __global__ 桶，但旧数据仍留在旧 key 导致 popup 显示为空。启动时
+    // 扫描合并到 __global__ 桶并删除旧 key。
+    migrateLegacyPerServerBuckets();
+
     connect(ConfigStore::instance(), &ConfigStore::valueChanged, this,
             [this](const QString &key, const QVariant &value)
             {
@@ -466,4 +472,96 @@ QString SearchHistoryManager::normalizeQuery(QString query)
 {
     query = query.simplified();
     return query.toCaseFolded();
+}
+
+
+// ============== 一次性迁移（旧 per-server 桶 → __global__ 桶）==============
+void SearchHistoryManager::migrateLegacyPerServerBuckets()
+{
+    const QString legacyPrefix = QStringLiteral("search/");
+    const QString legacySuffix = QStringLiteral("/history_records");
+
+    // 已知保留桶（不要迁移这些）
+    QSet<QString> reservedBuckets;
+    reservedBuckets.insert(QStringLiteral("__global__"));
+    reservedBuckets.insert(QStringLiteral("__aggregated__"));
+
+    QList<SearchHistoryEntry> mergedEntries;
+    const QStringList allKeys = ConfigStore::instance()->allKeys();
+
+    for (const QString& key : allKeys) {
+        if (!key.startsWith(legacyPrefix) || !key.endsWith(legacySuffix))
+            continue;
+        // 提取中间的 bucket（去掉前缀和后缀）
+        const QString bucket = key.mid(legacyPrefix.size(),
+                                       key.size() - legacyPrefix.size() - legacySuffix.size());
+        if (reservedBuckets.contains(bucket))
+            continue;
+        // 旧 per-server 桶，合并
+        const QString jsonStr = ConfigStore::instance()->get<QString>(key);
+        if (jsonStr.trimmed().isEmpty())
+            continue;
+        const QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+        if (!doc.isArray())
+            continue;
+        const QJsonArray arr = doc.array();
+        for (const QJsonValue& v : arr) {
+            const QJsonObject obj = v.toObject();
+            SearchHistoryEntry entry;
+            entry.term = obj.value("term").toString();
+            entry.timestamp = obj.value("timestamp").toVariant().toLongLong();
+            if (entry.term.isEmpty())
+                continue;
+            entry.normalizedTerm = normalizeQuery(entry.term);
+            mergedEntries.append(entry);
+        }
+        ConfigStore::instance()->set(key, QString()); // 清空旧 key
+    }
+
+    if (mergedEntries.isEmpty())
+        return;
+
+    // 去重（按 normalizedTerm 保留最新），最多 20 条
+    std::sort(mergedEntries.begin(), mergedEntries.end(),
+              [](const SearchHistoryEntry& a, const SearchHistoryEntry& b) {
+                  return a.timestamp > b.timestamp;
+              });
+    QList<SearchHistoryEntry> unique;
+    QSet<QString> seenTerms;
+    for (const auto& e : std::as_const(mergedEntries)) {
+        if (seenTerms.contains(e.normalizedTerm))
+            continue;
+        seenTerms.insert(e.normalizedTerm);
+        unique.append(e);
+        if (unique.size() >= 20)
+            break;
+    }
+
+    // 合并到 __global__ 桶（与现有 __global__ 条目去重合并）
+    const QString globalKey = historyConfigKey(QString()); // = __global__
+    const QString existingJson = ConfigStore::instance()->get<QString>(globalKey);
+    QJsonArray existingArr;
+    if (!existingJson.trimmed().isEmpty()) {
+        const QJsonDocument ed = QJsonDocument::fromJson(existingJson.toUtf8());
+        if (ed.isArray()) existingArr = ed.array();
+    }
+    QSet<QString> existingNormalized;
+    for (const QJsonValue& v : std::as_const(existingArr)) {
+        existingNormalized.insert(normalizeQuery(v.toObject().value("term").toString()));
+    }
+    for (const auto& e : std::as_const(unique)) {
+        if (existingNormalized.contains(e.normalizedTerm))
+            continue;
+        QJsonObject obj;
+        obj.insert("term", e.term);
+        obj.insert("timestamp", e.timestamp);
+        existingArr.append(obj);
+        existingNormalized.insert(e.normalizedTerm);
+    }
+
+    const QJsonDocument outDoc(existingArr);
+    ConfigStore::instance()->set(globalKey, QString::fromUtf8(outDoc.toJson(QJsonDocument::Compact)));
+
+    qInfo() << "[SearchHistoryManager] Migrated" << unique.size()
+            << "legacy per-server history entries to __global__ bucket";
 }

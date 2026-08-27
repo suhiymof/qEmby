@@ -4971,10 +4971,15 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     QString actualStreamUrl = streamUrl;
     if (!resolvedSourceInfo.id.isEmpty())
     {
-        QString directUrl = m_core->mediaService()->getStreamUrl(mediaId, resolvedSourceInfo);
+        // 跨服路由：直接 stream URL 必须按 m_currentMediaItem.serverId 拼，
+        // 否则 getStreamUrl(mediaId, sourceInfo) 默认走 active server 拼接，
+        // 覆盖原本正确的 streamUrl，导致聚合 item 在多个 server id 撞库时
+        // 播放到 active server 的同名 id 资源。
+        QString directUrl = m_core->mediaService()->getStreamUrl(
+            mediaId, resolvedSourceInfo, m_currentMediaItem.serverId);
         if (!directUrl.isEmpty())
         {
-            actualStreamUrl = directUrl; 
+            actualStreamUrl = directUrl;
         }
     }
 

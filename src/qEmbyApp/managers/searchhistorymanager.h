@@ -61,6 +61,11 @@ private:
 
     static QString normalizeQuery(QString query);
 
+    // 一次性迁移：旧 per-server 桶（search/<serverId>/history_records）
+    // → 共享 __global__ 桶。44fc82e 切换桶 key 但旧数据没迁移会卡在旧
+    // key 导致 popup 显示空。构造时自动调用一次。
+    void migrateLegacyPerServerBuckets();
+
     mutable QHash<QString, QList<SearchHistoryEntry>> m_cache;
     mutable QSet<QString> m_loadedBuckets;
 };
