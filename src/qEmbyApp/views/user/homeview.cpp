@@ -381,6 +381,11 @@ void HomeView::setupUi()
     m_edgeTrigger->setAttribute(Qt::WA_TransparentForMouseEvents, false);
     m_edgeTrigger->installEventFilter(this);
 
+    // 全局事件过滤：监听所有应用的 mouse press，搜索历史 popup 打开时
+    // 点击 popup 外部 → 自动 dismiss（SearchHistoryPopup 是 QFrame 不是
+    // Qt::Popup 窗口，不会自动 deactivate）。
+    qApp->installEventFilter(this);
+
     
     
     
@@ -1160,8 +1165,10 @@ void HomeView::triggerSearch(const QString &query)
     if (trimmedQuery.isEmpty())
         return;
 
-    SearchHistoryManager::instance()->recordSearch(currentSearchServerId(),
-                                                   trimmedQuery);
+    // 单服搜索历史：所有服共享一份记录（"__global__" 桶，空 serverId）。
+    // 聚合搜索历史用 SearchHistoryManager::aggregatedBucket()（"__aggregated__"）。
+    SearchHistoryManager::instance()->recordSearch(
+        QString(), trimmedQuery);
 
     
     m_libraryList->clearSelection();
@@ -1301,16 +1308,17 @@ void HomeView::setupSearchHistoryPopups()
             [this](const QString &term) {
                 if (!m_searchBox) return;
                 m_searchBox->setText(term);
-                triggerSearch(term); // 内含 recordSearch(currentSearchServerId())
+                triggerSearch(term); // 内含 recordSearch("", trimmedQuery) — 单服共享 __global__ 桶
             });
     connect(m_searchHistoryPopup, &SearchHistoryPopup::clearHistoryRequested, this,
             [this]() {
-                SearchHistoryManager::instance()->clearHistory(currentSearchServerId());
+                // 单服历史：所有服共享一份（__global__ 桶）
+                SearchHistoryManager::instance()->clearHistory(QString());
             });
     connect(m_searchHistoryPopup, &SearchHistoryPopup::removeHistoryTermRequested, this,
             [this](const QString &term) {
                 SearchHistoryManager::instance()->removeHistoryTerm(
-                    currentSearchServerId(), term);
+                    QString(), term);
             });
 
     // —— 聚合搜索框历史（__aggregated__ 桶，所有服务器共享）——
@@ -1350,11 +1358,12 @@ void HomeView::setupSearchHistoryPopups()
     // 历史变更时刷新正在显示的下拉。
     connect(SearchHistoryManager::instance(), &SearchHistoryManager::historyChanged,
             this, [this](const QString &serverId) {
+                // 单服历史：所有服共享 __global__ 桶（空 serverId）
                 if (m_searchHistoryPopup && m_searchHistoryPopup->isVisible()
                     && m_searchBox && m_searchBox->hasFocus()
-                    && serverId == currentSearchServerId()) {
+                    && serverId.isEmpty()) {
                     showHistoryPopupFor(m_searchBox, m_searchHistoryPopup,
-                                        serverId);
+                                        QString());
                 } else if (m_aggregatedSearchHistoryPopup
                            && m_aggregatedSearchHistoryPopup->isVisible()
                            && m_aggregatedSearchBox
@@ -2013,15 +2022,40 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    // —— 全局 mouse press：搜索历史 popup 打开时点 popup 外部 → dismiss ——
+    if (event->type() == QEvent::MouseButtonPress) {
+        // popup 自己的 mouse press 已经在 popup 内部消化，但 clicked widget
+        // 可能不是 popup（可能是其子 widget），所以这里统一处理。
+        auto clickOutside = [watched](SearchHistoryPopup *popup) -> bool {
+            if (!popup || !popup->isVisible()) return false;
+            // clicked widget 在 popup 子树内 → 不是外部
+            QObject *p = watched;
+            while (p) {
+                if (p == popup) return false;
+                p = p->parent();
+            }
+            return true;
+        };
+        const QPoint gp = QCursor::pos();
+        if (clickOutside(m_searchHistoryPopup)) {
+            m_searchHistoryPopup->dismiss(true);
+            // 不 return，让 homeview 也处理这个 click
+        } else if (clickOutside(m_aggregatedSearchHistoryPopup)) {
+            m_aggregatedSearchHistoryPopup->dismiss(true);
+        }
+    }
+
     // —— 搜索历史下拉：聚焦/点击（空文本）显示，↓ 键显示，Esc 隐藏 ——
     if (watched == m_searchBox || watched == m_aggregatedSearchBox) {
         const bool isAggregated = (watched == m_aggregatedSearchBox);
         auto *box = isAggregated ? m_aggregatedSearchBox : m_searchBox;
         SearchHistoryPopup *popup = isAggregated ? m_aggregatedSearchHistoryPopup
                                                  : m_searchHistoryPopup;
+        // 单服历史：所有服共享一份（__global__ 桶，空 serverId）
+        // 聚合历史：__aggregated__ 桶
         const QString bucket = isAggregated
                                    ? SearchHistoryManager::aggregatedBucket()
-                                   : currentSearchServerId();
+                                   : QString();
 
         if (event->type() == QEvent::FocusIn) {
             if (box && box->text().trimmed().isEmpty()) {
