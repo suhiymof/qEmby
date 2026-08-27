@@ -1,4 +1,5 @@
 #include "aggregatedhistoryview.h"
+#include "../../utils/resumeitemresolver.h"
 #include <services/aggregator/searchaggregator.h>
 #include <services/manager/servermanager.h>
 
@@ -25,6 +26,11 @@ void AggregatedHistoryView::startLoad()
     m_aggregator->getResumeItemsAllServers(
         kPerServerHistoryLimit,
         [this](const ServerProfile& profile, QList<MediaItem> items) {
+            // 与主页 dashboard 继续观看同源折叠：同一 series 的多条 episode
+            // 折叠成一条 Series 卡片（保留最新播放一集的进度上下文）。
+            // 否则同一部剧的每一集都出现，聚合历史出现大量重复卡片。
+            items = ResumeItemResolver::buildFallbackItems(
+                std::move(items), QStringLiteral("aggregate-history"));
             fillSection(profile, items);
         },
         [this](int /*attempted*/, int /*succeeded*/) {
