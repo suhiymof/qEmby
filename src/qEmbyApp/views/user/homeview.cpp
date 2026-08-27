@@ -1199,7 +1199,9 @@ void HomeView::setupSearchHistory()
 
     connect(SearchHistoryManager::instance(), &SearchHistoryManager::historyChanged,
             this, [this](const QString &serverId) {
-                if (serverId == currentSearchServerId()) {
+                // 单服历史：所有服共享 __global__ 桶（空 serverId 触发）；
+                // 兼容旧数据（按 serverId 分桶的写入）。
+                if (serverId.isEmpty() || serverId == currentSearchServerId()) {
                     updateSearchCompleter(m_searchBox ? m_searchBox->text()
                                                       : QString());
                 }
