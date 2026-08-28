@@ -15,6 +15,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
+    # 推 v* tag 触发正式版发布（如 v0.0.7），与主分支 push 的 continuous 滚动发布并存
+    tags: ['v*']
+  # 网页端 Draft/publish 一个 Release 也触发构建，产物自动挂到该 Release（OpenList 上游模式）
+  release:
+    types: [published]
 
 concurrency:
   group: build-${{ github.ref }}
@@ -149,7 +154,9 @@ jobs:
       # 注意：上游已从 softprops/action-ghrelease 改名为 action-gh-release（加连字符），
       # 改名后 Actions 解析服务不重定向旧名，会报 repository not found。
       # v2.6.2 为最终 v2（Node 20 已弃用），升级到 v3（Node 24）。
+      # 主分支 push：continuous 滚动 Release（每次覆盖更新，仅一条）
       - name: Release (continuous)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: continuous
@@ -164,6 +171,21 @@ jobs:
             |---|---|
             | qEmby-*-win-x64.zip | 便携版（解压即用） |
             | qEmby-*-win-x64-Setup.exe | 安装版（含开始菜单/桌面快捷方式） |
+          files: |
+            dist/qEmby-*-win-x64.zip
+            dist/qEmby-*-win-x64-Setup.exe
+
+      # 推 v* tag：正式版 Release（Latest 标签，更新说明自动汇总自上次 tag 以来的提交）
+      # 注意：tag 版本号需与根 CMakeLists.txt 的 project(qEmby VERSION x.y.z) 一致，
+      # 产物文件名中的版本号取自 CMakeLists。
+      - name: Release (versioned)
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "qEmby ${{ github.ref_name }}"
+          prerelease: false
+          generate_release_notes: true
           files: |
             dist/qEmby-*-win-x64.zip
             dist/qEmby-*-win-x64-Setup.exe
