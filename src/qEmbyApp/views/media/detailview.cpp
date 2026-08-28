@@ -1863,6 +1863,9 @@ void DetailView::applyCastSection(const MediaItem &item)
         MediaItem fakeItem;
         fakeItem.id = person.id;
         fakeItem.name = person.name;
+        // 跨服路由：演员头像按详情条目所属服务器取图。不填会回落到
+        // active server，非登录服条目（聚合历史/搜索点入）全部 HTTP 400。
+        fakeItem.serverId = item.serverId;
         fakeItem.images.primaryTag = person.primaryImageTag;
         
         QStringList personParts;
