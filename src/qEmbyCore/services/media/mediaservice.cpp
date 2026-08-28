@@ -1772,7 +1772,8 @@ QCoro::Task<QList<MediaItem>> MediaService::fetchPagedItemList(
 }
 
 QCoro::Task<QList<MediaItem>> MediaService::getResumeItems(int limit, const QString &sortBy,
-                                                           const QString &sortOrder, QString serverId)
+                                                           const QString &sortOrder,
+                                                           const QString &serverId)
 {
     // 跨服路由：serverId 为空时 resolveProfile 回退 active（单服行为不变）。
     const ServerProfile profile = resolveProfile(serverId);
