@@ -2224,13 +2224,9 @@ QCoro::Task<void> PlayerView::switchFromMediaSwitcher(QString mediaId, QString t
                 sourceIdx = 0;
             }
 
+            // 记忆/偏好流规则已由 playMedia 统一应用（见 playMedia 收口处），
+            // 这里只选 source，不再重复标记 isDefault。
             selectedSource = detail.mediaSources.at(sourceIdx);
-            PlayerPreferenceUtils::applyRememberedOrPreferredStreamRules(
-                selectedSource,
-                m_core->serverManager() ? m_core->serverManager()->activeProfile().id : QString(),
-                detail.id,
-                ConfigStore::instance()->get<QString>(ConfigKeys::PlayerAudioLang, "auto"),
-                ConfigStore::instance()->get<QString>(ConfigKeys::PlayerSubLang, "auto"));
             mediaSourceId = selectedSource.id;
         }
 
@@ -5237,6 +5233,22 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     m_targetSubStreamIndex = -2;
 
     QVariantList pendingSubtitles;
+
+    // 统一收口：无论 source 来自详情页 UI 选择、PlaybackInfo 协商还是
+    // item-detail 兜底，都在此应用「记忆选择 / 偏好规则」重标 isDefault，
+    // 再进入下方的 target 流扫描。修复：协商路径（ensureMediaSourcesThenPlay）
+    // 会用服务器原始 flags 整体覆盖详情页标记过的 source 且不再应用规则，
+    // 而 mpv 初始化为 sid=no，无 default 时字幕保持关闭——表现为详情页
+    // 显示选中了字幕、实际播放却是「关闭字幕」。规则应用是纯内存计算，
+    // 对起播速度无可感知影响。
+    if (!resolvedSourceInfo.id.isEmpty() && m_core && m_core->serverManager())
+    {
+        PlayerPreferenceUtils::applyRememberedOrPreferredStreamRules(
+            resolvedSourceInfo, m_core->serverManager()->activeProfile().id,
+            mediaId,
+            ConfigStore::instance()->get<QString>(ConfigKeys::PlayerAudioLang, "auto"),
+            ConfigStore::instance()->get<QString>(ConfigKeys::PlayerSubLang, "auto"));
+    }
 
     if (!resolvedSourceInfo.id.isEmpty())
     {
