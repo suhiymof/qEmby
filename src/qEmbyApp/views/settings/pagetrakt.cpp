@@ -12,7 +12,10 @@
 #include <QDebug>
 #include <QFrame>
 #include <QLineEdit>
+#include <QPointer>
 #include <QPushButton>
+#include <QWebEngineCookieStore>
+#include <QWebEngineProfile>
 #include <stdexcept>
 
 namespace {
@@ -140,8 +143,15 @@ QCoro::Task<void> PageTrakt::startBrowserLogin()
     m_accountBtn->setEnabled(false);
     updateStatusText(tr("Complete the authorization in the opened window..."));
 
+    QPointer<PageTrakt> guard(this);
     TraktLoginDialog dialog(clientId, this);
     dialog.exec();
+
+    // The dialog runs a nested event loop; the settings page could be gone
+    // by the time it returns (app teardown). Bail out before touching members.
+    if (!guard) {
+        co_return;
+    }
 
     if (dialog.authCode().isEmpty()) {
         m_loginInProgress = false;
@@ -179,5 +189,8 @@ QCoro::Task<void> PageTrakt::startBrowserLogin()
 void PageTrakt::signOut()
 {
     TraktService::instance()->signOut();
+    // Fully sign out: also drop the Trakt session cookies kept by the
+    // embedded browser, so the next sign-in asks for credentials again.
+    QWebEngineProfile::defaultProfile()->cookieStore()->deleteAllCookies();
     refreshAccountUi();
 }

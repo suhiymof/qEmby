@@ -2,6 +2,7 @@
 
 #include <services/trakt/traktservice.h>
 
+#include <QUuid>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVBoxLayout>
@@ -20,8 +21,7 @@ public:
     }
 
 protected:
-    bool acceptNavigationRequest(const QUrl &url, NavigationType type,
-                                 bool isMainFrame) override
+    bool acceptNavigationRequest(const QUrl &url, NavigationType, bool) override
     {
         const QString callbackHost = QUrl(TraktService::redirectUri()).host();
         if (!callbackHost.isEmpty() && url.host() == callbackHost) {
@@ -30,7 +30,7 @@ protected:
             }
             return false; // never actually navigate to the fake redirect
         }
-        return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
+        return true; // base implementation accepts all other navigations
     }
 };
 
@@ -51,12 +51,16 @@ TraktLoginDialog::TraktLoginDialog(const QString &clientId, QWidget *parent)
         [this](const QUrl &url) { handleCallbackUrl(url); };
     m_view->setPage(page);
 
+    m_expectedState =
+        QUuid::createUuid().toString(QUuid::WithoutBraces);
+
     QUrl url(QStringLiteral("https://trakt.tv/oauth/authorize"));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("response_type"), QStringLiteral("code"));
     query.addQueryItem(QStringLiteral("client_id"), clientId);
     query.addQueryItem(QStringLiteral("redirect_uri"),
                        TraktService::redirectUri());
+    query.addQueryItem(QStringLiteral("state"), m_expectedState);
     url.setQuery(query);
     m_view->load(url);
 }
@@ -64,6 +68,15 @@ TraktLoginDialog::TraktLoginDialog(const QString &clientId, QWidget *parent)
 void TraktLoginDialog::handleCallbackUrl(const QUrl &url)
 {
     const QUrlQuery query(url.query());
+    const QString state =
+        query.queryItemValue(QStringLiteral("state")).trimmed();
+    if (state.isEmpty() || state != m_expectedState) {
+        // Spoofed or replayed callback: drop it.
+        m_errorText = QStringLiteral("state_mismatch");
+        accept();
+        return;
+    }
+
     m_authCode = query.queryItemValue(QStringLiteral("code")).trimmed();
     if (m_authCode.isEmpty()) {
         m_errorText = query.queryItemValue(QStringLiteral("error")).trimmed();

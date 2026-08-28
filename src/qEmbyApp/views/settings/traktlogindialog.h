@@ -30,6 +30,9 @@ private:
     QWebEngineView *m_view = nullptr;
     QString m_authCode;
     QString m_errorText;
+    // Random per-request OAuth state; the callback must echo it back,
+    // otherwise the redirect is rejected (spoofing / replay guard).
+    QString m_expectedState;
 };
 
 #endif // TRAKTLOGINDIALOG_H
