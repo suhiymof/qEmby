@@ -5,7 +5,6 @@
 #include <qcorotask.h>
 
 class QPushButton;
-class QLineEdit;
 class QFrame;
 
 class PageTrakt : public SettingsPageBase {
@@ -16,12 +15,10 @@ public:
 private:
     void refreshAccountUi();
     void updateStatusText(const QString &text);
-    QCoro::Task<void> startBrowserLogin();
+    QCoro::Task<void> startLogin();
     void signOut();
 
     QPushButton *m_accountBtn = nullptr;
-    QLineEdit *m_clientIdEdit = nullptr;
-    QLineEdit *m_secretEdit = nullptr;
     QFrame *m_accountCard = nullptr;
     bool m_loginInProgress = false;
 };

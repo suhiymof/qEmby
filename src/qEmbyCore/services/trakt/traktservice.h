@@ -39,6 +39,8 @@ struct QEMBYCORE_EXPORT TraktMediaIds {
     }
 };
 
+enum class TraktPollStatus { Approved, Pending, Expired, Failed };
+
 class QEMBYCORE_EXPORT TraktService : public QObject
 {
     Q_OBJECT
@@ -50,18 +52,28 @@ public:
 
     bool isLoggedIn() const;
     QString userName() const;
+    // Built-in shared credentials (see .cpp) — not user-configurable.
     QString clientId() const;
     QString clientSecret() const;
 
-    // OAuth redirect_uri: a fictional host that never resolves. The embedded
-    // login dialog intercepts the navigation to it (nothing hits the wire),
-    // the same trick WebView2-based players use with their own fake domains.
-    // Must match the redirect URI configured on the Trakt application page.
-    static QString redirectUri();
+    struct DeviceCode {
+        QString deviceCode;
+        QString userCode;
+        QString verificationUrl;
+        int intervalSeconds = 5;
+        int expiresInSeconds = 600;
 
-    // Exchange the OAuth authorization code (captured by the login dialog)
-    // for an access/refresh token. Stores credentials on success.
-    QCoro::Task<bool> exchangeAuthorizationCode(const QString &authorizationCode);
+        bool isValid() const
+        {
+            return !deviceCode.isEmpty() && !userCode.isEmpty();
+        }
+    };
+
+    // Step 1 of the device auth flow: ask Trakt for a user code.
+    QCoro::Task<DeviceCode> requestDeviceCode();
+    // Step 2: poll once for approval. Stores the token and returns Approved
+    // on success; Pending/Expired/Failed to continue/stop polling.
+    QCoro::Task<TraktPollStatus> pollDeviceToken(const QString &deviceCode);
 
     void signOut();
 
@@ -106,7 +118,7 @@ private:
     QCoro::Task<bool> writeHistory(const TraktMediaIds &ids, bool add);
 
     // Persists access/refresh tokens and the user identity from a token
-    // endpoint response (shared by the code exchange and refresh flows).
+    // endpoint response (shared by the device flow and the refresh flow).
     void storeTokenReply(const QJsonObject &body);
 
     QJsonObject idsObject(const TraktMediaIds &ids) const;

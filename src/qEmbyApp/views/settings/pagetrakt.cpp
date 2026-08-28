@@ -5,27 +5,24 @@
 #include "../../components/settingscard.h"
 #include "../../utils/qcoroutil.h"
 #include "traktlogindialog.h"
-#include <config/config_keys.h>
-#include <config/configstore.h>
 #include <services/trakt/traktservice.h>
 
+#include <QDateTime>
 #include <QDebug>
 #include <QFrame>
-#include <QLineEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QTimer>
+#include <QUrl>
 #include <QWebEngineCookieStore>
 #include <QWebEngineProfile>
+#include <qcorotimer.h>
 #include <stdexcept>
 
 namespace {
 
 QString statusLine(TraktService *service)
 {
-    if (!service->clientId().isEmpty() && !service->clientSecret().isEmpty()
-        && !service->isLoggedIn()) {
-        return QObject::tr("API credentials configured, but not signed in");
-    }
     if (service->isLoggedIn()) {
         const QString user = service->userName();
         return user.isEmpty()
@@ -50,29 +47,6 @@ PageTrakt::PageTrakt(QEmbyCore *core, QWidget *parent)
                                      statusLine(TraktService::instance()),
                                      m_accountBtn, QString(), this);
     m_mainLayout->addWidget(m_accountCard);
-
-    // ---- API credentials -------------------------------------------------
-    m_clientIdEdit = new QLineEdit(this);
-    m_clientIdEdit->setPlaceholderText(
-        tr("Client ID from trakt.tv/oauth/applications"));
-    m_clientIdEdit->setText(ConfigStore::instance()->get<QString>(
-        ConfigKeys::TraktClientId, QString()));
-    m_mainLayout->addWidget(new SettingsCard(
-        ":/svg/dark/settings.svg", tr("Client ID"),
-        tr("Redirect URI of your Trakt application must be set to %1")
-            .arg(TraktService::redirectUri()),
-        m_clientIdEdit, ConfigKeys::TraktClientId, this));
-
-    m_secretEdit = new QLineEdit(this);
-    m_secretEdit->setEchoMode(QLineEdit::Password);
-    m_secretEdit->setPlaceholderText(
-        tr("Client Secret from trakt.tv/oauth/applications"));
-    m_secretEdit->setText(ConfigStore::instance()->get<QString>(
-        ConfigKeys::TraktClientSecret, QString()));
-    m_mainLayout->addWidget(new SettingsCard(
-        ":/svg/dark/settings.svg", tr("Client Secret"),
-        tr("API credentials of your registered Trakt application"),
-        m_secretEdit, ConfigKeys::TraktClientSecret, this));
 
     // ---- Feature switches ------------------------------------------------
     m_mainLayout->addWidget(new SettingsCard(
@@ -102,7 +76,7 @@ PageTrakt::PageTrakt(QEmbyCore *core, QWidget *parent)
         if (TraktService::instance()->isLoggedIn()) {
             signOut();
         } else {
-            launchTask(startBrowserLogin(), this);
+            launchTask(startLogin(), this);
         }
     });
 }
@@ -126,50 +100,16 @@ void PageTrakt::updateStatusText(const QString &text)
     }
 }
 
-QCoro::Task<void> PageTrakt::startBrowserLogin()
+QCoro::Task<void> PageTrakt::startLogin()
 {
     TraktService *service = TraktService::instance();
-    const QString clientId = m_clientIdEdit->text().trimmed();
-    const QString clientSecret = m_secretEdit->text().trimmed();
-    if (clientId.isEmpty() || clientSecret.isEmpty()) {
-        updateStatusText(tr("Enter Client ID and Client Secret first"));
-        co_return;
-    }
-    auto *store = ConfigStore::instance();
-    store->set(ConfigKeys::TraktClientId, clientId);
-    store->set(ConfigKeys::TraktClientSecret, clientSecret);
-
     m_loginInProgress = true;
     m_accountBtn->setEnabled(false);
-    updateStatusText(tr("Complete the authorization in the opened window..."));
+    updateStatusText(tr("Requesting device code..."));
 
-    QPointer<PageTrakt> guard(this);
-    TraktLoginDialog dialog(clientId, this);
-    dialog.exec();
-
-    // The dialog runs a nested event loop; the settings page could be gone
-    // by the time it returns (app teardown). Bail out before touching members.
-    if (!guard) {
-        co_return;
-    }
-
-    if (dialog.authCode().isEmpty()) {
-        m_loginInProgress = false;
-        m_accountBtn->setEnabled(true);
-        if (!dialog.errorText().isEmpty()) {
-            updateStatusText(tr("Authorization failed: %1")
-                                 .arg(dialog.errorText()));
-        } else {
-            // Dialog closed without a callback: user cancelled.
-            refreshAccountUi();
-        }
-        co_return;
-    }
-
-    updateStatusText(tr("Exchanging authorization code..."));
-    bool ok = false;
+    TraktService::DeviceCode code;
     try {
-        ok = co_await service->exchangeAuthorizationCode(dialog.authCode());
+        code = co_await service->requestDeviceCode();
     } catch (const std::exception &e) {
         updateStatusText(tr("Login failed: %1").arg(QString::fromUtf8(e.what())));
         m_loginInProgress = false;
@@ -177,13 +117,62 @@ QCoro::Task<void> PageTrakt::startBrowserLogin()
         co_return;
     }
 
-    m_loginInProgress = false;
-    m_accountBtn->setEnabled(true);
-    if (!ok) {
-        updateStatusText(
-            tr("Login failed, please check Client ID and Client Secret"));
+    // Embedded browser with the activation code pre-filled; the user just
+    // signs in with their Trakt account and approves.
+    const QString activateUrl = code.verificationUrl + QLatin1Char('/')
+        + code.userCode;
+    QPointer<PageTrakt> guard(this);
+    auto *dialog = new TraktLoginDialog(QUrl(activateUrl), this);
+    dialog->show();
+    updateStatusText(tr("Waiting for approval... (code %1)")
+                         .arg(code.userCode));
+
+    const int intervalMs = qMax(2, code.intervalSeconds) * 1000;
+    const QDateTime deadline =
+        QDateTime::currentDateTime().addSecs(qMax(60, code.expiresInSeconds));
+    QTimer waitTimer;
+    waitTimer.setSingleShot(true);
+
+    while (QDateTime::currentDateTime() < deadline) {
+        waitTimer.start(intervalMs);
+        co_await waitTimer;
+        if (!guard) {
+            co_return;
+        }
+
+        TraktPollStatus status = TraktPollStatus::Failed;
+        try {
+            status = co_await service->pollDeviceToken(code.deviceCode);
+        } catch (const std::exception &e) {
+            qWarning().noquote() << "[Trakt] Device poll error:" << e.what();
+        }
+        if (status == TraktPollStatus::Approved) {
+            break;
+        }
+        if (status == TraktPollStatus::Expired) {
+            updateStatusText(tr("Code expired, please try again"));
+            dialog->close();
+            m_loginInProgress = false;
+            m_accountBtn->setEnabled(true);
+            refreshAccountUi();
+            co_return;
+        }
+        if (status == TraktPollStatus::Failed) {
+            updateStatusText(tr("Login failed, please try again"));
+            dialog->close();
+            m_loginInProgress = false;
+            m_accountBtn->setEnabled(true);
+            refreshAccountUi();
+            co_return;
+        }
     }
-    refreshAccountUi();
+
+    if (guard) {
+        dialog->close();
+        m_loginInProgress = false;
+        m_accountBtn->setEnabled(true);
+        refreshAccountUi();
+    }
 }
 
 void PageTrakt::signOut()

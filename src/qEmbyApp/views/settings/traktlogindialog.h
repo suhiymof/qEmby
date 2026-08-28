@@ -2,37 +2,21 @@
 #define TRAKTLOGINDIALOG_H
 
 #include <QDialog>
-#include <functional>
 
 class QWebEngineView;
-class QUrl;
 
-// Embedded browser that walks the user through Trakt's OAuth authorize page
-// (same UX as WebView2-based players such as Rodeo Player). The redirect_uri
-// points to a fictional host which never resolves: when the page redirects
-// there, the navigation is intercepted locally, the authorization code is
-// captured and the dialog closes. The URL is never actually fetched.
+// Embedded browser shown during the Trakt device login: loads the Trakt
+// activation page with the user code pre-filled (verificationUrl/code), so
+// the user just signs in and approves. The dialog is modeless — the caller
+// polls for approval and closes it when the flow finishes.
 class TraktLoginDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit TraktLoginDialog(const QString &clientId, QWidget *parent = nullptr);
-
-    // Non-empty after accept() when the user approved the application.
-    QString authCode() const { return m_authCode; }
-    // Trakt-reported error (e.g. access_denied) when authorization failed.
-    QString errorText() const { return m_errorText; }
+    explicit TraktLoginDialog(const QUrl &activateUrl, QWidget *parent = nullptr);
 
 private:
-    class AuthPage;
-    void handleCallbackUrl(const QUrl &url);
-
     QWebEngineView *m_view = nullptr;
-    QString m_authCode;
-    QString m_errorText;
-    // Random per-request OAuth state; the callback must echo it back,
-    // otherwise the redirect is rejected (spoofing / replay guard).
-    QString m_expectedState;
 };
 
 #endif // TRAKTLOGINDIALOG_H

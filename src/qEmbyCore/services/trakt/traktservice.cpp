@@ -22,11 +22,20 @@ namespace {
 
 constexpr auto kApiBase = "https://api.trakt.tv";
 constexpr auto kAuthBase = "https://trakt.tv";
-// Fictional redirect host: intercepted by the embedded login dialog before
-// any network request happens. Users must configure exactly this value as
-// the redirect URI of their Trakt application.
-constexpr auto kRedirectUri = "http://qemby.local/trakt";
 constexpr int kTraktRequestTimeoutMs = 10000;
+
+// Built-in shared Trakt application credentials. Trakt closed free app
+// registration in August 2026 (VIP only), so users can no longer register
+// their own apps. Like other community clients (Plex, Infuse, Kodi), qEmby
+// ships one shared credential set. These are borrowed from the official
+// Jellyfin Trakt plugin (GPL) whose app is registered for the device code
+// flow with redirect "urn:ietf:wg:oauth:2.0:oob" (must match in refresh).
+// Replace with an own (VIP-registered) application when one is available.
+constexpr auto kBuiltInClientId =
+    "bfdd2e032c30c35b368f97ef4ec81587b899bcb028b91a1d4ba5589a4b6a7267";
+constexpr auto kBuiltInClientSecret =
+    "bf9fce37cf45c1de91da009e7ac6fca905a35d7a718bf65a52f92199073a2503";
+constexpr auto kRefreshRedirectUri = "urn:ietf:wg:oauth:2.0:oob";
 
 NetworkRequestOptions traktRequestOptions()
 {
@@ -126,21 +135,12 @@ QString TraktService::userName() const
 
 QString TraktService::clientId() const
 {
-    return ConfigStore::instance()
-        ->get<QString>(ConfigKeys::TraktClientId, QString())
-        .trimmed();
+    return QLatin1String(kBuiltInClientId);
 }
 
 QString TraktService::clientSecret() const
 {
-    return ConfigStore::instance()
-        ->get<QString>(ConfigKeys::TraktClientSecret, QString())
-        .trimmed();
-}
-
-QString TraktService::redirectUri()
-{
-    return QLatin1String(kRedirectUri);
+    return QLatin1String(kBuiltInClientSecret);
 }
 
 QMap<QString, QString> TraktService::baseHeaders() const
@@ -213,40 +213,74 @@ void TraktService::storeTokenReply(const QJsonObject &body)
                        .toString());
 }
 
-QCoro::Task<bool> TraktService::exchangeAuthorizationCode(
-    const QString &authorizationCode)
+QCoro::Task<TraktService::DeviceCode> TraktService::requestDeviceCode()
 {
-    const QString clientId = this->clientId();
-    const QString clientSecret = this->clientSecret();
-    if (clientId.isEmpty() || clientSecret.isEmpty()
-        || authorizationCode.trimmed().isEmpty()) {
-        co_return false;
-    }
+    DeviceCode result;
 
     QUrlQuery form;
-    form.addQueryItem(QStringLiteral("code"), authorizationCode.trimmed());
-    form.addQueryItem(QStringLiteral("client_id"), clientId);
-    form.addQueryItem(QStringLiteral("client_secret"), clientSecret);
-    form.addQueryItem(QStringLiteral("redirect_uri"),
-                      QLatin1String(kRedirectUri));
-    form.addQueryItem(QStringLiteral("grant_type"),
-                      QStringLiteral("authorization_code"));
-
+    form.addQueryItem(QStringLiteral("client_id"), clientId());
     const RawReply reply = co_await postFormRaw(
-        QStringLiteral("%1/oauth/token").arg(QLatin1String(kAuthBase)), form);
+        QStringLiteral("%1/oauth/device/code").arg(QLatin1String(kAuthBase)),
+        form);
     if (reply.status != 200) {
-        qWarning().noquote() << "[Trakt] Code exchange failed"
-                             << "| httpStatus:" << reply.status
-                             << "| error:"
-                             << reply.body.value(QStringLiteral("error"))
-                                    .toString();
-        co_return false;
+        throw std::runtime_error(
+            QStringLiteral("Trakt device code request failed (HTTP %1)")
+                .arg(reply.status)
+                .toStdString());
     }
 
-    storeTokenReply(reply.body);
-    qDebug().noquote() << "[Trakt] Authorized via embedded browser"
-                       << "| user:" << userName();
-    co_return true;
+    result.deviceCode =
+        reply.body.value(QStringLiteral("device_code")).toString();
+    result.userCode = reply.body.value(QStringLiteral("user_code")).toString();
+    result.verificationUrl =
+        reply.body.value(QStringLiteral("verification_url")).toString();
+    result.expiresInSeconds =
+        reply.body.value(QStringLiteral("expires_in")).toInt(600);
+    result.intervalSeconds =
+        reply.body.value(QStringLiteral("interval")).toInt(5);
+    if (!result.isValid()) {
+        throw std::runtime_error("Trakt device code response is invalid");
+    }
+    co_return result;
+}
+
+QCoro::Task<TraktPollStatus> TraktService::pollDeviceToken(
+    const QString &deviceCode)
+{
+    QUrlQuery form;
+    form.addQueryItem(QStringLiteral("code"), deviceCode);
+    form.addQueryItem(QStringLiteral("client_id"), clientId());
+    form.addQueryItem(QStringLiteral("client_secret"), clientSecret());
+    const RawReply reply = co_await postFormRaw(
+        QStringLiteral("%1/oauth/device/token").arg(QLatin1String(kAuthBase)),
+        form);
+
+    if (reply.status == 200) {
+        storeTokenReply(reply.body);
+        qDebug().noquote() << "[Trakt] Device auth approved"
+                           << "| user:" << userName();
+        co_return TraktPollStatus::Approved;
+    }
+
+    const QString error =
+        reply.body.value(QStringLiteral("error")).toString().trimmed();
+    // 400 authorization_pending / 429 slow_down: keep waiting.
+    if (reply.status == 400
+        && (error == QLatin1String("authorization_pending")
+            || error.isEmpty())) {
+        co_return TraktPollStatus::Pending;
+    }
+    if (reply.status == 409 || reply.status == 429
+        || error == QLatin1String("slow_down")) {
+        co_return TraktPollStatus::Pending;
+    }
+    if (reply.status == 410) {
+        co_return TraktPollStatus::Expired;
+    }
+    qWarning().noquote() << "[Trakt] Device poll failed"
+                         << "| httpStatus:" << reply.status
+                         << "| error:" << error;
+    co_return TraktPollStatus::Failed;
 }
 
 void TraktService::signOut()
@@ -265,8 +299,7 @@ QCoro::Task<bool> TraktService::refreshAccessToken()
         ConfigStore::instance()
             ->get<QString>(ConfigKeys::TraktRefreshToken, QString())
             .trimmed();
-    if (refreshToken.isEmpty() || clientId().isEmpty()
-        || clientSecret().isEmpty()) {
+    if (refreshToken.isEmpty()) {
         co_return false;
     }
 
@@ -274,8 +307,9 @@ QCoro::Task<bool> TraktService::refreshAccessToken()
     form.addQueryItem(QStringLiteral("refresh_token"), refreshToken);
     form.addQueryItem(QStringLiteral("client_id"), clientId());
     form.addQueryItem(QStringLiteral("client_secret"), clientSecret());
+    // Must match the redirect URI registered for the built-in application.
     form.addQueryItem(QStringLiteral("redirect_uri"),
-                      QLatin1String(kRedirectUri));
+                      QLatin1String(kRefreshRedirectUri));
     form.addQueryItem(QStringLiteral("grant_type"),
                       QStringLiteral("refresh_token"));
     const RawReply reply = co_await postFormRaw(

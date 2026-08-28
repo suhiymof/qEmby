@@ -229,9 +229,7 @@ constexpr const char* ExtPlayerDetectedList = "ext_player/detected_list";
 
 
 
-// Trakt.tv integration (https://trakt.tv/oauth/applications for client_id)
-constexpr const char* TraktClientId = "trakt/client_id";
-constexpr const char* TraktClientSecret = "trakt/client_secret";
+// Trakt.tv integration (built-in shared credentials, device code login)
 constexpr const char* TraktAccessToken = "trakt/access_token";
 constexpr const char* TraktRefreshToken = "trakt/refresh_token";
 constexpr const char* TraktUserSlug = "trakt/user_slug";
