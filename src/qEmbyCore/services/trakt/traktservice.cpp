@@ -3,6 +3,7 @@
 #include "../../api/networkmanager.h"
 #include "../../config/config_keys.h"
 #include "../../config/configstore.h"
+#include "../../models/media/mediaitem.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
