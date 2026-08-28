@@ -1349,6 +1349,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 showGlobalSearchHistoryPopup(m_globalSearchBox->text());
                 return true;
             }
+            // popup 不激活窗口（WA_ShowWithoutActivating）后，Esc 不再被
+            // Qt::Popup 原生消费，这里负责用 Esc 关闭历史下拉。
+            if (keyEvent->key() == Qt::Key_Escape && m_globalSearchHistoryPopup &&
+                m_globalSearchHistoryPopup->isVisible()) {
+                hideGlobalSearchTransientUi();
+                return true;
+            }
         } else if (event->type() == QEvent::Hide) {
             hideGlobalSearchTransientUi();
         }

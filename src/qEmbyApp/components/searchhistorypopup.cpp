@@ -115,6 +115,11 @@ SearchHistoryPopup::SearchHistoryPopup(QWidget *parent)
     // 顶层 Qt::Popup 窗口：鼠标事件由 popup 独占，点击条目/空白区域都不会
     // 透传到下层部件（此前是普通子 widget，点击会落到 popup 下面的按钮/卡片）。
     setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    // 弹出时不激活窗口：Qt::Popup 默认 show 时会抢走激活并把键盘事件
+    // 收归 popup（内部部件全是 NoFocus，按键被丢弃），表现为搜索框
+    // 无法输入。加 WA_ShowWithoutActivating 后键盘焦点留在锚点输入框，
+    // 打字/IME 正常；鼠标独占（防透传）不受影响。
+    setAttribute(Qt::WA_ShowWithoutActivating, true);
     hide();
 
     auto *hostLayout = new QVBoxLayout(this);
@@ -566,6 +571,9 @@ void SearchHistoryPopup::rebuildChips(bool preserveScrollPosition)
     {
         const auto &entry = entries.at(i);
         auto *chip = new SearchHistoryChip(m_flowHost);
+        // NoFocus：popup 不激活窗口（WA_ShowWithoutActivating），焦点必须
+        // 始终留在锚点输入框，chip 不可参与焦点链。
+        chip->setFocusPolicy(Qt::NoFocus);
         chip->setTerm(entry.term);
         chip->setSearchCount(entry.searchCount);
         chip->setHeatLevel(heatLevelForCount(entry.searchCount));
