@@ -224,7 +224,20 @@ constexpr const char* ExtPlayerArgs = "ext_player/arguments";
 constexpr const char* ExtPlayerDirectStream = "ext_player/direct_stream";
 constexpr const char* ExtPlayerQuickPlay = "ext_player/quick_play";
 constexpr const char* ExtPlayerUrlReplace = "ext_player/url_replace";
-constexpr const char* ExtPlayerDetectedList = "ext_player/detected_list"; 
+constexpr const char* ExtPlayerDetectedList = "ext_player/detected_list";
+
+
+
+
+// Trakt.tv integration (https://trakt.tv/oauth/applications for client_id)
+constexpr const char* TraktClientId = "trakt/client_id";
+constexpr const char* TraktAccessToken = "trakt/access_token";
+constexpr const char* TraktRefreshToken = "trakt/refresh_token";
+constexpr const char* TraktUserSlug = "trakt/user_slug";
+constexpr const char* TraktUserName = "trakt/user_name";
+constexpr const char* TraktScrobbleEnabled = "trakt/scrobble_enabled";
+constexpr const char* TraktSyncButtonEnabled = "trakt/sync_button_enabled";
+constexpr const char* TraktResumeCheckEnabled = "trakt/resume_check_enabled";
 
 
 

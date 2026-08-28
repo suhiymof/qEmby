@@ -93,6 +93,8 @@ private:
   QCoro::Task<void> executePlay(MediaItem targetItem, long long startTicks);
   QCoro::Task<void> executePlaySeason(MediaItem seasonItem);
   QCoro::Task<void> executeExternalPlay(MediaItem targetItem, QString playerPath);
+  QCoro::Task<void> traktSyncWatched(MediaItem targetItem, bool watched);
+  void traktSyncFeedback(bool success, bool watched);
   QCoro::Task<void> fetchSeriesNextUp(QString targetId,
                                       bool applyToUi = true);
   void updateSeasonSwitcher(int currentIndex);

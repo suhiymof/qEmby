@@ -8,6 +8,8 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
+#include <QPoint>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSet>
@@ -15,6 +17,7 @@
 #include <QVBoxLayout>
 #include <config/config_keys.h>
 #include <config/configstore.h>
+#include <services/trakt/traktservice.h>
 
 DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   auto *mainLayout = new QVBoxLayout(this);
@@ -49,6 +52,13 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   m_playedBtn->setFixedSize(36, 36);
   m_playedBtn->setCursor(Qt::PointingHandCursor);
 
+  m_traktBtn = new QPushButton(tr("Trakt"), this);
+  m_traktBtn->setObjectName("detail-trakt-btn");
+  m_traktBtn->setCursor(Qt::PointingHandCursor);
+  m_traktBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_traktBtn->setToolTip(tr("Sync watched status to Trakt"));
+  m_traktBtn->hide();
+
   m_progressWidget = new QWidget(this);
   m_progressWidget->setMaximumWidth(450);
   auto *progressLayout = new QHBoxLayout(m_progressWidget);
@@ -81,6 +91,7 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   actionsLayout->addWidget(m_extPlayerBtn);
   actionsLayout->addWidget(m_favBtn);
   actionsLayout->addWidget(m_playedBtn);
+  actionsLayout->addWidget(m_traktBtn);
   actionsLayout->addWidget(m_progressWidget);
   actionsLayout->addStretch();
 
@@ -109,6 +120,17 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
           &DetailActionWidget::favoriteRequested);
   connect(m_playedBtn, &QPushButton::clicked, this,
           &DetailActionWidget::playedToggleRequested);
+  connect(m_traktBtn, &QPushButton::clicked, this, [this]() {
+    QMenu menu(m_traktBtn);
+    QAction* markAction = menu.addAction(tr("Mark as Watched"));
+    QAction* unmarkAction = menu.addAction(tr("Remove from History"));
+    QAction* chosen = menu.exec(m_traktBtn->mapToGlobal(
+        QPoint(0, m_traktBtn->height())));
+    if (chosen == markAction)
+      Q_EMIT traktMarkWatchedRequested();
+    else if (chosen == unmarkAction)
+      Q_EMIT traktUnmarkWatchedRequested();
+  });
   connect(m_versionComboBox, &ModernMenuButton::currentIndexChanged, this,
           [this](int visualIndex) {
             if (visualIndex >= 0 && visualIndex < m_sourceIndexes.size())
@@ -132,6 +154,10 @@ void DetailActionWidget::clear() {
   m_playBtn->setText(tr("▶ Play"));
   m_progressWidget->hide();
 
+  m_traktItemType.clear();
+  if (m_traktBtn)
+    m_traktBtn->hide();
+
   m_versionComboBox->blockSignals(true);
   m_versionComboBox->clear();
   m_sourceIndexes.clear();
@@ -149,7 +175,29 @@ void DetailActionWidget::clear() {
   m_subtitleComboBox->blockSignals(false);
 }
 
+void DetailActionWidget::setTraktItemType(const QString& itemType) {
+  m_traktItemType = itemType;
+  updateTraktButtonVisibility();
+}
+
+void DetailActionWidget::updateTraktButtonVisibility() {
+  if (!m_traktBtn)
+    return;
+  const bool supported = m_traktItemType == QLatin1String("Movie") ||
+                         m_traktItemType == QLatin1String("Episode") ||
+                         m_traktItemType == QLatin1String("Series");
+  bool visible = false;
+  if (supported) {
+    TraktService* service = TraktService::instance();
+    visible = ConfigStore::instance()->get<bool>(
+                  ConfigKeys::TraktSyncButtonEnabled, false) &&
+              service->isLoggedIn() && !service->clientId().isEmpty();
+  }
+  m_traktBtn->setVisible(visible);
+}
+
 void DetailActionWidget::setupNormalMode(const MediaItem &item) {
+  setTraktItemType(item.type);
   m_playBtn->setEnabled(true);
   if (item.userData.playedPercentage > 0 &&
       item.userData.playedPercentage < 100) {
@@ -182,6 +230,7 @@ void DetailActionWidget::setSeriesLoadingMode() {
 
 void DetailActionWidget::setupSeriesMode(const MediaItem &nextUpItem,
                                          const QString &epTag) {
+  setTraktItemType(QLatin1String("Series"));
   m_playBtn->setEnabled(true);
   if (nextUpItem.userData.playbackPositionTicks > 0) {
     m_resumeBtn->show();

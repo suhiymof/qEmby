@@ -6,6 +6,7 @@
 #include "pagegeneral.h"
 #include "pageplayer.h"
 #include "pagelibrary.h"
+#include "pagetrakt.h"
 #include <QApplication>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -74,6 +75,10 @@ void SettingsView::setupUi() {
       ThemeManager::getAdaptiveIcon(":/svg/dark/library.svg"), tr(" Library"));
   itemLibrary->setData(Qt::UserRole, ":/svg/dark/library.svg");
 
+  auto *itemTrakt = new QListWidgetItem(
+      ThemeManager::getAdaptiveIcon(":/svg/dark/user.svg"), tr(" Trakt"));
+  itemTrakt->setData(Qt::UserRole, ":/svg/dark/user.svg");
+
   auto *itemAbout = new QListWidgetItem(
       ThemeManager::getAdaptiveIcon(":/svg/dark/about.svg"), tr(" About"));
   itemAbout->setData(Qt::UserRole, ":/svg/dark/about.svg");
@@ -83,12 +88,14 @@ void SettingsView::setupUi() {
   itemAppearance->setSizeHint(QSize(220, 44));
   itemPlayer->setSizeHint(QSize(220, 44));
   itemLibrary->setSizeHint(QSize(220, 44));
+  itemTrakt->setSizeHint(QSize(220, 44));
   itemAbout->setSizeHint(QSize(220, 44));
 
   m_navMenu->addItem(itemGeneral);
   m_navMenu->addItem(itemAppearance);
   m_navMenu->addItem(itemLibrary);
   m_navMenu->addItem(itemPlayer);
+  m_navMenu->addItem(itemTrakt);
   m_navMenu->addItem(itemAbout);
 
   leftLayout->addWidget(m_titleLabel);
@@ -102,7 +109,7 @@ void SettingsView::setupUi() {
   
   
   
-  const int kPageCount = 5;
+  const int kPageCount = 6;
   m_scrollAreas.reserve(kPageCount);
   m_scrollAnims.reserve(kPageCount);
   m_scrollTargets.reserve(kPageCount);
@@ -183,6 +190,9 @@ void SettingsView::ensurePageAt(int row) {
     page = new PagePlayer(m_core, m_stack);
     break;
   case 4:
+    page = new PageTrakt(m_core, m_stack);
+    break;
+  case 5:
     page = new PageAbout(m_core, m_stack);
     break;
   default:

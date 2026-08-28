@@ -32,6 +32,7 @@
 #include <QHBoxLayout>
 #include <QListWidget>
 #include <QMainWindow>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPalette>
 #include <QPointer> 
@@ -46,6 +47,7 @@
 #include <fileutils.h>
 
 #include <QVector>
+#include <QDateTime>
 #include <QWindow>
 #include <cmath>
 #include <config/config_keys.h>
@@ -1681,6 +1683,7 @@ void PlayerView::setupUi()
                 }
                 if (m_isPlaybackFinished)
                 {
+                    traktOnPlaybackStopped();
                     autoPlayNextMediaIfEnabled();
                 }
             });
@@ -2556,6 +2559,8 @@ void PlayerView::stopAndReport()
         
         QTimer::singleShot(10000, m_core, [lingeringTask]() { delete lingeringTask; });
     }
+
+    traktOnPlaybackStopped();
 
     if (m_mpvWidget)
     {
@@ -5493,6 +5498,18 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     startSessionTask(QPointer<PlayerView>(this), m_core->mediaService(), m_currentMediaId, m_currentMediaSourceId,
                      startPositionTicks);
 
+    // Trakt: fresh scrobble session for the new media.
+    m_traktIds = {};
+    m_traktResolvedMediaId.clear();
+    m_traktResolveInFlight = false;
+    m_traktResumeChecked = false;
+    m_traktStopped = false;
+    m_traktLastScrobbleMs = 0;
+    if (traktScrobbleActive())
+    {
+        launchTask(traktScrobbleAt(QStringLiteral("start")), this);
+    }
+
     m_reportTimer->start();
     m_mousePollTimer->start();
     m_bufferTimer->start();
@@ -5506,14 +5523,187 @@ void PlayerView::reportProgressToServer()
         return;
     }
     long long currentTicks = static_cast<long long>(m_currentPosition * 10000000.0);
-    
+
     m_core->mediaService()->reportPlaybackProgress(m_currentMediaId, m_currentMediaSourceId, currentTicks, !m_isPlaying,
                                                    m_currentPlaySessionId);
+
+    // Trakt scrobble update: Trakt recommends ~1 call per minute; piggyback
+    // on this 10s Emby report timer with its own throttle.
+    traktOnProgressTick();
 
     if (m_showStatisticsOverlay)
     {
         updateStatisticsDisplay();
     }
+}
+
+bool PlayerView::traktScrobbleActive() const
+{
+    if (m_traktStopped || m_currentMediaId.isEmpty())
+    {
+        return false;
+    }
+    const QString type = m_currentMediaItem.type;
+    if (type != QLatin1String("Movie") && type != QLatin1String("Episode"))
+    {
+        return false;
+    }
+    if (!ConfigStore::instance()->get<bool>(ConfigKeys::TraktScrobbleEnabled, false))
+    {
+        return false;
+    }
+    TraktService *service = TraktService::instance();
+    return service->isLoggedIn() && !service->clientId().isEmpty();
+}
+
+QCoro::Task<TraktMediaIds> PlayerView::traktEnsureIdsResolved()
+{
+    if (m_traktResolvedMediaId != m_currentMediaId)
+    {
+        m_traktIds = {};
+        m_traktResolveInFlight = false;
+    }
+    if (!m_traktIds.valid && !m_traktResolveInFlight)
+    {
+        m_traktResolveInFlight = true;
+        MediaItem item = m_currentMediaItem;
+        try
+        {
+            m_traktIds = co_await TraktService::instance()->resolveIds(item);
+        }
+        catch (const std::exception &e)
+        {
+            qDebug().noquote() << "[PlayerView][Trakt] Ids resolve failed"
+                               << "| mediaId:" << m_currentMediaId
+                               << "| error:" << e.what();
+        }
+        m_traktResolveInFlight = false;
+        m_traktResolvedMediaId = m_currentMediaId;
+    }
+    co_return m_traktIds;
+}
+
+QCoro::Task<void> PlayerView::traktScrobbleAt(QString action)
+{
+    if (!traktScrobbleActive())
+    {
+        co_return;
+    }
+    const TraktMediaIds ids = co_await traktEnsureIdsResolved();
+    if (!ids.valid || m_currentMediaId.isEmpty())
+    {
+        co_return;
+    }
+    const double percent = m_totalDuration > 0.0
+                               ? qBound(0.0, m_currentPosition * 100.0 / m_totalDuration, 100.0)
+                               : 0.0;
+    co_await TraktService::instance()->scrobble(action, ids, percent);
+    qDebug().noquote() << "[PlayerView][Trakt] Scrobble sent"
+                       << "| action:" << action
+                       << "| position:" << m_currentPosition
+                       << "| percent:" << percent;
+}
+
+void PlayerView::traktOnProgressTick()
+{
+    if (!traktScrobbleActive())
+    {
+        return;
+    }
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (m_traktLastScrobbleMs != 0 && now - m_traktLastScrobbleMs < 60000)
+    {
+        return;
+    }
+    m_traktLastScrobbleMs = now;
+    launchTask(traktScrobbleAt(QStringLiteral("start")), this);
+}
+
+void PlayerView::traktOnPauseStateChanged(bool isPaused)
+{
+    if (!traktScrobbleActive())
+    {
+        return;
+    }
+    // Pause keeps the position stored on Trakt (feeds cross-device resume);
+    // resume just continues the same scrobble session.
+    m_traktLastScrobbleMs = QDateTime::currentMSecsSinceEpoch();
+    launchTask(traktScrobbleAt(isPaused ? QStringLiteral("pause")
+                                        : QStringLiteral("start")),
+               this);
+}
+
+void PlayerView::traktOnPlaybackStopped()
+{
+    if (!traktScrobbleActive())
+    {
+        return;
+    }
+    // "stop" marks the item watched when progress > 80%, otherwise Trakt
+    // keeps the position for its own resume list.
+    m_traktStopped = true;
+    m_traktLastScrobbleMs = 0;
+    launchTask(traktScrobbleAt(QStringLiteral("stop")), this);
+}
+
+QCoro::Task<void> PlayerView::traktCheckResumeProgress()
+{
+    if (!ConfigStore::instance()->get<bool>(ConfigKeys::TraktResumeCheckEnabled, false))
+    {
+        co_return;
+    }
+    TraktService *service = TraktService::instance();
+    if (!service->isLoggedIn() || service->clientId().isEmpty())
+    {
+        co_return;
+    }
+    const TraktMediaIds ids = co_await traktEnsureIdsResolved();
+    if (!ids.valid || m_totalDuration <= 0.0)
+    {
+        co_return;
+    }
+    double percent = -1.0;
+    try
+    {
+        percent = co_await service->fetchStoredProgressPercent(ids);
+    }
+    catch (const std::exception &e)
+    {
+        qDebug().noquote() << "[PlayerView][Trakt] Resume check failed"
+                           << "| error:" << e.what();
+    }
+    if (percent <= 0.0 || m_isViewTearingDown || m_totalDuration <= 0.0)
+    {
+        co_return;
+    }
+    const double traktPosition = m_totalDuration * percent / 100.0;
+    // Only offer a jump that is meaningfully ahead of the Emby resume point.
+    if (traktPosition < 60.0 || traktPosition <= m_currentPosition + 120.0)
+    {
+        co_return;
+    }
+    qDebug().noquote() << "[PlayerView][Trakt] Resume candidate"
+                       << "| traktPosition:" << traktPosition
+                       << "| embyPosition:" << m_currentPosition;
+
+    QPointer<PlayerView> safeThis(this);
+    QMessageBox *box = new QMessageBox(QMessageBox::Question, tr("Trakt Resume"),
+                                       tr("Trakt progress: %1 (%2)\nContinue from there?")
+                                           .arg(formatTime(traktPosition, m_totalDuration),
+                                                QString::number(static_cast<int>(percent)) +QLatin1String("%")),
+                                       QMessageBox::Yes | QMessageBox::No, this);
+    box->setModal(false);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::finished, this, [safeThis, traktPosition](int result)
+            {
+        if (!safeThis || result != QMessageBox::Yes)
+        {
+            return;
+        }
+        safeThis->m_pendingSeekSeconds = 0.0;
+        safeThis->m_mpvWidget->seek(traktPosition);
+        safeThis->m_currentPosition = traktPosition; });
+    box->open();
 }
 
 void PlayerView::onBackClicked()
@@ -5748,6 +5938,14 @@ void PlayerView::onDurationChanged(double duration)
         m_mpvWidget->seek(m_pendingSeekSeconds);
         m_pendingSeekSeconds = 0.0;
     }
+
+    // Trakt resume check: once per media, only when duration is known so the
+    // stored percentage can be converted into a seek target.
+    if (!m_traktResumeChecked && duration > 0)
+    {
+        m_traktResumeChecked = true;
+        launchTask(traktCheckResumeProgress(), this);
+    }
 }
 
 void PlayerView::onPlaybackStateChanged(bool isPaused)
@@ -5770,6 +5968,8 @@ void PlayerView::onPlaybackStateChanged(bool isPaused)
         m_core->mediaService()->reportPlaybackProgress(m_currentMediaId, m_currentMediaSourceId, currentTicks, isPaused,
                                                        m_currentPlaySessionId);
     }
+
+    traktOnPauseStateChanged(isPaused);
 }
 
 void PlayerView::togglePlayPause()

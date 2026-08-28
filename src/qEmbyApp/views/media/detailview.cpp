@@ -25,6 +25,7 @@
 #include <qembycore.h>
 #include <services/manager/servermanager.h>
 #include <services/media/mediaservice.h>
+#include <services/trakt/traktservice.h>
 
 #include <QClipboard>
 #include <QDate>
@@ -671,6 +672,12 @@ void DetailView::setupUi()
     connect(m_actionWidget, &DetailActionWidget::externalPlayRequested, this,
             [this](const QString &playerPath) -> QCoro::Task<void>
             { co_await executeExternalPlay(m_currentPlayableItem, playerPath); });
+    connect(m_actionWidget, &DetailActionWidget::traktMarkWatchedRequested, this,
+            [this]() -> QCoro::Task<void>
+            { co_await traktSyncWatched(m_currentMediaItem, true); });
+    connect(m_actionWidget, &DetailActionWidget::traktUnmarkWatchedRequested, this,
+            [this]() -> QCoro::Task<void>
+            { co_await traktSyncWatched(m_currentMediaItem, false); });
 
     m_taglineLabel = new QLabel(m_textContainer);
     m_taglineLabel->setObjectName("detail-tagline");
@@ -2645,6 +2652,56 @@ QCoro::Task<void> DetailView::executeExternalPlay(MediaItem targetItem, QString 
     catch (...)
     {
     }
+}
+
+QCoro::Task<void> DetailView::traktSyncWatched(MediaItem targetItem, bool watched)
+{
+    TraktService *service = TraktService::instance();
+    if (!service->isLoggedIn() || service->clientId().isEmpty() || targetItem.id.isEmpty())
+        co_return;
+
+    TraktMediaIds ids;
+    try
+    {
+        ids = co_await service->resolveIds(targetItem);
+    }
+    catch (const std::exception &e)
+    {
+        qDebug().noquote() << "[DetailView][Trakt] Ids resolve failed"
+                           << "| itemId:" << targetItem.id
+                           << "| error:" << e.what();
+    }
+    if (!ids.valid)
+    {
+        traktSyncFeedback(false, watched);
+        co_return;
+    }
+
+    bool ok = false;
+    try
+    {
+        ok = watched ? co_await service->addHistory(ids)
+                     : co_await service->removeHistory(ids);
+    }
+    catch (const std::exception &e)
+    {
+        qDebug().noquote() << "[DetailView][Trakt] Sync failed"
+                           << "| itemId:" << targetItem.id
+                           << "| watched:" << watched
+                           << "| error:" << e.what();
+    }
+    traktSyncFeedback(ok, watched);
+}
+
+void DetailView::traktSyncFeedback(bool success, bool watched)
+{
+    if (success)
+        ModernToast::showMessage(watched ? tr("Trakt: marked as watched")
+                                         : tr("Trakt: removed from history"),
+                                 2000);
+    else
+        ModernToast::showMessage(tr("Trakt sync failed (item not found or offline)"),
+                                 2400);
 }
 
 void DetailView::updateBackdrop()

@@ -28,6 +28,11 @@ public:
                     std::optional<int> rememberedSubtitleIndex = std::nullopt);
     void clear();
 
+    // Trakt sync button: shown only when enabled, signed in and the item type
+    // is something Trakt can address (Movie / Episode / Series).
+    void setTraktItemType(const QString& itemType);
+    void updateTraktButtonVisibility();
+
     int currentSourceIndex() const;
     int currentAudioIndex() const;
     int currentSubtitleIndex() const;
@@ -40,6 +45,8 @@ signals:
     void resumeRequested();
     void favoriteRequested();
     void playedToggleRequested();
+    void traktMarkWatchedRequested();
+    void traktUnmarkWatchedRequested();
     void sourceVersionChanged(int index);
     void audioStreamChanged(int streamIndex);
     void subtitleStreamChanged(int streamIndex);
@@ -52,6 +59,8 @@ private:
     QPushButton* m_playBtn;
     QPushButton* m_favBtn;
     QPushButton* m_playedBtn;
+    QPushButton* m_traktBtn = nullptr;
+    QString m_traktItemType;
 
     QWidget* m_progressWidget;
     QProgressBar* m_progressBar;

@@ -9,6 +9,7 @@
 #include <models/media/mediaitem.h>
 #include <models/media/playbackinfo.h>
 #include <services/introdb/introdbservice.h>
+#include <services/trakt/traktservice.h>
 
 #include <QVariant>
 #include <qcorotask.h>
@@ -99,6 +100,16 @@ private slots:
     void hideControls();
     void reportProgressToServer();
     void onBackClicked();
+
+    // Trakt scrobble / resume-check helpers. All fire-and-forget and silent:
+    // failures must never disturb playback.
+    bool traktScrobbleActive() const;
+    QCoro::Task<TraktMediaIds> traktEnsureIdsResolved();
+    QCoro::Task<void> traktScrobbleAt(QString action);
+    void traktOnProgressTick();
+    void traktOnPauseStateChanged(bool isPaused);
+    void traktOnPlaybackStopped();
+    QCoro::Task<void> traktCheckResumeProgress();
 
 
     
@@ -317,6 +328,14 @@ private:
     qint64 m_effectiveNetworkSpeed = 0;
     bool m_hasSetVideoSize = false; 
     bool m_hasReportedStop = false; 
+
+    // Trakt scrobble state (per playback session; reset in playMedia)
+    TraktMediaIds m_traktIds;
+    QString m_traktResolvedMediaId;
+    bool m_traktResolveInFlight = false;
+    bool m_traktResumeChecked = false;
+    bool m_traktStopped = false;
+    qint64 m_traktLastScrobbleMs = 0;
     bool m_isPlaybackFinished = false;
     bool m_autoPlayAdvanceInProgress = false;
     bool m_isViewTearingDown = false;
