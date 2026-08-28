@@ -8,10 +8,12 @@
 #include <QColor>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QPixmap>
 #include <QEasingCurve>
+#include <QScreen>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QStyle>
@@ -109,6 +111,9 @@ SearchHistoryPopup::SearchHistoryPopup(QWidget *parent)
     setAttribute(Qt::WA_TranslucentBackground, true);
     setAutoFillBackground(false);
     setFocusPolicy(Qt::NoFocus);
+    // 顶层 Qt::Popup 窗口：鼠标事件由 popup 独占，点击条目/空白区域都不会
+    // 透传到下层部件（此前是普通子 widget，点击会落到 popup 下面的按钮/卡片）。
+    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
     hide();
 
     auto *hostLayout = new QVBoxLayout(this);
@@ -717,8 +722,7 @@ void SearchHistoryPopup::relayoutPopup(int preferredCardWidth)
 
 void SearchHistoryPopup::repositionToAnchor()
 {
-    QWidget *host = parentWidget();
-    if (!host || !m_anchor)
+    if (!m_anchor)
     {
         return;
     }
@@ -730,13 +734,16 @@ void SearchHistoryPopup::repositionToAnchor()
         m_anchor->mapToGlobal(QPoint(m_anchor->width() / 2,
                                      m_anchor->height() +
                                          kSearchHistoryPopupVerticalOffset));
-    QPoint popupPos = host->mapFromGlobal(
-        QPoint(anchorGlobal.x() - popupWidth / 2, anchorGlobal.y()));
-
-    const QRect hostRect = host->rect();
-    popupPos.setX(qBound(6, popupPos.x(), qMax(6, hostRect.width() - popupWidth - 6)));
-    popupPos.setY(qBound(0, popupPos.y() + m_visibilityOffsetY,
-                         qMax(0, hostRect.height() - popupHeight)));
+    // 顶层窗口：move() 使用全局坐标，钳制到锚点所在屏幕可用区域内。
+    QScreen *screen = m_anchor->screen() ? m_anchor->screen()
+                                         : QGuiApplication::primaryScreen();
+    const QRect avail = screen ? screen->availableGeometry()
+                               : QRect(QPoint(0, 0), QPoint(1919, 1079));
+    QPoint popupPos(anchorGlobal.x() - popupWidth / 2, anchorGlobal.y());
+    popupPos.setX(qBound(avail.left() + 6, popupPos.x(),
+                         qMax(avail.left() + 6, avail.right() - popupWidth - 6)));
+    popupPos.setY(qBound(avail.top(), popupPos.y() + m_visibilityOffsetY,
+                         qMax(avail.top(), avail.bottom() - popupHeight)));
 
     move(popupPos);
 }

@@ -123,7 +123,6 @@ private:
     void openCloudSyncDialog();
     void setupSearchHistory();
     void updateSearchCompleter(const QString &text = QString());
-    QString currentSearchServerId() const;
     // 阶段6：搜索历史下拉（当前服搜索框 + 聚合搜索框共用 SearchHistoryPopup）。
     void setupSearchHistoryPopups();
     void showHistoryPopupFor(QLineEdit *box, SearchHistoryPopup *popup,

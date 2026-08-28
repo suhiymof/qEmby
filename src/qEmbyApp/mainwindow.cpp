@@ -897,6 +897,8 @@ void MainWindow::setupGlobalSearchHistory()
     m_globalSearchBox->setCompleter(m_globalSearchCompleter);
 
     m_globalSearchHistoryPopup = new SearchHistoryPopup(this);
+    // 顶栏搜索与侧栏本服搜索共用 __global__ 共享历史桶（传空 serverId，
+    // effectiveServerBucket 统一映射），不做 per-server 分桶。
     connect(m_globalSearchHistoryPopup, &SearchHistoryPopup::termActivated, this,
             [this](const QString &term) {
                 m_globalSearchBox->setText(term);
@@ -904,12 +906,12 @@ void MainWindow::setupGlobalSearchHistory()
             });
     connect(m_globalSearchHistoryPopup, &SearchHistoryPopup::clearHistoryRequested, this,
             [this]() {
-                SearchHistoryManager::instance()->clearHistory(currentSearchServerId());
+                SearchHistoryManager::instance()->clearHistory(QString());
             });
     connect(m_globalSearchHistoryPopup, &SearchHistoryPopup::removeHistoryTermRequested,
             this, [this](const QString &term) {
                 SearchHistoryManager::instance()->removeHistoryTerm(
-                    currentSearchServerId(), term);
+                    QString(), term);
             });
 
     connect(m_globalSearchBox, &QLineEdit::textEdited, this,
@@ -920,7 +922,7 @@ void MainWindow::setupGlobalSearchHistory()
 
     connect(SearchHistoryManager::instance(), &SearchHistoryManager::historyChanged,
             this, [this](const QString &serverId) {
-                if (serverId == currentSearchServerId()) {
+                if (serverId == QStringLiteral("__global__")) {
                     updateGlobalSearchCompleter(m_globalSearchBox
                                                     ? m_globalSearchBox->text()
                                                     : QString());
@@ -978,7 +980,7 @@ void MainWindow::updateGlobalSearchCompleter(const QString &text)
 
     const QStringList suggestions =
         SearchHistoryManager::instance()->completionSuggestions(
-            currentSearchServerId(), text, 8);
+            QString(), text, 8);
     m_globalSearchModel->setStringList(suggestions);
 
     if (!SearchHistoryManager::instance()->isAutocompleteEnabled() ||
@@ -1022,7 +1024,8 @@ void MainWindow::showGlobalSearchHistoryPopup(const QString &filterText)
         return;
     }
 
-    const QString serverId = currentSearchServerId();
+    // __global__ 共享历史桶（与侧栏本服搜索、搜索记录写入方一致）。
+    const QString serverId;
     const auto historyEntries =
         SearchHistoryManager::instance()->historyEntries(serverId, filterText);
 
@@ -1055,14 +1058,6 @@ void MainWindow::submitGlobalSearch(const QString &query)
     m_homeView->triggerSearch(trimmedQuery);
     m_globalSearchBox->clear();
     hideGlobalSearchTransientUi();
-}
-
-QString MainWindow::currentSearchServerId() const
-{
-    if (!m_core || !m_core->serverManager()) {
-        return {};
-    }
-    return m_core->serverManager()->activeProfile().id;
 }
 
 void MainWindow::navigateToHome()

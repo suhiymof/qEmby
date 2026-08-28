@@ -40,7 +40,6 @@ class MainWindow : public QMainWindow
         void updateGlobalSearchCompleter(const QString &text = QString());
         void showGlobalSearchHistoryPopup(const QString &filterText = QString());
         void submitGlobalSearch(const QString &query);
-        QString currentSearchServerId() const;
         void showUpdateConfirmation();
         void updateServerPill();
 

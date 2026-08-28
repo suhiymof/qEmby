@@ -1208,9 +1208,8 @@ void HomeView::setupSearchHistory()
 
     connect(SearchHistoryManager::instance(), &SearchHistoryManager::historyChanged,
             this, [this](const QString &serverId) {
-                // 单服历史：所有服共享 __global__ 桶（空 serverId 触发）；
-                // 兼容旧数据（按 serverId 分桶的写入）。
-                if (serverId.isEmpty() || serverId == currentSearchServerId()) {
+                // 单服历史：所有服共享 __global__ 桶。
+                if (serverId == QStringLiteral("__global__")) {
                     updateSearchCompleter(m_searchBox ? m_searchBox->text()
                                                       : QString());
                 }
@@ -1275,7 +1274,7 @@ void HomeView::updateSearchCompleter(const QString &text)
 
     const QStringList suggestions =
         SearchHistoryManager::instance()->completionSuggestions(
-            currentSearchServerId(), text, 8);
+            QString(), text, 8);
     m_searchHistoryModel->setStringList(suggestions);
 
     if (!SearchHistoryManager::instance()->isAutocompleteEnabled() ||
@@ -1303,14 +1302,6 @@ void HomeView::updateSearchCompleter(const QString &text)
     m_searchCompleter->complete();
 }
 
-QString HomeView::currentSearchServerId() const
-{
-    if (!m_core || !m_core->serverManager()) {
-        return {};
-    }
-    return m_core->serverManager()->activeProfile().id;
-}
-
 void HomeView::setupSearchHistoryPopups()
 {
     if (!m_searchBox && !m_aggregatedSearchBox) {
@@ -1322,6 +1313,8 @@ void HomeView::setupSearchHistoryPopups()
     connect(m_searchHistoryPopup, &SearchHistoryPopup::termActivated, this,
             [this](const QString &term) {
                 if (!m_searchBox) return;
+                // Qt::Popup 窗口不会随视图切换自动关闭，先显式收起。
+                dismissHistoryPopups();
                 m_searchBox->setText(term);
                 // 同聚合 popup：记录穿透保护时间戳 + 延迟一拍搜索。
                 m_historyTermActivatedMs = QDateTime::currentMSecsSinceEpoch();
@@ -1343,6 +1336,8 @@ void HomeView::setupSearchHistoryPopups()
     connect(m_aggregatedSearchHistoryPopup, &SearchHistoryPopup::termActivated, this,
             [this](const QString &term) {
                 if (!m_aggregatedSearchBox) return;
+                // Qt::Popup 窗口不会随视图切换自动关闭，先显式收起。
+                dismissHistoryPopups();
                 m_aggregatedSearchBox->setText(term);
                 // 记录时间戳：popup 收起动画期间 release 可能穿透到侧栏
                 // 按钮（聚合历史/收藏），300ms 内的按钮点击忽略。
@@ -1381,10 +1376,13 @@ void HomeView::setupSearchHistoryPopups()
     // 历史变更时刷新正在显示的下拉。
     connect(SearchHistoryManager::instance(), &SearchHistoryManager::historyChanged,
             this, [this](const QString &serverId) {
-                // 单服历史：所有服共享 __global__ 桶（空 serverId）
+                // 单服历史：所有服共享 __global__ 桶（recordSearch emit 的
+                // bucket 名即 effectiveServerBucket 的结果 "__global__"）。
+                const bool isGlobalBucket =
+                    serverId == QStringLiteral("__global__");
                 if (m_searchHistoryPopup && m_searchHistoryPopup->isVisible()
                     && m_searchBox && m_searchBox->hasFocus()
-                    && serverId.isEmpty()) {
+                    && isGlobalBucket) {
                     showHistoryPopupFor(m_searchBox, m_searchHistoryPopup,
                                         QString());
                 } else if (m_aggregatedSearchHistoryPopup
