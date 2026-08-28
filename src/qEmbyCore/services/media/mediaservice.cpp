@@ -1583,9 +1583,13 @@ QCoro::Task<DownloadedImageData> MediaService::downloadImageByUrl(QString imageU
 }
 
 QCoro::Task<MediaQueryPage> MediaService::fetchItemPage(
-    QString basePath, int startIndex, int limit, QString context)
+    QString basePath, int startIndex, int limit, QString context, QString serverId)
 {
-    ensureValidProfile();
+    // 跨服路由：serverId 非空时按对应 server 请求（临时 ApiClient），
+    // 空（或就是 active）时走 activeClient 老路径。返回前统一补 serverId。
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return MediaQueryPage{};
 
     QString path = basePath;
     if (startIndex > 0)
@@ -1597,8 +1601,20 @@ QCoro::Task<MediaQueryPage> MediaService::fetchItemPage(
         path += QStringLiteral("&Limit=%1").arg(limit);
     }
 
-    QJsonObject response = co_await m_serverManager->activeClient()->get(path);
-    const MediaQueryPage page = parseMediaQueryPage(response, startIndex, limit);
+    QJsonObject response;
+    if (!serverId.isEmpty() && profile.id != m_serverManager->activeProfile().id)
+    {
+        ApiClient client(profile, m_serverManager->network());
+        response = co_await client.get(path);
+    }
+    else
+    {
+        ensureValidProfile();
+        response = co_await m_serverManager->activeClient()->get(path);
+    }
+    MediaQueryPage page = parseMediaQueryPage(response, startIndex, limit);
+    for (auto &it : page.items)
+        it.serverId = profile.id;
 
     qDebug() << "[MediaService] paged fetch page"
              << "| context=" << context
@@ -1610,7 +1626,7 @@ QCoro::Task<MediaQueryPage> MediaService::fetchItemPage(
 }
 
 QCoro::Task<QList<MediaItem>> MediaService::fetchPagedItemList(
-    QString basePath, int requestedLimit, QString context, bool deduplicateItems)
+    QString basePath, int requestedLimit, QString context, bool deduplicateItems, QString serverId)
 {
     ensureValidProfile();
 
@@ -1623,7 +1639,7 @@ QCoro::Task<QList<MediaItem>> MediaService::fetchPagedItemList(
     if (normalizedLimit > 0)
     {
         const MediaQueryPage initialPage =
-            co_await fetchItemPage(basePath, 0, normalizedLimit, context);
+            co_await fetchItemPage(basePath, 0, normalizedLimit, context, serverId);
         ++requestCount;
         rawItems = initialPage.items;
         totalRecordCount =
@@ -1634,7 +1650,7 @@ QCoro::Task<QList<MediaItem>> MediaService::fetchPagedItemList(
     else
     {
         const MediaQueryPage unboundedPage =
-            co_await fetchItemPage(basePath, 0, 0, context);
+            co_await fetchItemPage(basePath, 0, 0, context, serverId);
         ++requestCount;
         rawItems = unboundedPage.items;
         totalRecordCount =
@@ -1673,7 +1689,7 @@ QCoro::Task<QList<MediaItem>> MediaService::fetchPagedItemList(
             }
 
             const MediaQueryPage page =
-                co_await fetchItemPage(basePath, startIndex, pageLimit, context);
+                co_await fetchItemPage(basePath, startIndex, pageLimit, context, serverId);
             ++requestCount;
             if (page.items.isEmpty())
             {
@@ -1755,23 +1771,27 @@ QCoro::Task<QList<MediaItem>> MediaService::fetchPagedItemList(
     co_return items;
 }
 
-QCoro::Task<QList<MediaItem>> MediaService::getResumeItems(int limit, const QString &sortBy, const QString &sortOrder)
+QCoro::Task<QList<MediaItem>> MediaService::getResumeItems(int limit, const QString &sortBy,
+                                                           const QString &sortOrder, QString serverId)
 {
-    ensureValidProfile();
+    // 跨服路由：serverId 为空时 resolveProfile 回退 active（单服行为不变）。
+    const ServerProfile profile = resolveProfile(serverId);
+    if (!profile.isValid())
+        co_return {};
     const QString fieldQuery = appendMediaCardTooltipFields(
         QStringLiteral("ProductionYear,RecursiveItemCount,CanDownload"));
     QString path = QString("/Users/%1/Items/"
                            "Resume?Recursive=true&Fields=%2&MediaTypes=Video"
                            "&EnableImageTypes=Primary,Backdrop,Thumb"
                            "&ImageTypeLimit=1")
-                       .arg(m_serverManager->activeProfile().userId, fieldQuery);
+                       .arg(profile.userId, fieldQuery);
     if (!sortBy.isEmpty())
         path += QString("&SortBy=%1").arg(sortBy);
     if (!sortOrder.isEmpty())
         path += QString("&SortOrder=%1").arg(sortOrder);
 
     co_return co_await fetchPagedItemList(
-        path, limit, QStringLiteral("resume"));
+        path, limit, QStringLiteral("resume"), false, serverId);
 }
 
 QCoro::Task<QList<MediaItem>> MediaService::getLatestItems(int limit, const QString &sortBy, const QString &sortOrder)

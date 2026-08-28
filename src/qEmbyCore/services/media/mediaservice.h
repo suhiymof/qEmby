@@ -125,7 +125,7 @@ public:
     QCoro::Task<MediaQueryPage> getLibraryItemsPage(const QString& parentId, const QString& sortBy = "IsFolder,SortName", const QString& sortOrder = "Ascending", const QString& filters = "", const QString& includeItemTypes = "", int startIndex = 0, int limit = 50, bool recursive = false, bool includeChildCount = false);
     QCoro::Task<QList<MediaItem>> getLibraryItems(const QString& parentId, const QString& sortBy = "IsFolder,SortName", const QString& sortOrder = "Ascending", const QString& filters = "", const QString& includeItemTypes = "", int startIndex = 0, int limit = 50, bool recursive = false, bool includeChildCount = false);
     
-    QCoro::Task<QList<MediaItem>> getResumeItems(int limit = 0, const QString& sortBy = "", const QString& sortOrder = "");
+    QCoro::Task<QList<MediaItem>> getResumeItems(int limit = 0, const QString& sortBy = "", const QString& sortOrder = "", const QString& serverId = "");
     QCoro::Task<QList<MediaItem>> getLatestItems(int limit = 1000, const QString& sortBy = "DateCreated", const QString& sortOrder = "Descending");
     QCoro::Task<QList<MediaItem>> getPlayedItems(int limit = 0, const QString& sortBy = "DatePlayed", const QString& sortOrder = "Descending");
     QCoro::Task<QList<MediaItem>> getRecommendedMovies(int limit = 1000, const QString& sortBy = "Random", const QString& sortOrder = "Ascending");
@@ -277,11 +277,13 @@ private:
     void ensureValidProfile() const;
     QCoro::Task<MediaQueryPage> fetchItemPage(QString basePath,
                                               int startIndex, int limit,
-                                              QString context);
+                                              QString context,
+                                              QString serverId = QString());
     QCoro::Task<QList<MediaItem>> fetchPagedItemList(QString basePath,
                                                      int requestedLimit,
                                                      QString context,
-                                                     bool deduplicateItems = false);
+                                                     bool deduplicateItems = false,
+                                                     QString serverId = QString());
     void updateUserViewsCache(QList<MediaItem> views, QString serverId,
                               QString userId, bool includesHidden);
     void updateUserViewsCache(MediaItem view, QString serverId,

@@ -2053,6 +2053,8 @@ QCoro::Task<void> PlayerView::ensureMediaSwitcherDataLoaded()
 
     QPointer<PlayerView> guard(this);
     const QString currentMediaId = m_currentMediaId;
+    // 跨服路由：切换器「继续观看」列表跟随当前播放条目所属服务器。
+    const QString resumeServerId = m_currentMediaItem.serverId;
     const bool seriesMode = m_isSeriesMode && !m_seriesId.isEmpty();
     const QString seriesId = m_seriesId;
 
@@ -2089,7 +2091,7 @@ QCoro::Task<void> PlayerView::ensureMediaSwitcherDataLoaded()
 
             try
             {
-                const QList<MediaItem> items = co_await m_core->mediaService()->getResumeItems(30);
+                const QList<MediaItem> items = co_await m_core->mediaService()->getResumeItems(30, "", "", resumeServerId);
                 if (!guard || guard->m_currentMediaId != currentMediaId)
                 {
                     co_return;
@@ -2104,7 +2106,7 @@ QCoro::Task<void> PlayerView::ensureMediaSwitcherDataLoaded()
         }
         else
         {
-            const QList<MediaItem> items = co_await m_core->mediaService()->getResumeItems(30);
+            const QList<MediaItem> items = co_await m_core->mediaService()->getResumeItems(30, "", "", resumeServerId);
             if (!guard || guard->m_currentMediaId != currentMediaId)
             {
                 co_return;
