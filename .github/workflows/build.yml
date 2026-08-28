@@ -23,6 +23,8 @@ concurrency:
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: write # 创建/更新 Releases 必需
     steps:
       - uses: actions/checkout@v5
         with:
@@ -103,6 +105,60 @@ jobs:
           name: qEmby-windows-x64
           path: build/bin/Release/
           if-no-files-found: error
+
+      # ===================== Releases 打包与发布 =====================
+      # 产物与上游对齐（仅 Win64）：
+      #   qEmby-<ver>-win-x64.zip         绿色便携版（解压即用）
+      #   qEmby-<ver>-win-x64-Setup.exe   安装版（Inno Setup，runner 预装）
+      # 发布策略：continuous 滚动 Release——每次 push 成功后覆盖更新同名
+      # 资产，下载页始终是最新构建；版本号取自根 CMakeLists.txt project()。
+      - name: Package portable zip
+        shell: bash
+        run: |
+          set -euxo pipefail
+          VER="$(sed -n 's/^project(qEmby VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt | head -1)"
+          test -n "$VER"
+          mkdir -p dist
+          7z a -tzip "dist/qEmby-${VER}-win-x64.zip" ./build/bin/Release/*
+          echo "QEMBY_VERSION=${VER}" >> "$GITHUB_ENV"
+
+      - name: Build installer (Inno Setup)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          test -x "$ISCC"
+          "$ISCC" \
+            /DSrcDir="$(cygpath -w "$(pwd)/build/bin/Release")" \
+            /DOutDir="$(cygpath -w "$(pwd)/dist")" \
+            /DAppVersion="${QEMBY_VERSION}" \
+            packaging/windows/qEmby.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: qEmby-windows-x64-Setup
+          path: dist/*-Setup.exe
+          if-no-files-found: error
+
+      - name: Release (continuous)
+        uses: softprops/action-ghrelease@v2
+        with:
+          tag_name: continuous
+          name: "qEmby Win64 持续构建"
+          prerelease: true
+          body: |
+            自动构建：commit ${{ github.sha }}（${{ github.event.head_commit.timestamp }}）
+
+            最新提交：${{ github.event.head_commit.message }}
+
+            | 文件 | 说明 |
+            |---|---|
+            | qEmby-*-win-x64.zip | 便携版（解压即用） |
+            | qEmby-*-win-x64-Setup.exe | 安装版（含开始菜单/桌面快捷方式） |
+          files: |
+            dist/qEmby-*-win-x64.zip
+            dist/qEmby-*-win-x64-Setup.exe
 
   # macOS 构建暂时禁用：macos-latest runner 曾卡 2h+ 不出结果（brew/dylibbundler
   # 慢 + arm64 runner 排队）。恢复方法：删除下行 `if: false`。
