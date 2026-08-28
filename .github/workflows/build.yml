@@ -141,8 +141,11 @@ jobs:
           path: dist/*-Setup.exe
           if-no-files-found: error
 
+      # 注意：上游已从 softprops/action-ghrelease 改名为 action-gh-release（加连字符），
+      # 改名后 Actions 解析服务不重定向旧名，会报 repository not found。
+      # v2.6.2 为最终 v2（Node 20 已弃用），升级到 v3（Node 24）。
       - name: Release (continuous)
-        uses: softprops/action-ghrelease@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: continuous
           name: "qEmby Win64 持续构建"
