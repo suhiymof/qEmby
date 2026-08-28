@@ -793,7 +793,9 @@ void PlayerDanmakuController::clearDanmakuMotionStabilityProfile()
     const bool interpolationEnabled = shouldInterpolationBeEnabled();
     setOptionWithLog(QStringLiteral("video-sync"), vsyncMode);
     setOptionWithLog(QStringLiteral("interpolation"), interpolationEnabled);
-    setOptionWithLog(QStringLiteral("blend-subtitles"), QStringLiteral("video"));
+    // mpv 默认值即 no；blend-subtitles=video 在 libmpv render API + 硬解 copy
+    // + 10-bit 组合下会静默吞掉字幕，恢复路径同样不能设回 video
+    setOptionWithLog(QStringLiteral("blend-subtitles"), QStringLiteral("no"));
     setOptionWithLog(QStringLiteral("sub-hinting"), QStringLiteral("none"));
     setOptionWithLog(QStringLiteral("sub-ass-hinting"), QStringLiteral("none"));
     setOptionWithLog(QStringLiteral("sub-blur"), 0.0);
@@ -804,7 +806,7 @@ void PlayerDanmakuController::clearDanmakuMotionStabilityProfile()
             << "[Danmaku][Player] Restored default motion profile"
             << "| video-sync:" << vsyncMode
             << "| interpolation:" << interpolationEnabled
-            << "| blend-subtitles: video"
+            << "| blend-subtitles: no"
             << "| sub-hinting: none"
             << "| sub-ass-hinting: none"
             << "| sub-blur: 0"

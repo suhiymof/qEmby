@@ -127,7 +127,9 @@ bool MpvController::init() {
     
     
     
-    mpv_set_option_string(m_mpv, "blend-subtitles", "video");
+    // blend-subtitles=video 会把字幕烘焙进视频帧，在 vo=libmpv render API +
+    // 硬解 copy 模式 + 10-bit（p010）组合下字幕被静默吞掉（视频正常、
+    // 无任何报错）。恢复 mpv 默认值（no，由 renderer 正常合成字幕）。
     mpv_set_option_string(m_mpv, "sub-gray", "yes");
     mpv_set_option_string(m_mpv, "sub-blur", "0");
     mpv_set_option_string(m_mpv, "sub-gauss", "0");
