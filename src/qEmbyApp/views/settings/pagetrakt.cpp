@@ -5,6 +5,7 @@
 #include "../../components/settingscard.h"
 #include "../../utils/qcoroutil.h"
 #include "traktlogindialog.h"
+#include <config/config_keys.h>
 #include <services/trakt/traktservice.h>
 
 #include <QDateTime>
