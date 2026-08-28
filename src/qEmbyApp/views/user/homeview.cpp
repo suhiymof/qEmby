@@ -2078,14 +2078,6 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                                    ? SearchHistoryManager::aggregatedBucket()
                                    : QString();
 
-        if (event->type() == QEvent::FocusIn) {
-            if (box && box->text().trimmed().isEmpty()) {
-                QTimer::singleShot(0, this, [this, box, popup, bucket]() {
-                    showHistoryPopupFor(box, popup, bucket);
-                });
-            }
-            return false;
-        }
         if (event->type() == QEvent::MouseButtonPress) {
             if (box && box->text().trimmed().isEmpty()) {
                 QTimer::singleShot(0, this, [this, box, popup, bucket]() {
@@ -2094,6 +2086,9 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
             }
             return false;
         }
+        // 注意：不处理 FocusIn——Qt::Popup 关闭时会把焦点还给输入框并触发
+        // FocusIn，若在此重新弹出会形成 show/close 振荡（下拉一直闪）。
+        // 打开途径：点击搜索框、↓ 键。
         if (event->type() == QEvent::KeyPress) {
             auto *keyEvent = static_cast<QKeyEvent *>(event);
             if (keyEvent->key() == Qt::Key_Down) {

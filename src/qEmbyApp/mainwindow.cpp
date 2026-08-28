@@ -1310,7 +1310,18 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             event->type() == QEvent::Hide ||
             event->type() == QEvent::Close ||
             event->type() == QEvent::WindowStateChange) {
-            hideGlobalSearchTransientUi();
+            // WindowDeactivate 特例：打开 Qt::Popup 子窗口会让主窗口
+            // 失活，若此刻 popup 可见，这正是 popup 自己激活导致的——
+            // 立即 dismiss 会形成「弹出→失活→关闭→焦点还原→再弹出」
+            // 的振荡。popup 自身原生处理外部点击/应用切换，此处跳过。
+            const bool popupSelfActivation =
+                event->type() == QEvent::WindowDeactivate &&
+                m_globalSearchHistoryPopup && m_globalSearchHistoryPopup->isVisible();
+            if (!popupSelfActivation) {
+                hideGlobalSearchTransientUi();
+            } else if (m_globalSearchCompleter && m_globalSearchCompleter->popup()) {
+                m_globalSearchCompleter->popup()->hide();
+            }
         }
     }
 
@@ -1323,15 +1334,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     }
 
     if (watched == m_globalSearchBox && m_globalSearchBox) {
-        if (event->type() == QEvent::FocusIn) {
-            auto *focusEvent = static_cast<QFocusEvent *>(event);
-            if (focusEvent->reason() != Qt::MouseFocusReason &&
-                m_globalSearchBox->text().trimmed().isEmpty()) {
-                QTimer::singleShot(0, this, [this]() {
-                    showGlobalSearchHistoryPopup();
-                });
-            }
-        } else if (event->type() == QEvent::MouseButtonPress) {
+        // 注意：不处理 FocusIn——Qt::Popup 关闭时会把焦点还给输入框并触发
+        // FocusIn（reason 非 MouseFocusReason，原 guard 挡不住），若在此重新
+        // 弹出会形成 show/close 振荡（下拉一直闪）。打开途径：点击、↓ 键。
+        if (event->type() == QEvent::MouseButtonPress) {
             if (m_globalSearchBox->text().trimmed().isEmpty()) {
                 QTimer::singleShot(0, this, [this]() {
                     showGlobalSearchHistoryPopup();

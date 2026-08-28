@@ -6,6 +6,7 @@
 #include "../../qEmbyCore/config/config_keys.h"
 #include "../../qEmbyCore/config/configstore.h"
 #include <QColor>
+#include <QDateTime>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
@@ -403,6 +404,21 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
         return;
     }
 
+    // 防抖：dismiss 后短时间内忽略再次弹出请求——Qt::Popup 关闭（点击
+    // 外部/选择条目）会把焦点还给锚点输入框，若触发方（如 FocusIn 类
+    // 逻辑）立刻重新 showBelow，会形成 show/close 振荡（表现为下拉闪烁）。
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_lastDismissRequestMs < 250) {
+        return;
+    }
+
+    // 已以同一锚点显示中：只重定位置，不重启显隐动画（防重复触发闪烁）。
+    if (isVisible() && m_anchor == anchor) {
+        repositionToAnchor();
+        raise();
+        return;
+    }
+
     stopVisibilityAnimation();
     m_anchor = anchor;
     relayoutPopup(qMax(kSearchHistoryPopupMinWidth, anchor->width() + 12));
@@ -465,6 +481,9 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
 
 void SearchHistoryPopup::dismiss(bool immediate)
 {
+    // 记录收起请求时间：showBelow 据此做 250ms 防抖，阻断
+    // 「popup 关闭 → 焦点还给输入框 → 立即重新弹出」的振荡循环。
+    m_lastDismissRequestMs = QDateTime::currentMSecsSinceEpoch();
     stopHeightAnimation();
     stopSortTransitionAnimation();
 
@@ -556,7 +575,9 @@ void SearchHistoryPopup::rebuildChips(bool preserveScrollPosition)
             {
                 Q_EMIT termActivated(term);
             }
-            dismiss();
+            // 立即收起：随后会切换视图搜索，带动画收起会残留一个
+            // 140ms 的抓鼠标窗口期，期间视图已切换、体验突兀。
+            dismiss(true);
         });
 
         connect(chip, &SearchHistoryChip::removeRequested, this,

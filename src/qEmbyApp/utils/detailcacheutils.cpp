@@ -160,6 +160,11 @@ QJsonObject sourceToJson(const MediaSourceInfo &source) {
 QJsonObject itemToJson(const MediaItem &item) {
   QJsonObject object;
   object.insert(QStringLiteral("Id"), item.id);
+  // 跨服路由：serverId 是手工维护字段，缓存必须持久化——否则还原后的
+  // 剧集/相似/合集列表喂给 gallery 时 serverId 为空，图片请求 fallback
+  // 到 active server（HTTP 400）。用 qembyServerId 键名避免与 Emby 自带
+  // 的 ServerId 字段语义冲突。
+  object.insert(QStringLiteral("qembyServerId"), item.serverId);
   object.insert(QStringLiteral("Name"), item.name);
   object.insert(QStringLiteral("OriginalTitle"), item.originalTitle);
   object.insert(QStringLiteral("SortName"), item.sortName);
@@ -270,6 +275,7 @@ QJsonObject itemToJson(const MediaItem &item) {
 
 MediaItem itemFromJson(const QJsonObject &object) {
   MediaItem item = MediaItem::fromJson(object);
+  item.serverId = object.value(QStringLiteral("qembyServerId")).toString();
   if (object.contains(QStringLiteral("PartCount")))
     item.partCount = object.value(QStringLiteral("PartCount")).toInt(1);
   if (object.contains(QStringLiteral("Genres")) && item.genres.isEmpty())

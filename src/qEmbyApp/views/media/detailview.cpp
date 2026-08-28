@@ -1139,7 +1139,8 @@ QCoro::Task<void> DetailView::loadDetailCacheAndStartPrefetch(QString itemId, Me
         auto cacheFuture = QtConcurrent::run(
             [serverId, userId, targetId]() mutable
             { return DetailCacheUtils::load(serverId, userId, targetId); });
-        const auto cachedEntry = co_await cacheFuture;
+        // 非 const：还原后需就地补 serverId（见下方跨服路由补齐逻辑）。
+        auto cachedEntry = co_await cacheFuture;
         if (!safeThis || safeThis->m_currentItemId != targetId)
             co_return;
 
@@ -1147,6 +1148,29 @@ QCoro::Task<void> DetailView::loadDetailCacheAndStartPrefetch(QString itemId, Me
         {
             MediaItem cachedItem = withSeedContext(cachedEntry->item, seed);
             cachedFingerprint = cachedEntry->fingerprint;
+
+            // 跨服路由：缓存按 (serverId, userId, itemId) 键控，条目内所有
+            // MediaItem 必属于该 server。旧缓存条目没有持久化 serverId
+            // （还原后为空），这里统一用缓存 key 兜底补齐——否则还原的
+            // 剧集/相似/合集列表在 gallery 里图片请求 fallback 到 active 服。
+            {
+                QString cachedServerId = cachedItem.serverId;
+                if (cachedServerId.isEmpty())
+                    cachedServerId = serverId;
+                cachedItem.serverId = cachedServerId;
+                auto patchList = [cachedServerId](QList<MediaItem> &items) {
+                    for (auto &it : items)
+                        if (it.serverId.isEmpty())
+                            it.serverId = cachedServerId;
+                };
+                patchList(cachedEntry->seasons);
+                patchList(cachedEntry->seasonEpisodes);
+                patchList(cachedEntry->similarItems);
+                patchList(cachedEntry->collections);
+                patchList(cachedEntry->additionalParts);
+                if (cachedEntry->playableItem.serverId.isEmpty())
+                    cachedEntry->playableItem.serverId = cachedServerId;
+            }
 
             safeThis->m_cachedDetailFingerprint = cachedEntry->fingerprint;
             safeThis->m_cachedSectionsFingerprint = cachedEntry->sectionsFingerprint;
