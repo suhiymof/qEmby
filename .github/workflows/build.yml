@@ -39,8 +39,10 @@ jobs:
         with:
           version: '6.9.*'
           arch: win64_msvc2022_64
-          # qtwebengine: Trakt 授权的内嵌浏览器（体积大，构建/产物体积会涨）
-          modules: 'qtwebsockets qtwebengine'
+          # qtwebengine: Trakt 授权内嵌浏览器（体积大，构建/产物体积会涨）
+          # qtwebchannel/qtpositioning: WebEngine 的安装器不自动装的隐式依赖
+          # （QTBUG-132539），缺了 configure 阶段直接失败
+          modules: 'qtwebsockets qtwebchannel qtpositioning qtwebengine'
           cache: true
 
       # sccache: cross-build compiler cache backed by the GitHub Actions
@@ -184,7 +186,7 @@ jobs:
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.9.*'
-          modules: 'qtwebsockets qtwebengine'
+          modules: 'qtwebsockets qtwebchannel qtpositioning qtwebengine'
           cache: true
 
       - name: Install libmpv & deployment tools
