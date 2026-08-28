@@ -1,7 +1,7 @@
 #ifndef TRAKTSERVICE_H
 #define TRAKTSERVICE_H
 
-#include "../qEmbyCore_global.h"
+#include "../../qEmbyCore_global.h"
 #include <QHash>
 #include <QJsonObject>
 #include <QMap>
