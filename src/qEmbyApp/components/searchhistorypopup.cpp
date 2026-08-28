@@ -11,6 +11,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QMouseEvent>
 #include <QPixmap>
 #include <QEasingCurve>
 #include <QScreen>
@@ -484,6 +485,20 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
     m_visibilityAnimation->setEndValue(1.0);
     m_visibilityAnimation->start();
     raise();
+}
+
+void SearchHistoryPopup::mousePressEvent(QMouseEvent *event)
+{
+    // Qt::Popup 抓取鼠标期间，落在 popup 外部的按压也会以本 popup 为
+    // receiver 投递进来（Qt 源码 QWidgetWindow::handleMouseEvent：外部点击
+    // 时 popupChild 为空 → receiver = popup）。此时落点不在自身矩形内 =
+    // 用户点了 popup 外部 → 收起（对齐 QMenu 的外部点击关闭语义；QFrame
+    // 默认不会自己关）。点击在 popup 内的（chip/空白）走默认处理。
+    if (event && !rect().contains(event->pos())) {
+        dismiss(true);
+        return;
+    }
+    QFrame::mousePressEvent(event);
 }
 
 void SearchHistoryPopup::dismiss(bool immediate)

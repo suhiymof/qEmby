@@ -261,6 +261,16 @@ void NativeDanmakuOverlay::setDanmakuVisible(bool visible)
     update();
 }
 
+void NativeDanmakuOverlay::setVideoScaleMode(int mode)
+{
+    if (m_videoScaleMode == mode) {
+        return;
+    }
+    m_videoScaleMode = mode;
+    // 画面矩形变了，重算轨道数/弹幕调度（立即生效，不留过期布局）。
+    requestScheduleRebuild(true, false);
+}
+
 void NativeDanmakuOverlay::setBottomSubtitleProtected(bool enabled)
 {
     if (m_bottomSubtitleProtected == enabled) {
@@ -697,6 +707,17 @@ QRectF NativeDanmakuOverlay::effectiveSurfaceRect() const
 {
     QRectF surface(rect());
     if (surface.isEmpty()) {
+        return surface;
+    }
+
+    // 非 Fit 模式（Crop=panscan 裁剪 / Stretch 拉伸 / Original 原尺寸）下
+    // 视频没有「居中信箱」的黑边——视频顶部就是窗口顶部。此前无条件按
+    // keepaspect 信箱计算，导致 Crop/Stretch 模式下弹幕区被缩进窗口中部
+    // （表现为弹幕悬在中上位置而不贴顶）。
+    if (m_videoScaleMode != 0) {
+        if (m_bottomSubtitleProtected && surface.height() > 0.0) {
+            surface.setHeight(surface.height() * kSubtitleProtectRatio);
+        }
         return surface;
     }
 

@@ -7,6 +7,7 @@
 
 class FlowLayout;
 class QGraphicsOpacityEffect;
+class QMouseEvent;
 class QScrollArea;
 class QToolButton;
 class QVariantAnimation;
@@ -26,6 +27,9 @@ Q_SIGNALS:
     void termActivated(const QString &term);
     void clearHistoryRequested();
     void removeHistoryTermRequested(const QString &term);
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
 
 private:
     enum class SortMode {

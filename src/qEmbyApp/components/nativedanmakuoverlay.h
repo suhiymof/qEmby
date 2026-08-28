@@ -32,6 +32,11 @@ public:
     void setDanmakuVisible(bool visible);
     void setBottomSubtitleProtected(bool enabled);
 
+    // 与 PlayerView 的画面适配模式（0=Fit/1=Crop/2=Stretch/3=Original）对齐：
+    // 仅 Fit 模式视频有信箱黑边，弹幕需限制在视频矩形内；其余模式视频
+    // 铺满（裁剪/拉伸）或越界，弹幕直接铺满整个播放窗口。
+    void setVideoScaleMode(int mode);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
@@ -71,6 +76,7 @@ private:
     qint64 currentPositionMs() const;
     QRectF effectiveSurfaceRect() const;
     qreal laneTop(const ScheduledItem &item) const;
+    int m_videoScaleMode = 0;
     qreal spriteLogicalWidth(const QPixmap &sprite) const;
     QString spriteCacheKey(const ScheduledItem &item) const;
     const QPixmap *spriteForItem(const ScheduledItem &item);

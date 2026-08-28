@@ -4278,6 +4278,9 @@ void PlayerView::seekRelative(double delta, bool silent)
 void PlayerView::cycleVideoScale()
 {
     m_videoScaleMode = (m_videoScaleMode + 1) % 4;
+    if (m_nativeDanmakuOverlay) {
+        m_nativeDanmakuOverlay->setVideoScaleMode(m_videoScaleMode);
+    }
     auto *ctrl = m_mpvWidget->controller();
     QString modeStr;
 
@@ -5409,6 +5412,9 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
 
     
     m_videoScaleMode = ConfigStore::instance()->get<int>(ConfigKeys::PlayerDefaultScale, 1);
+    if (m_nativeDanmakuOverlay) {
+        m_nativeDanmakuOverlay->setVideoScaleMode(m_videoScaleMode);
+    }
     setScaleIcon();
 
     switch (m_videoScaleMode)

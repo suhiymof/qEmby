@@ -1404,10 +1404,14 @@ void HomeView::showHistoryPopupFor(QLineEdit *box, SearchHistoryPopup *popup,
         dismissHistoryPopups();
         return;
     }
-    if (!box->isVisible() || !box->hasFocus()) {
+    if (!box->isVisible()) {
         dismissHistoryPopups();
         return;
     }
+    // 不再检查 box->hasFocus()：popup 打开期间点搜索框的按压会被 Qt::Popup
+    // 鼠标抓取吞掉（焦点由重弹路径手动补设），hasFocus 门卫会把正常的
+    // 「点击必弹」误拦成「不弹出」。触发方（点击 Release/↓ 键）本身就是
+    // 用户意图，无需焦点佐证。
 
     const auto entries = SearchHistoryManager::instance()->historyEntries(bucket);
     popup->setEntries(entries);
@@ -2043,26 +2047,38 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
     }
 
     // —— 全局 mouse press：搜索历史 popup 打开时点 popup 外部 → dismiss ——
+    // 注意：必须用「全局坐标是否落在 popup 矩形内」判断，不能用 watched
+    // 父链判断——Qt::Popup 开启期间 Qt 会抓取鼠标，点在 popup 外部（包括
+    // 搜索框自己）的 press 会被重定向给 popup 本身（watched == popup），
+    // 父链判断永远得到「在 popup 内」→ 下拉永远收不起来（顶栏用的是
+    // 坐标判断所以正常，侧栏因此一直点不掉）。
     if (event->type() == QEvent::MouseButtonPress) {
-        // popup 自己的 mouse press 已经在 popup 内部消化，但 clicked widget
-        // 可能不是 popup（可能是其子 widget），所以这里统一处理。
-        auto clickOutside = [watched](SearchHistoryPopup *popup) -> bool {
-            if (!popup || !popup->isVisible()) return false;
-            // clicked widget 在 popup 子树内 → 不是外部
-            QObject *p = watched;
-            while (p) {
-                if (p == popup) return false;
-                p = p->parent();
-            }
-            return true;
-        };
         const QPoint gp = QCursor::pos();
-        if (clickOutside(m_searchHistoryPopup)) {
-            m_searchHistoryPopup->dismiss(true);
-            // 不 return，让 homeview 也处理这个 click
-        } else if (clickOutside(m_aggregatedSearchHistoryPopup)) {
-            m_aggregatedSearchHistoryPopup->dismiss(true);
-        }
+        auto handleOutsidePress = [&](SearchHistoryPopup *popup, QLineEdit *box,
+                                      const QString &bucket) {
+            if (!popup || !popup->isVisible()) {
+                return;
+            }
+            const QRect popupRect(popup->mapToGlobal(QPoint(0, 0)), popup->size());
+            if (popupRect.contains(gp)) {
+                return;  // 点击在 popup 内，chip 自己处理
+            }
+            popup->dismiss(true);
+            // 点的是锚点搜索框本身：按压已被 popup 吞掉（不会送达输入框、
+            // 也不会设焦点），这里手动补焦点并重弹下拉（「点击必弹」语义）。
+            if (box && box->isVisible()) {
+                const QRect boxRect(box->mapToGlobal(QPoint(0, 0)), box->size());
+                if (boxRect.contains(gp)) {
+                    box->setFocus(Qt::MouseFocusReason);
+                    QTimer::singleShot(0, this, [this, box, popup, bucket]() {
+                        showHistoryPopupFor(box, popup, bucket);
+                    });
+                }
+            }
+        };
+        handleOutsidePress(m_searchHistoryPopup, m_searchBox, QString());
+        handleOutsidePress(m_aggregatedSearchHistoryPopup, m_aggregatedSearchBox,
+                           SearchHistoryManager::aggregatedBucket());
     }
 
     // —— 搜索历史下拉：聚焦/点击（空文本）显示，↓ 键显示，Esc 隐藏 ——
@@ -2077,7 +2093,10 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                                    ? SearchHistoryManager::aggregatedBucket()
                                    : QString();
 
-        if (event->type() == QEvent::MouseButtonPress) {
+        if (event->type() == QEvent::MouseButtonRelease) {
+            // 用 Release 而非 Press 触发：popup 在松开后才弹出，本轮点击的
+            // press/release 都已正常落到输入框（不会被 Qt::Popup 的鼠标抓取
+            // 重定向、也不会吞掉输入框焦点），点击必弹且无闪烁。
             // 点击必弹（不要求空文本）：选过历史后框内残留文字也应能
             // 再次打开下拉（否则点过一次历史记录后就「打不开」了）。
             QTimer::singleShot(0, this, [this, box, popup, bucket]() {
