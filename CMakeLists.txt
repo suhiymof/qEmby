@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 
-project(qEmby VERSION 0.0.7 LANGUAGES CXX)
+project(qEmby VERSION 0.0.8 LANGUAGES CXX)
 
 # Capture the build commit short hash at configure time so the resulting
 # binary self-identifies which commit it was built from. Lets users verify
