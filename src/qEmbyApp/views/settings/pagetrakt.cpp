@@ -4,27 +4,24 @@
 #include "../../components/modernswitch.h"
 #include "../../components/settingscard.h"
 #include "../../utils/qcoroutil.h"
+#include "traktlogindialog.h"
 #include <config/config_keys.h>
 #include <config/configstore.h>
 #include <services/trakt/traktservice.h>
 
-#include <QDateTime>
 #include <QDebug>
-#include <QDesktopServices>
 #include <QFrame>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QTimer>
-#include <QUrl>
-#include <qcorotimer.h>
 #include <stdexcept>
 
 namespace {
 
 QString statusLine(TraktService *service)
 {
-    if (!service->clientId().isEmpty() && !service->isLoggedIn()) {
-        return QObject::tr("Client ID configured, but not signed in");
+    if (!service->clientId().isEmpty() && !service->clientSecret().isEmpty()
+        && !service->isLoggedIn()) {
+        return QObject::tr("API credentials configured, but not signed in");
     }
     if (service->isLoggedIn()) {
         const QString user = service->userName();
@@ -51,7 +48,7 @@ PageTrakt::PageTrakt(QEmbyCore *core, QWidget *parent)
                                      m_accountBtn, QString(), this);
     m_mainLayout->addWidget(m_accountCard);
 
-    // ---- Client ID ------------------------------------------------------
+    // ---- API credentials -------------------------------------------------
     m_clientIdEdit = new QLineEdit(this);
     m_clientIdEdit->setPlaceholderText(
         tr("Client ID from trakt.tv/oauth/applications"));
@@ -59,8 +56,20 @@ PageTrakt::PageTrakt(QEmbyCore *core, QWidget *parent)
         ConfigKeys::TraktClientId, QString()));
     m_mainLayout->addWidget(new SettingsCard(
         ":/svg/dark/settings.svg", tr("Client ID"),
-        tr("API credentials of your registered Trakt application"),
+        tr("Redirect URI of your Trakt application must be set to %1")
+            .arg(TraktService::redirectUri()),
         m_clientIdEdit, ConfigKeys::TraktClientId, this));
+
+    m_secretEdit = new QLineEdit(this);
+    m_secretEdit->setEchoMode(QLineEdit::Password);
+    m_secretEdit->setPlaceholderText(
+        tr("Client Secret from trakt.tv/oauth/applications"));
+    m_secretEdit->setText(ConfigStore::instance()->get<QString>(
+        ConfigKeys::TraktClientSecret, QString()));
+    m_mainLayout->addWidget(new SettingsCard(
+        ":/svg/dark/settings.svg", tr("Client Secret"),
+        tr("API credentials of your registered Trakt application"),
+        m_secretEdit, ConfigKeys::TraktClientSecret, this));
 
     // ---- Feature switches ------------------------------------------------
     m_mainLayout->addWidget(new SettingsCard(
@@ -90,7 +99,7 @@ PageTrakt::PageTrakt(QEmbyCore *core, QWidget *parent)
         if (TraktService::instance()->isLoggedIn()) {
             signOut();
         } else {
-            launchTask(startDeviceLogin(), this);
+            launchTask(startBrowserLogin(), this);
         }
     });
 }
@@ -114,23 +123,43 @@ void PageTrakt::updateStatusText(const QString &text)
     }
 }
 
-QCoro::Task<void> PageTrakt::startDeviceLogin()
+QCoro::Task<void> PageTrakt::startBrowserLogin()
 {
     TraktService *service = TraktService::instance();
     const QString clientId = m_clientIdEdit->text().trimmed();
-    if (clientId.isEmpty()) {
-        updateStatusText(tr("Enter your Client ID first"));
+    const QString clientSecret = m_secretEdit->text().trimmed();
+    if (clientId.isEmpty() || clientSecret.isEmpty()) {
+        updateStatusText(tr("Enter Client ID and Client Secret first"));
         co_return;
     }
-    ConfigStore::instance()->set(ConfigKeys::TraktClientId, clientId);
+    auto *store = ConfigStore::instance();
+    store->set(ConfigKeys::TraktClientId, clientId);
+    store->set(ConfigKeys::TraktClientSecret, clientSecret);
 
     m_loginInProgress = true;
     m_accountBtn->setEnabled(false);
-    updateStatusText(tr("Requesting device code..."));
+    updateStatusText(tr("Complete the authorization in the opened window..."));
 
-    TraktService::DeviceCode code;
+    TraktLoginDialog dialog(clientId, this);
+    dialog.exec();
+
+    if (dialog.authCode().isEmpty()) {
+        m_loginInProgress = false;
+        m_accountBtn->setEnabled(true);
+        if (!dialog.errorText().isEmpty()) {
+            updateStatusText(tr("Authorization failed: %1")
+                                 .arg(dialog.errorText()));
+        } else {
+            // Dialog closed without a callback: user cancelled.
+            refreshAccountUi();
+        }
+        co_return;
+    }
+
+    updateStatusText(tr("Exchanging authorization code..."));
+    bool ok = false;
     try {
-        code = co_await service->requestDeviceCode(clientId);
+        ok = co_await service->exchangeAuthorizationCode(dialog.authCode());
     } catch (const std::exception &e) {
         updateStatusText(tr("Login failed: %1").arg(QString::fromUtf8(e.what())));
         m_loginInProgress = false;
@@ -138,42 +167,12 @@ QCoro::Task<void> PageTrakt::startDeviceLogin()
         co_return;
     }
 
-    QDesktopServices::openUrl(QUrl(code.verificationUrl));
-    updateStatusText(tr("Enter code %1 at %2")
-                         .arg(code.userCode, code.verificationUrl));
-
-    const int intervalMs = qMax(2, code.intervalSeconds) * 1000;
-    const QDateTime deadline =
-        QDateTime::currentDateTime().addSecs(qMax(60, code.expiresInSeconds));
-    QTimer waitTimer;
-    waitTimer.setSingleShot(true);
-
-    while (QDateTime::currentDateTime() < deadline) {
-        waitTimer.start(intervalMs);
-        co_await waitTimer;
-
-        TraktPollStatus status = TraktPollStatus::Failed;
-        try {
-            status = co_await service->pollDeviceToken(clientId, code.deviceCode);
-        } catch (const std::exception &e) {
-            qWarning().noquote() << "[Trakt] Device poll error:" << e.what();
-        }
-        if (status == TraktPollStatus::Approved) {
-            refreshAccountUi();
-            break;
-        }
-        if (status == TraktPollStatus::Expired) {
-            updateStatusText(tr("Code expired, please try again"));
-            break;
-        }
-        if (status == TraktPollStatus::Failed) {
-            updateStatusText(tr("Login failed, please try again"));
-            break;
-        }
-    }
-
     m_loginInProgress = false;
     m_accountBtn->setEnabled(true);
+    if (!ok) {
+        updateStatusText(
+            tr("Login failed, please check Client ID and Client Secret"));
+    }
     refreshAccountUi();
 }
 

@@ -39,8 +39,6 @@ struct QEMBYCORE_EXPORT TraktMediaIds {
     }
 };
 
-enum class TraktPollStatus { Approved, Pending, Expired, Failed };
-
 class QEMBYCORE_EXPORT TraktService : public QObject
 {
     Q_OBJECT
@@ -53,26 +51,18 @@ public:
     bool isLoggedIn() const;
     QString userName() const;
     QString clientId() const;
+    QString clientSecret() const;
 
-    struct DeviceCode {
-        QString deviceCode;
-        QString userCode;
-        QString verificationUrl;
-        int intervalSeconds = 5;
-        int expiresInSeconds = 600;
+    // OAuth redirect_uri: a fictional host that never resolves. The embedded
+    // login dialog intercepts the navigation to it (nothing hits the wire),
+    // the same trick WebView2-based players use with their own fake domains.
+    // Must match the redirect URI configured on the Trakt application page.
+    static QString redirectUri();
 
-        bool isValid() const
-        {
-            return !deviceCode.isEmpty() && !userCode.isEmpty();
-        }
-    };
+    // Exchange the OAuth authorization code (captured by the login dialog)
+    // for an access/refresh token. Stores credentials on success.
+    QCoro::Task<bool> exchangeAuthorizationCode(const QString &authorizationCode);
 
-    // Step 1 of the device auth flow: ask Trakt for a user code.
-    QCoro::Task<DeviceCode> requestDeviceCode(QString clientId);
-    // Step 2: poll once for approval. Stores the token and returns Approved on
-    // success; Pending/Expired when polling should continue/stop.
-    QCoro::Task<TraktPollStatus> pollDeviceToken(QString clientId,
-                                                 QString deviceCode);
     void signOut();
 
     // Scrobble: action is "start" | "pause" | "stop" (stop >80% marks watched).
@@ -101,7 +91,7 @@ private:
     };
 
     // Form POST that reports the HTTP status instead of throwing, so the
-    // device-token polling can treat 400 (authorization_pending) as normal.
+    // OAuth token endpoints can surface 4xx errors as plain values.
     QCoro::Task<RawReply> postFormRaw(QString url, const QUrlQuery &form);
 
     QMap<QString, QString> baseHeaders() const;
@@ -112,8 +102,12 @@ private:
         const std::function<QCoro::Task<QJsonObject>(
             const QMap<QString, QString> &)> &request);
 
-    QCoro::Task<bool> refreshAccessToken(QString clientId);
+    QCoro::Task<bool> refreshAccessToken();
     QCoro::Task<bool> writeHistory(const TraktMediaIds &ids, bool add);
+
+    // Persists access/refresh tokens and the user identity from a token
+    // endpoint response (shared by the code exchange and refresh flows).
+    void storeTokenReply(const QJsonObject &body);
 
     QJsonObject idsObject(const TraktMediaIds &ids) const;
 

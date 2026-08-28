@@ -75,6 +75,7 @@ target_link_libraries(qEmbyApp PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
     Qt${QT_VERSION_MAJOR}::OpenGLWidgets
     Qt${QT_VERSION_MAJOR}::Concurrent
+    Qt${QT_VERSION_MAJOR}::WebEngineWidgets
     qEmbyCore
     QWKWidgets
     WidgetFrame

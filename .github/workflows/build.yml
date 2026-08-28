@@ -39,7 +39,8 @@ jobs:
         with:
           version: '6.9.*'
           arch: win64_msvc2022_64
-          modules: qtwebsockets
+          # qtwebengine: Trakt 授权的内嵌浏览器（体积大，构建/产物体积会涨）
+          modules: 'qtwebsockets qtwebengine'
           cache: true
 
       # sccache: cross-build compiler cache backed by the GitHub Actions
@@ -183,7 +184,7 @@ jobs:
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.9.*'
-          modules: qtwebsockets
+          modules: 'qtwebsockets qtwebengine'
           cache: true
 
       - name: Install libmpv & deployment tools

@@ -16,11 +16,12 @@ public:
 private:
     void refreshAccountUi();
     void updateStatusText(const QString &text);
-    QCoro::Task<void> startDeviceLogin();
+    QCoro::Task<void> startBrowserLogin();
     void signOut();
 
     QPushButton *m_accountBtn = nullptr;
     QLineEdit *m_clientIdEdit = nullptr;
+    QLineEdit *m_secretEdit = nullptr;
     QFrame *m_accountCard = nullptr;
     bool m_loginInProgress = false;
 };

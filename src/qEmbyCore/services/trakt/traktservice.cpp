@@ -22,6 +22,10 @@ namespace {
 
 constexpr auto kApiBase = "https://api.trakt.tv";
 constexpr auto kAuthBase = "https://trakt.tv";
+// Fictional redirect host: intercepted by the embedded login dialog before
+// any network request happens. Users must configure exactly this value as
+// the redirect URI of their Trakt application.
+constexpr auto kRedirectUri = "http://qemby.local/trakt";
 constexpr int kTraktRequestTimeoutMs = 10000;
 
 NetworkRequestOptions traktRequestOptions()
@@ -127,6 +131,18 @@ QString TraktService::clientId() const
         .trimmed();
 }
 
+QString TraktService::clientSecret() const
+{
+    return ConfigStore::instance()
+        ->get<QString>(ConfigKeys::TraktClientSecret, QString())
+        .trimmed();
+}
+
+QString TraktService::redirectUri()
+{
+    return QLatin1String(kRedirectUri);
+}
+
 QMap<QString, QString> TraktService::baseHeaders() const
 {
     QMap<QString, QString> headers;
@@ -180,87 +196,55 @@ QCoro::Task<TraktService::RawReply> TraktService::postFormRaw(
     co_return result;
 }
 
-QCoro::Task<TraktService::DeviceCode> TraktService::requestDeviceCode(
-    QString clientId)
+void TraktService::storeTokenReply(const QJsonObject &body)
 {
-    DeviceCode result;
-    if (clientId.trimmed().isEmpty()) {
-        throw std::runtime_error("Trakt Client ID is not configured");
-    }
-
-    QUrlQuery form;
-    form.addQueryItem(QStringLiteral("client_id"), clientId.trimmed());
-    const RawReply reply = co_await postFormRaw(
-        QStringLiteral("%1/oauth/device/code").arg(QLatin1String(kAuthBase)),
-        form);
-    if (reply.status != 200) {
-        throw std::runtime_error(
-            QStringLiteral("Trakt device code request failed (HTTP %1)")
-                .arg(reply.status)
-                .toStdString());
-    }
-
-    result.deviceCode =
-        reply.body.value(QStringLiteral("device_code")).toString();
-    result.userCode = reply.body.value(QStringLiteral("user_code")).toString();
-    result.verificationUrl =
-        reply.body.value(QStringLiteral("verification_url")).toString();
-    result.expiresInSeconds =
-        reply.body.value(QStringLiteral("expires_in")).toInt(600);
-    result.intervalSeconds =
-        reply.body.value(QStringLiteral("interval")).toInt(5);
-    if (!result.isValid()) {
-        throw std::runtime_error("Trakt device code response is invalid");
-    }
-    co_return result;
+    auto *store = ConfigStore::instance();
+    store->set(ConfigKeys::TraktAccessToken,
+               body.value(QStringLiteral("access_token")).toString());
+    store->set(ConfigKeys::TraktRefreshToken,
+               body.value(QStringLiteral("refresh_token")).toString());
+    const QJsonObject user = body.value(QStringLiteral("user")).toObject();
+    store->set(ConfigKeys::TraktUserName,
+               user.value(QStringLiteral("username")).toString());
+    store->set(ConfigKeys::TraktUserSlug,
+               user.value(QStringLiteral("ids"))
+                       .toObject()
+                       .value(QStringLiteral("slug"))
+                       .toString());
 }
 
-QCoro::Task<TraktPollStatus> TraktService::pollDeviceToken(QString clientId,
-                                                           QString deviceCode)
+QCoro::Task<bool> TraktService::exchangeAuthorizationCode(
+    const QString &authorizationCode)
 {
+    const QString clientId = this->clientId();
+    const QString clientSecret = this->clientSecret();
+    if (clientId.isEmpty() || clientSecret.isEmpty()
+        || authorizationCode.trimmed().isEmpty()) {
+        co_return false;
+    }
+
     QUrlQuery form;
-    form.addQueryItem(QStringLiteral("code"), deviceCode);
-    form.addQueryItem(QStringLiteral("client_id"), clientId.trimmed());
+    form.addQueryItem(QStringLiteral("code"), authorizationCode.trimmed());
+    form.addQueryItem(QStringLiteral("client_id"), clientId);
+    form.addQueryItem(QStringLiteral("client_secret"), clientSecret);
+    form.addQueryItem(QStringLiteral("redirect_uri"),
+                      QLatin1String(kRedirectUri));
+    form.addQueryItem(QStringLiteral("grant_type"),
+                      QStringLiteral("authorization_code"));
+
     const RawReply reply = co_await postFormRaw(
-        QStringLiteral("%1/oauth/device/token").arg(QLatin1String(kAuthBase)),
-        form);
-
-    if (reply.status == 200) {
-        auto *store = ConfigStore::instance();
-        store->set(ConfigKeys::TraktAccessToken,
-                   reply.body.value(QStringLiteral("access_token")).toString());
-        store->set(ConfigKeys::TraktRefreshToken,
-                   reply.body.value(QStringLiteral("refresh_token")).toString());
-        const QJsonObject user =
-            reply.body.value(QStringLiteral("user")).toObject();
-        store->set(ConfigKeys::TraktUserName,
-                   user.value(QStringLiteral("username")).toString());
-        store->set(ConfigKeys::TraktUserSlug,
-                   user.value(QStringLiteral("ids"))
-                           .toObject()
-                           .value(QStringLiteral("slug"))
-                           .toString());
-        qDebug().noquote() << "[Trakt] Device auth approved"
-                           << "| user:" << userName();
-        co_return TraktPollStatus::Approved;
+        QStringLiteral("%1/oauth/token").arg(QLatin1String(kAuthBase)), form);
+    if (reply.status != 200) {
+        qWarning().noquote() << "[Trakt] Code exchange failed"
+                             << "| httpStatus:" << reply.status
+                             << "| error:" << reply.body.value("error").toString();
+        co_return false;
     }
 
-    const QString error =
-        reply.body.value(QStringLiteral("error")).toString().trimmed();
-    if (reply.status == 400 &&
-        error == QLatin1String("authorization_pending")) {
-        co_return TraktPollStatus::Pending;
-    }
-    if (reply.status == 409 || error == QLatin1String("slow_down")) {
-        co_return TraktPollStatus::Pending;
-    }
-    if (reply.status == 410) {
-        co_return TraktPollStatus::Expired;
-    }
-    qWarning().noquote() << "[Trakt] Device poll failed"
-                         << "| httpStatus:" << reply.status
-                         << "| error:" << error;
-    co_return TraktPollStatus::Failed;
+    storeTokenReply(reply.body);
+    qDebug().noquote() << "[Trakt] Authorized via embedded browser"
+                       << "| user:" << userName();
+    co_return true;
 }
 
 void TraktService::signOut()
@@ -273,20 +257,23 @@ void TraktService::signOut()
     qDebug().noquote() << "[Trakt] Signed out";
 }
 
-QCoro::Task<bool> TraktService::refreshAccessToken(QString clientId)
+QCoro::Task<bool> TraktService::refreshAccessToken()
 {
     const QString refreshToken =
         ConfigStore::instance()
             ->get<QString>(ConfigKeys::TraktRefreshToken, QString())
             .trimmed();
-    if (refreshToken.isEmpty() || clientId.trimmed().isEmpty()) {
+    if (refreshToken.isEmpty() || clientId().isEmpty()
+        || clientSecret().isEmpty()) {
         co_return false;
     }
 
     QUrlQuery form;
     form.addQueryItem(QStringLiteral("refresh_token"), refreshToken);
-    form.addQueryItem(QStringLiteral("client_id"), clientId.trimmed());
-    form.addQueryItem(QStringLiteral("redirect_uri"), QStringLiteral("urn:ietf:wg:oauth:2.0:oob"));
+    form.addQueryItem(QStringLiteral("client_id"), clientId());
+    form.addQueryItem(QStringLiteral("client_secret"), clientSecret());
+    form.addQueryItem(QStringLiteral("redirect_uri"),
+                      QLatin1String(kRedirectUri));
     form.addQueryItem(QStringLiteral("grant_type"),
                       QStringLiteral("refresh_token"));
     const RawReply reply = co_await postFormRaw(
@@ -318,7 +305,7 @@ QCoro::Task<QJsonObject> TraktService::authorizedCall(
         }
     }
     // Access token expired: refresh once and retry with the fresh headers.
-    if (!co_await refreshAccessToken(clientId())) {
+    if (!co_await refreshAccessToken()) {
         throw std::runtime_error("Trakt authorization failed (401)");
     }
     co_return co_await request(authorizedHeaders());
