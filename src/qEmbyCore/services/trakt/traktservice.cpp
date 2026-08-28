@@ -237,7 +237,9 @@ QCoro::Task<bool> TraktService::exchangeAuthorizationCode(
     if (reply.status != 200) {
         qWarning().noquote() << "[Trakt] Code exchange failed"
                              << "| httpStatus:" << reply.status
-                             << "| error:" << reply.body.value("error").toString();
+                             << "| error:"
+                             << reply.body.value(QStringLiteral("error"))
+                                    .toString();
         co_return false;
     }
 

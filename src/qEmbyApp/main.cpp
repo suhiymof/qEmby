@@ -38,6 +38,9 @@ int main(int argc, char *argv[]) {
   QSurfaceFormat::setDefaultFormat(format);
 
   QGuiApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
+  // QtWebEngine（Trakt 授权内嵌浏览器）与 mpv 的 QOpenGLWidget 混用 GL 时，
+  // 必须在 QApplication 构造前开启全局 context 共享，否则 WebView 白屏。
+  QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
   QApplication a(argc, argv);
   a.setApplicationName(APP_NAME);
   a.setApplicationVersion(APP_VERSION);
