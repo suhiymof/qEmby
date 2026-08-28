@@ -124,6 +124,11 @@ jobs:
 
       - name: Build installer (Inno Setup)
         shell: bash
+        # MSYS2 会把以 /D 开头的参数当 POSIX 路径转换（如 /DAppVersion=0.0.7），
+        # 导致 ISCC 报 "You may not specify more than one script filename"。
+        env:
+          MSYS2_ARG_CONV_EXCL: "/D"
+          MSYS_NO_PATHCONV: "1"
         run: |
           set -euxo pipefail
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
