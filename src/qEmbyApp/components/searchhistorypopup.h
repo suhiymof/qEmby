@@ -85,7 +85,6 @@ private:
     bool m_visibilityHiding = false;
     bool m_animateNextRelayout = false;
     bool m_sortTransitionRebuilt = false;
-    qint64 m_lastDismissRequestMs = 0;
 
     QList<SearchHistoryManager::SearchHistoryEntry> m_entries;
     SortMode m_sortMode = SortMode::Recent;

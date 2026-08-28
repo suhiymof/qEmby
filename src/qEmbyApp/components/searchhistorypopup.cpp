@@ -6,7 +6,6 @@
 #include "../../qEmbyCore/config/config_keys.h"
 #include "../../qEmbyCore/config/configstore.h"
 #include <QColor>
-#include <QDateTime>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
@@ -409,15 +408,11 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
         return;
     }
 
-    // 防抖：dismiss 后短时间内忽略再次弹出请求——Qt::Popup 关闭（点击
-    // 外部/选择条目）会把焦点还给锚点输入框，若触发方（如 FocusIn 类
-    // 逻辑）立刻重新 showBelow，会形成 show/close 振荡（表现为下拉闪烁）。
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_lastDismissRequestMs < 250) {
-        return;
-    }
-
     // 已以同一锚点显示中：只重定位置，不重启显隐动画（防重复触发闪烁）。
+    // 注意：此处不再做 dismiss 后防抖——曾经的振荡源（FocusIn 自动弹出、
+    // popup 激活导致主窗口失活 dismiss）已分别移除/被 WA_ShowWithoutActivating
+    // 根除，防抖反而会吞掉调用方「dismiss(true) 后立刻 showBelow」的正常
+    // 序列（表现为点击搜索框下拉永远弹不出来）。
     if (isVisible() && m_anchor == anchor) {
         repositionToAnchor();
         raise();
@@ -426,7 +421,14 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
 
     stopVisibilityAnimation();
     m_anchor = anchor;
-    relayoutPopup(qMax(kSearchHistoryPopupMinWidth, anchor->width() + 12));
+    // 宽度上限：不超出锚点所在主窗口（下拉比窗口还宽时整体移位也无济于事）。
+    int preferredCardWidth = qMax(kSearchHistoryPopupMinWidth, anchor->width() + 12);
+    if (QWidget *win = anchor->window()) {
+        preferredCardWidth = qMin(preferredCardWidth,
+                                  qMax(kSearchHistoryPopupMinWidth,
+                                       win->width() - kSearchHistoryPopupOuterMargin * 2));
+    }
+    relayoutPopup(preferredCardWidth);
 
     const bool reduceAnimations =
         ConfigStore::instance()->get<bool>(ConfigKeys::UiAnimations, false);
@@ -486,9 +488,6 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
 
 void SearchHistoryPopup::dismiss(bool immediate)
 {
-    // 记录收起请求时间：showBelow 据此做 250ms 防抖，阻断
-    // 「popup 关闭 → 焦点还给输入框 → 立即重新弹出」的振荡循环。
-    m_lastDismissRequestMs = QDateTime::currentMSecsSinceEpoch();
     stopHeightAnimation();
     stopSortTransitionAnimation();
 
@@ -773,6 +772,17 @@ void SearchHistoryPopup::repositionToAnchor()
                          qMax(avail.left() + 6, avail.right() - popupWidth - 6)));
     popupPos.setY(qBound(avail.top(), popupPos.y() + m_visibilityOffsetY,
                          qMax(avail.top(), avail.bottom() - popupHeight)));
+
+    // 水平再钳制到锚点所在主窗口内：侧栏搜索框靠窗口左缘，仅按屏幕
+    // 钳制时下拉中心对齐锚点会伸出窗口外（左侧悬空到桌面）。
+    if (QWidget *win = m_anchor->window()) {
+        const QRect winGlobal(win->mapToGlobal(QPoint(0, 0)), win->size());
+        const int winMinX = winGlobal.left() + 6;
+        const int winMaxX = winGlobal.right() - popupWidth - 6;
+        if (winMaxX > winMinX) {
+            popupPos.setX(qBound(winMinX, popupPos.x(), winMaxX));
+        }
+    }
 
     move(popupPos);
 }

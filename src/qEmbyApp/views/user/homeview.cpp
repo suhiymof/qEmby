@@ -1316,9 +1316,10 @@ void HomeView::setupSearchHistoryPopups()
                 // Qt::Popup 窗口不会随视图切换自动关闭，先显式收起。
                 dismissHistoryPopups();
                 m_searchBox->setText(term);
-                // 同聚合 popup：记录穿透保护时间戳 + 延迟一拍搜索。
+                // 同聚合 popup：记录穿透保护时间戳；直接触发搜索（与回车
+                // 路径一致，不绕 singleShot）。
                 m_historyTermActivatedMs = QDateTime::currentMSecsSinceEpoch();
-                QTimer::singleShot(0, this, [this, term]() { triggerSearch(term); });
+                triggerSearch(term);
             });
     connect(m_searchHistoryPopup, &SearchHistoryPopup::clearHistoryRequested, this,
             [this]() {
@@ -1342,11 +1343,9 @@ void HomeView::setupSearchHistoryPopups()
                 // 记录时间戳：popup 收起动画期间 release 可能穿透到侧栏
                 // 按钮（聚合历史/收藏），300ms 内的按钮点击忽略。
                 m_historyTermActivatedMs = QDateTime::currentMSecsSinceEpoch();
-                const QString q = term;
-                // 延迟一拍：popup dismiss/动画收尾后再切视图搜索。
-                QTimer::singleShot(0, this, [this, q]() {
-                    Q_EMIT aggregatedSearchRequested(q);
-                });
+                // 直接 emit（与回车路径完全一致），不再绕 singleShot——
+                // 间接一拍曾被观察到搜索请求丢失（点了历史无搜索效果）。
+                Q_EMIT aggregatedSearchRequested(term);
             });
     connect(m_aggregatedSearchHistoryPopup,
             &SearchHistoryPopup::clearHistoryRequested, this,
@@ -2079,11 +2078,11 @@ bool HomeView::eventFilter(QObject *watched, QEvent *event)
                                    : QString();
 
         if (event->type() == QEvent::MouseButtonPress) {
-            if (box && box->text().trimmed().isEmpty()) {
-                QTimer::singleShot(0, this, [this, box, popup, bucket]() {
-                    showHistoryPopupFor(box, popup, bucket);
-                });
-            }
+            // 点击必弹（不要求空文本）：选过历史后框内残留文字也应能
+            // 再次打开下拉（否则点过一次历史记录后就「打不开」了）。
+            QTimer::singleShot(0, this, [this, box, popup, bucket]() {
+                showHistoryPopupFor(box, popup, bucket);
+            });
             return false;
         }
         // 注意：不处理 FocusIn——Qt::Popup 关闭时会把焦点还给输入框并触发

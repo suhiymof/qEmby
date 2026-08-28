@@ -1035,7 +1035,9 @@ void MainWindow::showGlobalSearchHistoryPopup(const QString &filterText)
         return;
     }
 
-    m_globalSearchHistoryPopup->dismiss(true);
+    // 不在此处 dismiss(true)——showBelow 自身处理「已显示重定位/切换锚点
+    // 重启动画」，而紧贴 showBelow 的 dismiss 会被（原 250ms 防抖等）状态
+    // 吞掉，导致点击搜索框下拉永远弹不出来。
     if (m_globalSearchCompleter && m_globalSearchCompleter->popup()) {
         m_globalSearchCompleter->popup()->hide();
     }
@@ -1337,12 +1339,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         // 注意：不处理 FocusIn——Qt::Popup 关闭时会把焦点还给输入框并触发
         // FocusIn（reason 非 MouseFocusReason，原 guard 挡不住），若在此重新
         // 弹出会形成 show/close 振荡（下拉一直闪）。打开途径：点击、↓ 键。
+        // 点击必弹（不要求空文本）：选过历史后框内残留文字也应能再次打开。
         if (event->type() == QEvent::MouseButtonPress) {
-            if (m_globalSearchBox->text().trimmed().isEmpty()) {
-                QTimer::singleShot(0, this, [this]() {
-                    showGlobalSearchHistoryPopup();
-                });
-            }
+            QTimer::singleShot(0, this, [this]() {
+                // 点击 → 展示全量历史（不过滤前缀）；↓ 键 → 按文本过滤。
+                showGlobalSearchHistoryPopup();
+            });
         } else if (event->type() == QEvent::KeyPress) {
             auto *keyEvent = static_cast<QKeyEvent *>(event);
             if (keyEvent->key() == Qt::Key_Down) {
