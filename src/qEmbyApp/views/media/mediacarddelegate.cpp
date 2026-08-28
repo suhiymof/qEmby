@@ -710,7 +710,8 @@ void MediaCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
             item.indexNumber >= 10
                 ? QStringLiteral("E%1").arg(item.indexNumber)
                 : QStringLiteral("E0%1").arg(item.indexNumber);
-        QString sxeText = QStringLiteral("%1E%2").arg(season).arg(episode);
+        // season/episode 均已带各自前缀（S01 / E02），直接拼接
+        QString sxeText = QStringLiteral("%1%2").arg(season, episode);
         if (isSeriesResumeFallback) {
             const QString epName = item.resumeEpisodeName.trimmed();
             if (!epName.isEmpty()) {
