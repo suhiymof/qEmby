@@ -194,6 +194,26 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     m_confirmButton->setCursor(Qt::PointingHandCursor);
     m_confirmButton->setEnabled(false);
     connect(m_confirmButton, &QPushButton::clicked, this, [this]() {
+        if (m_mode != Mode::Multi) {
+            // Single mode: materialise the episode candidate from the
+            // current row right before accepting.
+            const int currentRow =
+                m_episodeList ? m_episodeList->currentRow() : -1;
+            if (currentRow < 0 || currentRow >= m_currentSeries.episodes.size()) {
+                return;
+            }
+            const DanmakuEpisode &ep =
+                m_currentSeries.episodes.at(currentRow);
+            DanmakuMatchCandidate episodeCandidate = m_currentSeries;
+            episodeCandidate.episodes.clear();
+            episodeCandidate.targetId = ep.cid;
+            episodeCandidate.episodeNumber = ep.episodeNumber + m_episodeOffset;
+            episodeCandidate.seasonNumber = -1;
+            episodeCandidate.durationMs = ep.durationMs;
+            episodeCandidate.title = ep.longTitle.isEmpty() ? ep.title : ep.longTitle;
+            episodeCandidate.subtitle = m_currentSeries.title;
+            m_selectedEpisodes = {episodeCandidate};
+        }
         if (!m_selectedEpisodes.isEmpty()) {
             accept();
         }
@@ -381,15 +401,7 @@ void SeriesDanmakuMatchDialog::enterEpisodePicker(int row)
 
     m_selectedEpisodes.clear();
     m_episodeTitleLabel->setText(m_currentSeries.displayText());
-    m_episodeList->clear();
-    for (const DanmakuEpisode &ep : m_currentSeries.episodes) {
-        const QString label =
-            QStringLiteral("%1. %2")
-                .arg(ep.episodeNumber > 0 ? ep.episodeNumber : 0, 2, 10, QChar('0'))
-                .arg(ep.longTitle.isEmpty() ? ep.title : ep.longTitle);
-        auto *item = new QListWidgetItem(label, m_episodeList);
-        item->setData(kSeriesCandidateRole, QVariant());
-    }
+    rebuildEpisodeList();
     m_seriesListContainer->hide();
     m_promptLabel->hide();
     m_episodePanel->show();

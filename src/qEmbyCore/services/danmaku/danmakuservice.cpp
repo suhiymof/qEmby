@@ -2073,6 +2073,53 @@ QCoro::Task<DanmakuMatchResult> DanmakuService::resolveMatch(DanmakuMediaContext
             }
         }
 
+        // Series-level candidates (e.g. Bilibili season with embedded episode
+        // list) are meant for the interactive two-stage picker. For auto
+        // match we need a concrete episode-level candidate so the cache key
+        // and fetchComments resolve to the right episode. Expand each series
+        // candidate into the episode matching context.episodeNumber; when no
+        // match is found keep the whole series candidate as fallback (the
+        // confidence gate will likely reject it, surfacing the picker).
+        if (context.isEpisode())
+        {
+            QList<DanmakuMatchCandidate> expanded;
+            for (const DanmakuMatchCandidate &candidate : std::as_const(onlineCandidates))
+            {
+                if (!candidate.isSeries() || candidate.episodes.isEmpty())
+                {
+                    expanded.append(candidate);
+                    continue;
+                }
+                bool matched = false;
+                for (const DanmakuEpisode &ep : candidate.episodes)
+                {
+                    if (ep.episodeNumber > 0 &&
+                        ep.episodeNumber == context.episodeNumber)
+                    {
+                        DanmakuMatchCandidate episodeCandidate = candidate;
+                        episodeCandidate.episodes.clear();
+                        episodeCandidate.targetId = ep.cid;
+                        episodeCandidate.episodeNumber = ep.episodeNumber;
+                        episodeCandidate.seasonNumber = context.seasonNumber;
+                        episodeCandidate.durationMs = ep.durationMs;
+                        episodeCandidate.title = ep.longTitle.isEmpty()
+                                                     ? ep.title
+                                                     : ep.longTitle;
+                        episodeCandidate.subtitle = candidate.title;
+                        episodeCandidate.score += 24.0;
+                        expanded.append(episodeCandidate);
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched)
+                {
+                    expanded.append(candidate);
+                }
+            }
+            onlineCandidates = expanded;
+        }
+
         sortDanmakuCandidates(onlineCandidates, context,
                               trimmedManualKeyword);
         appendCandidates(onlineCandidates);

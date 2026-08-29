@@ -247,31 +247,40 @@ BiliBiliDanmakuProvider::BiliBiliDanmakuProvider(NetworkManager *networkManager)
 {
 }
 
-// In the long_title returned by /pgc/view/web/season, the trailing run of
-// digits is the episode number within its season and everything before it is
-// the season name. Examples:
-//   "凡人风起天南1重制版" -> ("风起天南", 1)
+// In the long_title returned by /pgc/view/web/season, the season name is
+// followed by the episode number, optionally with a trailing suffix such as
+// "重制版". The episode number is the FIRST run of consecutive digits, so a
+// linear scan from the left finds it even when a suffix follows. Examples:
+//   "凡人风起天南1重制版" -> ("凡人风起天南", 1)
 //   "魔道争锋9"          -> ("魔道争锋", 9)
 //   "星海飞驰25"         -> ("星海飞驰", 25)
 //   "慕兰之战14"         -> ("慕兰之战", 14)
+//   "特别篇"            -> ("特别篇", 0)
 QPair<QString, int> parseLongTitle(const QString &longTitle)
 {
-    QString text = longTitle.trimmed();
+    const QString text = longTitle.trimmed();
     if (text.isEmpty()) {
         return {QString(), 0};
     }
-    int i = text.size();
-    while (i > 0 && text.at(i - 1).isDigit()) {
-        --i;
+    // Find the first run of digits (the episode number).
+    int digitStart = -1;
+    int digitEnd = -1;
+    for (int i = 0; i < text.size(); ++i) {
+        if (text.at(i).isDigit()) {
+            if (digitStart < 0) {
+                digitStart = i;
+            }
+            digitEnd = i;
+        } else if (digitStart >= 0) {
+            break;
+        }
     }
-    if (i == text.size()) {
+    if (digitStart < 0) {
         return {text, 0};
     }
-    if (i == 0) {
-        return {QString(), text.toInt()};
-    }
-    QString seasonName = text.left(i).trimmed();
-    int episodeInSeason = text.mid(i).toInt();
+    QString seasonName = text.left(digitStart).trimmed();
+    int episodeInSeason =
+        text.mid(digitStart, digitEnd - digitStart + 1).toInt();
     return {seasonName, episodeInSeason};
 }
 
