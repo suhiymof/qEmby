@@ -82,11 +82,27 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # zlib: used by bilibilidanmakuprovider to inflate B站 raw-deflate danmaku
-# payloads (the B站 comment.bilibili.com endpoint returns Content-Encoding:
-# deflate without the zlib header, so Qt's qUncompress wrapper can't decode
-# it). On Windows Qt ships a private zlib but the public headers may not be
-# in the default include path; rely on the system one.
-find_package(ZLIB REQUIRED)
+# payloads (comment.bilibili.com serves Content-Encoding: deflate but the
+# body is *raw* deflate — no zlib header, no trailing adler32 — so Qt's
+# qUncompress wrapper cannot decode it). We need inflateInit2(stream,
+# -15) which only the public zlib API exposes. Pull the upstream
+# tarball via FetchContent so the CI runners do not need a separate
+# zlib-dev package install step. Build is ~10s, fully covered by
+# sccache on incremental builds.
+include(FetchContent)
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+set(ZLIB_INSTALL OFF CACHE BOOL "" FORCE)
+set(SKIP_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
+set(SKIP_SHARED_LIB_COMPILE_FLAG ON CACHE BOOL "" FORCE)
+set(SKIP_STATIC_LIB_COMPILE_FLAG ON CACHE BOOL "" FORCE)
+FetchContent_Declare(zlib
+    URL https://zlib.net/fossils/zlib-1.3.1.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(zlib)
 
 # ==========================================
 # 为第三方子模块 (qwindowkit/qmsetup) 注入所需的 Qt 版本环境变量
