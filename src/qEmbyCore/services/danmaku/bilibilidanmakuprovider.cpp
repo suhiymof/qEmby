@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPair>
 #include <QRegularExpression>
 #include <QSet>
 #include <QStringList>
@@ -246,6 +247,34 @@ BiliBiliDanmakuProvider::BiliBiliDanmakuProvider(NetworkManager *networkManager)
 {
 }
 
+// In the long_title returned by /pgc/view/web/season, the trailing run of
+// digits is the episode number within its season and everything before it is
+// the season name. Examples:
+//   "凡人风起天南1重制版" -> ("风起天南", 1)
+//   "魔道争锋9"          -> ("魔道争锋", 9)
+//   "星海飞驰25"         -> ("星海飞驰", 25)
+//   "慕兰之战14"         -> ("慕兰之战", 14)
+QPair<QString, int> parseLongTitle(const QString &longTitle)
+{
+    QString text = longTitle.trimmed();
+    if (text.isEmpty()) {
+        return {QString(), 0};
+    }
+    int i = text.size();
+    while (i > 0 && text.at(i - 1).isDigit()) {
+        --i;
+    }
+    if (i == text.size()) {
+        return {text, 0};
+    }
+    if (i == 0) {
+        return {QString(), text.toInt()};
+    }
+    QString seasonName = text.left(i).trimmed();
+    int episodeInSeason = text.mid(i).toInt();
+    return {seasonName, episodeInSeason};
+}
+
 QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandidates(
     DanmakuMediaContext context,
     DanmakuProviderConfig config,
@@ -274,11 +303,14 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
         co_return candidates;
     }
 
+    // 1) media_bangumi search -> { season_id, media_id, title (with <em> tags) }.
+    // This surfaces the official bangumi entry instead of UGC uploads that
+    // /search/type?search_type=video would return.
     const QMap<QString, QString> searchParams = wbiSign(
-        {{QStringLiteral("search_type"), QStringLiteral("video")},
+        {{QStringLiteral("search_type"), QStringLiteral("media_bangumi")},
          {QStringLiteral("keyword"), querySubject},
          {QStringLiteral("page"), QStringLiteral("1")},
-         {QStringLiteral("page_size"), QStringLiteral("20")}},
+         {QStringLiteral("page_size"), QStringLiteral("5")}},
         wbi.imgKey, wbi.subKey);
 
     QUrl searchUrl(QStringLiteral("https://api.bilibili.com/x/web-interface/wbi/search/type"));
@@ -288,13 +320,25 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
     }
     searchUrl.setQuery(query);
 
-    const QJsonObject response = co_await m_networkManager->get(
-        searchUrl.toString(), requestHeaders(cookie), requestOptions());
+    QJsonObject searchResponse;
+    try {
+        searchResponse = co_await m_networkManager->get(
+            searchUrl.toString(), requestHeaders(cookie), requestOptions());
+    } catch (const std::exception &e) {
+        qWarning().noquote() << "[BiliBili] media_bangumi search failed"
+                             << "| error:" << e.what();
+        co_return candidates;
+    }
     const QJsonArray results =
-        response.value(QStringLiteral("data"))
+        searchResponse.value(QStringLiteral("data"))
             .toObject()
             .value(QStringLiteral("result"))
             .toArray();
+    if (results.isEmpty()) {
+        qDebug().noquote() << "[BiliBili] media_bangumi search returned no results"
+                           << "| keyword:" << querySubject;
+        co_return candidates;
+    }
 
     int resolved = 0;
     for (const QJsonValue &resultValue : results) {
@@ -302,53 +346,80 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             break;
         }
         const QJsonObject result = resultValue.toObject();
-        const QString bvid = result.value(QStringLiteral("bvid")).toString().trimmed();
-        const QString resultTitle = stripHtmlTags(
+        const qint64 seasonId =
+            result.value(QStringLiteral("season_id")).toVariant().toLongLong();
+        const qint64 mediaId =
+            result.value(QStringLiteral("media_id")).toVariant().toLongLong();
+        const QString seriesTitle = stripHtmlTags(
             result.value(QStringLiteral("title")).toString());
-        if (bvid.isEmpty() || resultTitle.isEmpty()) {
+        if (seasonId <= 0 || seriesTitle.isEmpty()) {
             continue;
         }
 
-        // bvid -> cid list (multi-part videos become multiple candidates).
-        QUrl pagelistUrl(QStringLiteral("https://api.bilibili.com/x/player/pagelist"));
-        QUrlQuery pagelistQuery;
-        pagelistQuery.addQueryItem(QStringLiteral("bvid"), bvid);
-        pagelistUrl.setQuery(pagelistQuery);
-
-        QJsonObject pagelist;
+        // 2) /pgc/view/web/season?season_id=... -> episodes[] (merged across
+        //    all sub-seasons for this series). section_type==0 marks the main
+        //    episodes; the rest are previews/PVs/extras and are dropped.
+        const QString seasonUrl = QStringLiteral(
+            "https://api.bilibili.com/pgc/view/web/season?season_id=%1")
+            .arg(seasonId);
+        QJsonObject seasonResponse;
         try {
-            pagelist = co_await m_networkManager->get(
-                pagelistUrl.toString(), requestHeaders(cookie), requestOptions());
+            seasonResponse = co_await m_networkManager->get(
+                seasonUrl, requestHeaders(cookie), requestOptions());
         } catch (const std::exception &e) {
-            qWarning().noquote() << "[BiliBili] pagelist failed"
-                                 << "| bvid:" << bvid << "| error:" << e.what();
+            qWarning().noquote() << "[BiliBili] season detail failed"
+                                 << "| seasonId:" << seasonId
+                                 << "| error:" << e.what();
             continue;
         }
-        const QJsonArray pages = pagelist.value(QStringLiteral("data")).toArray();
-        for (const QJsonValue &pageValue : pages) {
-            const QJsonObject page = pageValue.toObject();
-            const QString cid = page.value(QStringLiteral("cid")).toVariant().toString().trimmed();
+        const QJsonArray episodes =
+            seasonResponse.value(QStringLiteral("data"))
+                .toObject()
+                .value(QStringLiteral("episodes"))
+                .toArray();
+        if (episodes.isEmpty()) {
+            continue;
+        }
+
+        for (const QJsonValue &episodeValue : episodes) {
+            const QJsonObject episode = episodeValue.toObject();
+            if (episode.value(QStringLiteral("section_type")).toInt(-1) != 0) {
+                continue;
+            }
+            const QString cid =
+                episode.value(QStringLiteral("cid")).toVariant().toString().trimmed();
             if (cid.isEmpty()) {
                 continue;
             }
-            const QString partTitle =
-                page.value(QStringLiteral("part")).toString().trimmed();
+            const QString longTitle =
+                episode.value(QStringLiteral("long_title")).toString().trimmed();
+            const QPair<QString, int> parsed = parseLongTitle(longTitle);
+            const QString episodePartTitle = longTitle.isEmpty()
+                ? episode.value(QStringLiteral("title")).toString().trimmed()
+                : longTitle;
 
             DanmakuMatchCandidate candidate;
             candidate.provider = QStringLiteral("bilibili");
             candidate.targetId = cid;
-            candidate.title = partTitle.isEmpty() ? resultTitle : partTitle;
-            candidate.subtitle = resultTitle;
-            candidate.episodeNumber = extractEpisodeNumber(candidate.title);
+            candidate.title = episodePartTitle;
+            candidate.subtitle =
+                parsed.first.isEmpty() ? seriesTitle : parsed.first;
+            candidate.episodeNumber = parsed.second;
             candidate.durationMs = static_cast<qint64>(
-                page.value(QStringLiteral("duration")).toVariant().toDouble() * 1000.0);
-            candidate.commentCount =
-                result.value(QStringLiteral("danmaku")).toInt();
-            candidate.matchReason = QStringLiteral("search");
-            candidate.score = titleScore(querySubject, resultTitle) * 60.0;
+                episode.value(QStringLiteral("duration")).toVariant().toDouble() * 1000.0);
+            candidate.matchReason = QStringLiteral("media_bangumi");
+            // Score weights: long_title contains both the series name and the
+            // sub-season name, so a series-name match scores reasonably; the
+            // episode number bonus keeps the right episode on top.
+            candidate.score = titleScore(querySubject, episodePartTitle) * 60.0;
             if (context.isEpisode() && context.episodeNumber > 0 &&
                 candidate.episodeNumber == context.episodeNumber) {
                 candidate.score += 24.0;
+            }
+            if (!parsed.first.isEmpty() &&
+                !context.seriesName.trimmed().isEmpty() &&
+                parsed.first.contains(context.seriesName.trimmed(), Qt::CaseInsensitive)) {
+                candidate.score += 6.0;
             }
             if (candidate.isValid()) {
                 candidates.append(candidate);
@@ -362,6 +433,9 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
                  const DanmakuMatchCandidate &right) {
                   return left.score > right.score;
               });
+    if (candidates.size() > kMaxSearchCandidates) {
+        candidates.resize(kMaxSearchCandidates);
+    }
     co_return candidates;
 }
 
