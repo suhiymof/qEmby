@@ -1941,6 +1941,16 @@ QCoro::Task<DanmakuMatchResult> DanmakuService::resolveMatch(DanmakuMediaContext
         seriesBoundHit = m_cacheStore->loadSeriesBinding(
             context.serverId, context.parentSeriesId, context.seasonNumber,
             context.episodeNumber, &seriesBoundCandidate);
+        if (!seriesBoundHit && context.seasonNumber > 0) {
+            // Series-level bindings are saved from the Series detail page,
+            // where the Series item has no ParentIndexNumber, so the stored
+            // key lands on season 0 (see saveSeriesBindings). Retry with the
+            // flattened season so a bound show resolves regardless of how
+            // Emby split it into seasons.
+            seriesBoundHit = m_cacheStore->loadSeriesBinding(
+                context.serverId, context.parentSeriesId, 0,
+                context.episodeNumber, &seriesBoundCandidate);
+        }
         if (seriesBoundHit && seriesBoundCandidate.isValid() &&
             cachedCandidateAvailable(seriesBoundCandidate) &&
             sourceModeAllowsCandidate(seriesBoundCandidate))

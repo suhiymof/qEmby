@@ -10158,6 +10158,34 @@ This cannot be undone.</source>
         <translation>选择一集</translation>
     </message>
     <message>
+        <source>Deselect All</source>
+        <translation>取消全选</translation>
+    </message>
+    <message>
+        <source>%1 / %2 episodes selected</source>
+        <translation>已选择 %1 / %2 集</translation>
+    </message>
+    <message>
+        <source>Re-open the danmaku matcher. %1 episode binding(s) saved.</source>
+        <translation>重新打开弹幕匹配器。已保存 %1 集弹幕绑定。</translation>
+    </message>
+    <message>
+        <source>Saved %1 danmaku match(es) for this series</source>
+        <translation>已为本剧集保存 %1 条弹幕匹配</translation>
+    </message>
+    <message>
+        <source>Cleared danmaku bindings for this series</source>
+        <translation>已清除本剧集的弹幕绑定</translation>
+    </message>
+    <message>
+        <source>Rematch Danmaku</source>
+        <translation>重新匹配弹幕</translation>
+    </message>
+    <message>
+        <source>Clear Danmaku Binding</source>
+        <translation>清除弹幕绑定</translation>
+    </message>
+    <message>
         <source>%1 / %2 episodes selected</source>
         <translation>已选择 %1 / %2 集</translation>
     </message>
