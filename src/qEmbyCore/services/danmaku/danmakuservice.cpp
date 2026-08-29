@@ -597,85 +597,6 @@ void sortDanmakuCandidates(QList<DanmakuMatchCandidate> &candidates,
         });
 }
 
-QList<DanmakuMatchCandidate> DanmakuService::aggregateEpisodesToSeries(
-    const QList<DanmakuMatchCandidate> &flatCandidates) const
-{
-    // dandanplay / danmu_api return one *episode-level* candidate per row
-    // (targetId = episodeId, episodes[] empty, isSeries()==false). Bilibili
-    // returns *series-level* candidates (episodes[] already filled with the
-    // full season, isSeries()==true).
-    //
-    // The two-stage SeriesDanmakuMatchDialog wants every entry in the
-    // "pick a series" stage to be one row per (work, provider, season) —
-    // not one row per episode. Collapse the flat episode-level rows into
-    // series-level groups keyed by (provider, animeTitle, seasonNumber)
-    // so multi-season works split naturally (different seasons → different
-    // keys) while single-season works collapse into a single row.
-    //
-    // Each aggregated candidate's episodes[] carries the original per-
-    // episode targetId in DanmakuEpisode::cid; the dialog's episode-picker
-    // confirm handler materialises one episode-level candidate per picked
-    // row by reading ep.cid, so the aggregated candidate's own targetId is
-    // irrelevant (kept as the first episode's id for isValid()).
-    QList<DanmakuMatchCandidate> seriesLevel;
-    seriesLevel.reserve(flatCandidates.size());
-
-    QHash<QString, DanmakuMatchCandidate> groupTemplate;
-    QHash<QString, QList<DanmakuEpisode>> groupEpisodes;
-    groupTemplate.reserve(flatCandidates.size());
-    groupEpisodes.reserve(flatCandidates.size());
-
-    for (const DanmakuMatchCandidate &c : flatCandidates) {
-        if (c.isSeries()) {
-            seriesLevel.append(c);
-            continue;
-        }
-        const QString animeTitle = c.subtitle.trimmed();
-        const QString key = QStringLiteral("%1|%2|%3")
-                                .arg(c.provider, animeTitle)
-                                .arg(c.seasonNumber);
-        if (!groupTemplate.contains(key)) {
-            // First episode in this group seeds the candidate's metadata.
-            // episodeNumber / durationMs are series-level meaning-less so
-            // we reset them; the per-episode values live in episodes[].
-            // title is also reset to the anime title so the series
-            // picker shows "凡人修仙传 - 凡人修仙传 (N)" rather than
-            // "<anime> - <some single episode title>".
-            DanmakuMatchCandidate sc = c;
-            sc.title = animeTitle;
-            sc.episodeNumber = -1;
-            sc.durationMs = 0;
-            sc.episodes.clear();
-            groupTemplate.insert(key, sc);
-            groupEpisodes.insert(key, {});
-        }
-        DanmakuEpisode ep;
-        ep.cid = c.targetId;        // original episodeId from the provider
-        ep.episodeNumber = c.episodeNumber;
-        ep.title = c.title;
-        ep.longTitle = c.title;
-        ep.durationMs = c.durationMs;
-        groupEpisodes[key].append(ep);
-    }
-
-    for (auto it = groupTemplate.begin(); it != groupTemplate.end(); ++it) {
-        QList<DanmakuEpisode> eps = groupEpisodes.value(it.key());
-        std::sort(eps.begin(), eps.end(),
-                  [](const DanmakuEpisode &a, const DanmakuEpisode &b) {
-                      const int ax = a.episodeNumber > 0
-                                        ? a.episodeNumber
-                                        : std::numeric_limits<int>::max();
-                      const int bx = b.episodeNumber > 0
-                                        ? b.episodeNumber
-                                        : std::numeric_limits<int>::max();
-                      return ax < bx;
-                  });
-        it.value().episodes = std::move(eps);
-        seriesLevel.append(it.value());
-    }
-    return seriesLevel;
-}
-
 bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const DanmakuMatchCandidate &candidate)
 {
     if (!candidate.isValid())
@@ -1132,6 +1053,85 @@ QList<DanmakuComment> parseLocalXmlComments(const QByteArray &rawData)
 }
 
 } 
+
+QList<DanmakuMatchCandidate> DanmakuService::aggregateEpisodesToSeries(
+    const QList<DanmakuMatchCandidate> &flatCandidates) const
+{
+    // dandanplay / danmu_api return one *episode-level* candidate per row
+    // (targetId = episodeId, episodes[] empty, isSeries()==false). Bilibili
+    // returns *series-level* candidates (episodes[] already filled with the
+    // full season, isSeries()==true).
+    //
+    // The two-stage SeriesDanmakuMatchDialog wants every entry in the
+    // "pick a series" stage to be one row per (work, provider, season) —
+    // not one row per episode. Collapse the flat episode-level rows into
+    // series-level groups keyed by (provider, animeTitle, seasonNumber)
+    // so multi-season works split naturally (different seasons → different
+    // keys) while single-season works collapse into a single row.
+    //
+    // Each aggregated candidate's episodes[] carries the original per-
+    // episode targetId in DanmakuEpisode::cid; the dialog's episode-picker
+    // confirm handler materialises one episode-level candidate per picked
+    // row by reading ep.cid, so the aggregated candidate's own targetId is
+    // irrelevant (kept as the first episode's id for isValid()).
+    QList<DanmakuMatchCandidate> seriesLevel;
+    seriesLevel.reserve(flatCandidates.size());
+
+    QHash<QString, DanmakuMatchCandidate> groupTemplate;
+    QHash<QString, QList<DanmakuEpisode>> groupEpisodes;
+    groupTemplate.reserve(flatCandidates.size());
+    groupEpisodes.reserve(flatCandidates.size());
+
+    for (const DanmakuMatchCandidate &c : flatCandidates) {
+        if (c.isSeries()) {
+            seriesLevel.append(c);
+            continue;
+        }
+        const QString animeTitle = c.subtitle.trimmed();
+        const QString key = QStringLiteral("%1|%2|%3")
+                                .arg(c.provider, animeTitle)
+                                .arg(c.seasonNumber);
+        if (!groupTemplate.contains(key)) {
+            // First episode in this group seeds the candidate's metadata.
+            // episodeNumber / durationMs are series-level meaning-less so
+            // we reset them; the per-episode values live in episodes[].
+            // title is also reset to the anime title so the series
+            // picker shows "凡人修仙传 - 凡人修仙传 (N)" rather than
+            // "<anime> - <some single episode title>".
+            DanmakuMatchCandidate sc = c;
+            sc.title = animeTitle;
+            sc.episodeNumber = -1;
+            sc.durationMs = 0;
+            sc.episodes.clear();
+            groupTemplate.insert(key, sc);
+            groupEpisodes.insert(key, {});
+        }
+        DanmakuEpisode ep;
+        ep.cid = c.targetId;        // original episodeId from the provider
+        ep.episodeNumber = c.episodeNumber;
+        ep.title = c.title;
+        ep.longTitle = c.title;
+        ep.durationMs = c.durationMs;
+        groupEpisodes[key].append(ep);
+    }
+
+    for (auto it = groupTemplate.begin(); it != groupTemplate.end(); ++it) {
+        QList<DanmakuEpisode> eps = groupEpisodes.value(it.key());
+        std::sort(eps.begin(), eps.end(),
+                  [](const DanmakuEpisode &a, const DanmakuEpisode &b) {
+                      const int ax = a.episodeNumber > 0
+                                        ? a.episodeNumber
+                                        : std::numeric_limits<int>::max();
+                      const int bx = b.episodeNumber > 0
+                                        ? b.episodeNumber
+                                        : std::numeric_limits<int>::max();
+                      return ax < bx;
+                  });
+        it.value().episodes = std::move(eps);
+        seriesLevel.append(it.value());
+    }
+    return seriesLevel;
+}
 
 DanmakuService::DanmakuService(NetworkManager *networkManager, ServerManager *serverManager, QObject *parent)
     : QObject(parent), m_networkManager(networkManager), m_serverManager(serverManager),
