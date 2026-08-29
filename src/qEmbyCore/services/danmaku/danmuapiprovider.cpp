@@ -501,16 +501,27 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmuApiProvider::searchCandidates(
     QString episodeParameter;
     if (searchContext.isEpisode() && hint.episodeNumber > 0) {
         episodeParameter = QString::number(hint.episodeNumber);
-    } else if (!searchContext.isEpisode()) {
-        episodeParameter = QStringLiteral("movie");
     }
+    // When the active context is a Series/Movie (not an Episode), do NOT
+    // send an episode filter at all. The previous code sent the magic
+    // string "movie" for non-episode contexts, but dandanplay-compatible
+    // services (e.g. the user's ziji / LogVar danmu_api) interpret
+    // episode=movie as "movies only" and return zero rows for series like
+    // 凡人修仙传. Sending no episode param returns the full work
+    // catalogue, matching the dandanplay provider's behaviour (which
+    // skips the param when episodeParameter is empty, see
+    // DandanplayProvider::buildEpisodeSearchRequests). Movies and
+    // non-episodic works still resolve correctly: ziji returns the same
+    // 1 anime for 肖申克的救赎 whether episode=movie is sent or not.
 
     const QString path = QStringLiteral("/api/v2/search/episodes");
     QJsonObject response;
     try {
-        const QList<QPair<QString, QString>> queryItems{
-            {QStringLiteral("anime"), querySubject},
-            {QStringLiteral("episode"), episodeParameter}};
+        QList<QPair<QString, QString>> queryItems{
+            {QStringLiteral("anime"), querySubject}};
+        if (!episodeParameter.isEmpty()) {
+            queryItems.append({QStringLiteral("episode"), episodeParameter});
+        }
         const QString url = buildUrl(config, path, queryItems);
         const QMap<QString, QString> headers = requestHeaders();
         const NetworkRequestOptions options = requestOptions();
