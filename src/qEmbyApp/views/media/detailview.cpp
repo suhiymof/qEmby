@@ -10,6 +10,7 @@
 #include "../../components/mediasectionwidget.h"
 #include "../../components/modernmenubutton.h"
 #include "../../components/moderntoast.h"
+#include "seriesdanmakumatchdialog.h"
 #include "../../managers/playbackmanager.h"
 #include <models/media/playerlaunchcontext.h>
 #include "../../managers/thememanager.h"
@@ -23,6 +24,7 @@
 #include <config/config_keys.h>
 #include <config/configstore.h>
 #include <qembycore.h>
+#include <services/danmaku/danmakuservice.h>
 #include <services/manager/servermanager.h>
 #include <services/media/mediaservice.h>
 #include <services/trakt/traktservice.h>
@@ -678,6 +680,8 @@ void DetailView::setupUi()
     connect(m_actionWidget, &DetailActionWidget::traktUnmarkWatchedRequested, this,
             [this]() -> QCoro::Task<void>
             { co_await traktSyncWatched(m_currentMediaItem, false); });
+    connect(m_actionWidget, &DetailActionWidget::danmakuMatchRequested, this,
+            [this]() { openDanmakuSeriesMatch(); });
 
     m_taglineLabel = new QLabel(m_textContainer);
     m_taglineLabel->setObjectName("detail-tagline");
@@ -2702,6 +2706,51 @@ void DetailView::traktSyncFeedback(bool success, bool watched)
     else
         ModernToast::showMessage(tr("Trakt sync failed (item not found or offline)"),
                                  2400);
+}
+
+void DetailView::openDanmakuSeriesMatch()
+{
+    if (m_currentMediaItem.id.isEmpty() || !m_core || !m_core->danmakuService())
+        return;
+
+    // Build a danmaku media context from the current item so the two-stage
+    // series matcher can search providers (Bilibili season, dandanplay, ...).
+    DanmakuMediaContext context;
+    context.serverId = activeServerId(m_core);
+    context.mediaId = m_currentMediaItem.id;
+    context.itemType = m_currentMediaItem.type;
+    context.title = m_currentMediaItem.name;
+    context.originalTitle = m_currentMediaItem.originalTitle;
+    context.seriesName = m_currentMediaItem.seriesName;
+    context.productionYear = m_currentMediaItem.productionYear;
+    context.seasonNumber = m_currentMediaItem.parentIndexNumber;
+    context.episodeNumber = m_currentMediaItem.indexNumber;
+    context.providerIds = m_currentMediaItem.providerIds;
+
+    // Multi mode: pre-bind several episodes of the chosen series at once.
+    auto *dialog = new SeriesDanmakuMatchDialog(
+        m_core, SeriesDanmakuMatchDialog::Mode::Multi,
+        {}, context, m_currentMediaItem.seriesName, QString(), QString(),
+        this);
+    connect(dialog, &SeriesDanmakuMatchDialog::finished, this,
+            [this, dialog, context](int result) {
+                if (result == PlayerOverlayDialog::Accepted) {
+                    const QList<DanmakuMatchCandidate> picked =
+                        dialog->selectedEpisodes();
+                    if (!picked.isEmpty()) {
+                        DanmakuService *service = m_core->danmakuService();
+                        for (const DanmakuMatchCandidate &candidate : picked) {
+                            service->saveManualMatch(context, candidate);
+                        }
+                        ModernToast::showMessage(
+                            tr("Saved %1 danmaku match(es) for this series")
+                                .arg(picked.size()),
+                            2500);
+                    }
+                }
+                dialog->deleteLater();
+            });
+    dialog->open();
 }
 
 void DetailView::updateBackdrop()

@@ -99,6 +99,16 @@ struct QEMBYCORE_EXPORT DanmakuMediaContext {
 };
 Q_DECLARE_METATYPE(DanmakuMediaContext)
 
+struct QEMBYCORE_EXPORT DanmakuEpisode {
+    int episodeNumber = -1;
+    QString cid;            // Bilibili cid (used as the danmaku target id)
+    QString title;          // short title, e.g. "3"
+    QString longTitle;      // full title, e.g. "凡人风起天南3重制版"
+    QString seasonName;     // sub-season name parsed from longTitle, e.g. "风起天南"
+    qint64 durationMs = 0;
+};
+Q_DECLARE_METATYPE(DanmakuEpisode)
+
 struct QEMBYCORE_EXPORT DanmakuMatchCandidate {
     QString provider;
     QString cacheScope;
@@ -113,6 +123,14 @@ struct QEMBYCORE_EXPORT DanmakuMatchCandidate {
     double score = 0.0;
     QString matchReason;
     int commentCount = 0;
+    // Series-level candidates carry the full episode list here so the UI can
+    // render a secondary "pick episode" step without another network round
+    // trip. Episode-level candidates leave it empty.
+    QList<DanmakuEpisode> episodes;
+
+    bool isSeries() const {
+        return !episodes.isEmpty();
+    }
 
     bool isHashMatch() const {
         return matchReason.compare(QStringLiteral("hash"),

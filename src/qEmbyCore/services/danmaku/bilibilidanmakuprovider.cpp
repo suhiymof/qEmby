@@ -419,6 +419,27 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             continue;
         }
 
+        // 3) Aggregate into ONE series-level candidate. The UI renders a
+        //    secondary "pick episode" step from candidate.episodes, so the
+        //    search result list stays small (one row per series) and the
+        //    season data is fetched once per series instead of per episode.
+        DanmakuMatchCandidate seriesCandidate;
+        seriesCandidate.provider = QStringLiteral("bilibili");
+        seriesCandidate.targetId = QString::number(seasonId);
+        seriesCandidate.title = seriesTitle;
+        seriesCandidate.subtitle = seriesTitle;
+        seriesCandidate.matchReason = QStringLiteral("media_bangumi");
+        seriesCandidate.commentCount = mainEpisodes;
+        // Score: series-title match (seriesTitle already includes the season
+        // name for most shows, e.g. "凡人修仙传"), plus a bonus when the
+        // queried series name matches the search subject directly.
+        seriesCandidate.score = titleScore(querySubject, seriesTitle) * 60.0;
+        if (!seriesTitle.trimmed().isEmpty() &&
+            !querySubject.trimmed().isEmpty() &&
+            normalizedTitle(seriesTitle).contains(normalizedTitle(querySubject))) {
+            seriesCandidate.score += 12.0;
+        }
+
         for (const QJsonValue &episodeValue : episodes) {
             const QJsonObject episode = episodeValue.toObject();
             if (episode.value(QStringLiteral("section_type")).toInt(-1) != 0) {
@@ -432,43 +453,19 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             const QString longTitle =
                 episode.value(QStringLiteral("long_title")).toString().trimmed();
             const QPair<QString, int> parsed = parseLongTitle(longTitle);
-            const QString episodePartTitle = longTitle.isEmpty()
-                ? episode.value(QStringLiteral("title")).toString().trimmed()
-                : longTitle;
 
-            DanmakuMatchCandidate candidate;
-            candidate.provider = QStringLiteral("bilibili");
-            candidate.targetId = cid;
-            candidate.title = episodePartTitle;
-            candidate.subtitle =
-                parsed.first.isEmpty() ? seriesTitle : parsed.first;
-            candidate.episodeNumber = parsed.second;
-            candidate.durationMs = static_cast<qint64>(
+            DanmakuEpisode ep;
+            ep.episodeNumber = parsed.second;
+            ep.cid = cid;
+            ep.title = episode.value(QStringLiteral("title")).toString().trimmed();
+            ep.longTitle = longTitle.isEmpty() ? ep.title : longTitle;
+            ep.seasonName = parsed.first;
+            ep.durationMs = static_cast<qint64>(
                 episode.value(QStringLiteral("duration")).toVariant().toDouble() * 1000.0);
-            candidate.matchReason = QStringLiteral("media_bangumi");
-            // B站 long_title 只含子季名 + 集号（如 "风起天南1重制版"），
-            // 不含剧名前缀；裸用 titleScore("凡人修仙传", "风起天南1") 字
-            // 符 bigram 重叠几乎为 0。改用 [剧名, 子季名+集号] 双键评分：
-            // 任意一边命中都能拿到分。
-            const double titleScorePart = titleScore(querySubject, episodePartTitle);
-            const double seriesScorePart =
-                parsed.first.isEmpty() ? 0.0
-                                       : titleScore(querySubject,
-                                                    seriesTitle + QStringLiteral(" ") + parsed.first);
-            candidate.score = qMax(titleScorePart, seriesScorePart) * 60.0;
-            // 同一季名出现的 ep 视为更相关（与 seriesName 含子季名加分一致）。
-            if (!parsed.first.isEmpty() &&
-                !context.seriesName.trimmed().isEmpty() &&
-                parsed.first.contains(context.seriesName.trimmed(), Qt::CaseInsensitive)) {
-                candidate.score += 6.0;
-            }
-            if (context.isEpisode() && context.episodeNumber > 0 &&
-                candidate.episodeNumber == context.episodeNumber) {
-                candidate.score += 24.0;
-            }
-            if (candidate.isValid()) {
-                candidates.append(candidate);
-            }
+            seriesCandidate.episodes.append(ep);
+        }
+        if (!seriesCandidate.episodes.isEmpty()) {
+            candidates.append(seriesCandidate);
         }
         ++resolved;
     }
@@ -483,7 +480,7 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
     }
     qDebug().noquote() << "[BiliBili] search done"
                        << "| querySubject:" << querySubject
-                       << "| candidates:" << candidates.size();
+                       << "| series candidates:" << candidates.size();
     co_return candidates;
 }
 
@@ -497,12 +494,36 @@ QCoro::Task<QList<DanmakuComment>> BiliBiliDanmakuProvider::fetchComments(
         co_return comments;
     }
 
+    // Resolve the concrete cid. Two shapes are accepted:
+    //   1) episode-level:  targetId == cid  (normal path, saved manual match)
+    //   2) series-level:   targetId == season_id, episodeNumber set — pick the
+    //      matching episode from the embedded list (auto-match path).
+    QString cid = candidate.targetId.trimmed();
+    if (candidate.isSeries()) {
+        cid.clear();
+        for (const DanmakuEpisode &ep : candidate.episodes) {
+            if (ep.episodeNumber == candidate.episodeNumber) {
+                cid = ep.cid;
+                break;
+            }
+        }
+        if (cid.isEmpty() && !candidate.episodes.isEmpty()) {
+            cid = candidate.episodes.constFirst().cid;
+        }
+    }
+    if (cid.isEmpty()) {
+        qWarning() << "[BiliBili] fetchComments aborted: no cid resolved"
+                   << "| targetId:" << candidate.targetId
+                   << "| episodeNumber:" << candidate.episodeNumber
+                   << "| episodes:" << candidate.episodes.size();
+        co_return comments;
+    }
+
     co_await auth->ensureBuvid3();
     const QString cookie = auth->cookieHeader();
 
     const QByteArray raw = co_await m_networkManager->getBytes(
-        QStringLiteral("https://comment.bilibili.com/%1.xml")
-            .arg(candidate.targetId),
+        QStringLiteral("https://comment.bilibili.com/%1.xml").arg(cid),
         requestHeaders(cookie), requestOptions());
 
     QByteArray xml = raw;
@@ -516,7 +537,8 @@ QCoro::Task<QList<DanmakuComment>> BiliBiliDanmakuProvider::fetchComments(
 
     comments = parseDanmakuXml(xml);
     qDebug().noquote() << "[BiliBili] Comments fetched"
-                       << "| targetId:" << candidate.targetId
+                       << "| cid:" << cid
+                       << "| episodeNumber:" << candidate.episodeNumber
                        << "| count:" << comments.size();
     co_return comments;
 }

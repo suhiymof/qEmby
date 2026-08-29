@@ -33,6 +33,10 @@ public:
     void setTraktItemType(const QString& itemType);
     void updateTraktButtonVisibility();
 
+    // Danmaku match button: visible for Movie / Episode / Series. The detail
+    // view connects danmakuMatchRequested to the two-stage series matcher.
+    void setDanmakuMatchVisible(bool visible);
+
     int currentSourceIndex() const;
     int currentAudioIndex() const;
     int currentSubtitleIndex() const;
@@ -47,6 +51,7 @@ signals:
     void playedToggleRequested();
     void traktMarkWatchedRequested();
     void traktUnmarkWatchedRequested();
+    void danmakuMatchRequested();
     void sourceVersionChanged(int index);
     void audioStreamChanged(int streamIndex);
     void subtitleStreamChanged(int streamIndex);
@@ -60,6 +65,7 @@ private:
     QPushButton* m_favBtn;
     QPushButton* m_playedBtn;
     QPushButton* m_traktBtn = nullptr;
+    QPushButton* m_danmakuMatchBtn = nullptr;
     QString m_traktItemType;
 
     QWidget* m_progressWidget;

@@ -2,6 +2,7 @@
 
 #include "loadingoverlay.h"
 #include "moderntoast.h"
+#include "seriesdanmakumatchdialog.h"
 #include "../managers/thememanager.h"
 
 #include <qembycore.h>
@@ -111,11 +112,19 @@ QString candidateCountText(const DanmakuMatchCandidate &candidate)
 
 QString buildResultDisplayText(const DanmakuMatchCandidate &candidate)
 {
-    const QString title =
+    QString title =
         candidate.displayText().trimmed().isEmpty()
             ? QCoreApplication::translate("PlayerDanmakuIdentifyDialog",
                                           "Unknown Danmaku")
             : candidate.displayText().trimmed();
+    // Series-level candidates (e.g. Bilibili season) carry an embedded
+    // episode list; surface the episode count so the user knows clicking
+    // the row opens the two-stage episode picker.
+    if (candidate.isSeries()) {
+        title = QStringLiteral("%1 (%2)")
+                    .arg(title)
+                    .arg(candidate.episodes.size());
+    }
     QStringList detailParts;
     if (isLocalCandidate(candidate)) {
         detailParts.append(providerDisplayName(candidate.provider));
@@ -362,6 +371,18 @@ PlayerDanmakuIdentifyDialog::PlayerDanmakuIdentifyDialog(
                 refreshDetail();
                 updateApplyButtonState();
             });
+    connect(m_resultList, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem *item) {
+                const QVariant data = item->data(kDanmakuCandidateRole);
+                if (!data.canConvert<DanmakuMatchCandidate>()) {
+                    return;
+                }
+                const DanmakuMatchCandidate candidate =
+                    data.value<DanmakuMatchCandidate>();
+                if (candidate.isSeries()) {
+                    openSeriesEpisodePicker(candidate);
+                }
+            });
     connect(m_filterEdit, &QLineEdit::textChanged, this,
             [this](const QString &text) {
                 m_filterText = text;
@@ -374,6 +395,10 @@ PlayerDanmakuIdentifyDialog::PlayerDanmakuIdentifyDialog(
 
 DanmakuMatchCandidate PlayerDanmakuIdentifyDialog::selectedCandidate() const
 {
+    // An episode picked inside a series candidate wins over a plain row.
+    if (m_episodeOverride.isValid()) {
+        return m_episodeOverride;
+    }
     const QListWidgetItem *item =
         m_resultList ? m_resultList->currentItem() : nullptr;
     if (!item) {
@@ -385,6 +410,31 @@ DanmakuMatchCandidate PlayerDanmakuIdentifyDialog::selectedCandidate() const
         return {};
     }
     return data.value<DanmakuMatchCandidate>();
+}
+
+void PlayerDanmakuIdentifyDialog::openSeriesEpisodePicker(
+    const DanmakuMatchCandidate &seriesCandidate)
+{
+    if (m_isLoading) {
+        return;
+    }
+    auto *dialog = new SeriesDanmakuMatchDialog(
+        m_core, SeriesDanmakuMatchDialog::Mode::Single,
+        {seriesCandidate}, m_context, QString(), m_activeTargetId,
+        m_activeEndpointId, this);
+    connect(dialog, &SeriesDanmakuMatchDialog::finished, this,
+            [this, dialog](int result) {
+                if (result == PlayerOverlayDialog::Accepted) {
+                    const QList<DanmakuMatchCandidate> picked =
+                        dialog->selectedEpisodes();
+                    if (!picked.isEmpty()) {
+                        m_episodeOverride = picked.constFirst();
+                        accept();
+                    }
+                }
+                dialog->deleteLater();
+            });
+    dialog->open();
 }
 
 void PlayerDanmakuIdentifyDialog::showEvent(QShowEvent *event)

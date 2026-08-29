@@ -49,6 +49,9 @@ private:
     void updateApplyButtonState();
     void updateStatusText(const QString &text);
     void updateResultStatusText();
+    // A series-level candidate was clicked: open the two-stage episode
+    // picker. On confirm the picked episode becomes the dialog result.
+    void openSeriesEpisodePicker(const DanmakuMatchCandidate &seriesCandidate);
 
     QEmbyCore *m_core = nullptr;
     DanmakuMediaContext m_context;
@@ -71,6 +74,9 @@ private:
     std::optional<QCoro::Task<void>> m_pendingTask;
     QString m_activeTargetId;
     QString m_activeEndpointId;
+    // Set when the user picked an episode inside a series candidate; takes
+    // precedence over any single row selection in selectedCandidate().
+    DanmakuMatchCandidate m_episodeOverride;
 };
 
 #endif 

@@ -59,6 +59,13 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   m_traktBtn->setToolTip(tr("Sync watched status to Trakt"));
   m_traktBtn->hide();
 
+  m_danmakuMatchBtn = new QPushButton(QStringLiteral("\U0001F4AC ") + tr("Match Danmaku"), this);
+  m_danmakuMatchBtn->setObjectName("detail-danmaku-match-btn");
+  m_danmakuMatchBtn->setCursor(Qt::PointingHandCursor);
+  m_danmakuMatchBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_danmakuMatchBtn->setToolTip(tr("Match danmaku for this item"));
+  m_danmakuMatchBtn->hide();
+
   m_progressWidget = new QWidget(this);
   m_progressWidget->setMaximumWidth(450);
   auto *progressLayout = new QHBoxLayout(m_progressWidget);
@@ -92,6 +99,7 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   actionsLayout->addWidget(m_favBtn);
   actionsLayout->addWidget(m_playedBtn);
   actionsLayout->addWidget(m_traktBtn);
+  actionsLayout->addWidget(m_danmakuMatchBtn);
   actionsLayout->addWidget(m_progressWidget);
   actionsLayout->addStretch();
 
@@ -120,6 +128,8 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
           &DetailActionWidget::favoriteRequested);
   connect(m_playedBtn, &QPushButton::clicked, this,
           &DetailActionWidget::playedToggleRequested);
+  connect(m_danmakuMatchBtn, &QPushButton::clicked, this,
+          &DetailActionWidget::danmakuMatchRequested);
   connect(m_traktBtn, &QPushButton::clicked, this, [this]() {
     QMenu menu(m_traktBtn);
     QAction* markAction = menu.addAction(tr("Mark as Watched"));
@@ -157,6 +167,8 @@ void DetailActionWidget::clear() {
   m_traktItemType.clear();
   if (m_traktBtn)
     m_traktBtn->hide();
+  if (m_danmakuMatchBtn)
+    m_danmakuMatchBtn->hide();
 
   m_versionComboBox->blockSignals(true);
   m_versionComboBox->clear();
@@ -180,6 +192,12 @@ void DetailActionWidget::setTraktItemType(const QString& itemType) {
   updateTraktButtonVisibility();
 }
 
+void DetailActionWidget::setDanmakuMatchVisible(bool visible) {
+  if (m_danmakuMatchBtn) {
+    m_danmakuMatchBtn->setVisible(visible);
+  }
+}
+
 void DetailActionWidget::updateTraktButtonVisibility() {
   if (!m_traktBtn)
     return;
@@ -198,6 +216,10 @@ void DetailActionWidget::updateTraktButtonVisibility() {
 
 void DetailActionWidget::setupNormalMode(const MediaItem &item) {
   setTraktItemType(item.type);
+  setDanmakuMatchVisible(
+      item.type == QLatin1String("Movie") ||
+      item.type == QLatin1String("Episode") ||
+      item.type == QLatin1String("Series"));
   m_playBtn->setEnabled(true);
   if (item.userData.playedPercentage > 0 &&
       item.userData.playedPercentage < 100) {
@@ -231,6 +253,7 @@ void DetailActionWidget::setSeriesLoadingMode() {
 void DetailActionWidget::setupSeriesMode(const MediaItem &nextUpItem,
                                          const QString &epTag) {
   setTraktItemType(QLatin1String("Series"));
+  setDanmakuMatchVisible(true);
   m_playBtn->setEnabled(true);
   if (nextUpItem.userData.playbackPositionTicks > 0) {
     m_resumeBtn->show();
