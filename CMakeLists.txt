@@ -99,7 +99,13 @@ set(SKIP_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
 set(SKIP_SHARED_LIB_COMPILE_FLAG ON CACHE BOOL "" FORCE)
 set(SKIP_STATIC_LIB_COMPILE_FLAG ON CACHE BOOL "" FORCE)
 FetchContent_Declare(zlib
-    URL https://zlib.net/fossils/zlib-1.3.1.tar.gz
+    # GitHub tag tarball instead of zlib.net: the zlib.net fossil tarball
+    # carries a gzip header with the FNAME flag (1f8b 0808), which the
+    # CMake 4.4 bundled libarchive on the Windows CI runner refuses to
+    # open ("Unrecognized archive format"). GitHub's tag tarball uses a
+    # plain gzip header (1f8b 0800) and extracts fine. Same zlib-1.3.1
+    # source tree either way (zlib-1.3.1/ containing CMakeLists.txt).
+    URL https://github.com/madler/zlib/archive/refs/tags/v1.3.1.tar.gz
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(zlib)
