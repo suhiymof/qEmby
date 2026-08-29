@@ -548,6 +548,18 @@ Error: </source>
         <source>No Subtitles</source>
         <translation>无字幕</translation>
     </message>
+    <message>
+        <source>Sync watched status to Trakt</source>
+        <translation>同步已看状态到 Trakt</translation>
+    </message>
+    <message>
+        <source>Mark as Watched</source>
+        <translation>标记为已看</translation>
+    </message>
+    <message>
+        <source>Remove from History</source>
+        <translation>从历史记录移除</translation>
+    </message>
 </context>
 
 <context>
@@ -1458,6 +1470,18 @@ Choose a file, paste an image URL, or drag one onto the preview.</source>
         <source>Lyricist</source>
         <translation>作词</translation>
     </message>
+    <message>
+        <source>Trakt: marked as watched</source>
+        <translation>Trakt：已标记为已看</translation>
+    </message>
+    <message>
+        <source>Trakt: removed from history</source>
+        <translation>Trakt：已从历史记录移除</translation>
+    </message>
+    <message>
+        <source>Trakt sync failed (item not found or offline)</source>
+        <translation>Trakt 同步失败（未找到条目或离线）</translation>
+    </message>
 </context>
 
 <context>
@@ -2033,6 +2057,16 @@ Choose a file, paste an image URL, or drag one onto the preview.</source>
     <message>
         <source>Fullscreen</source>
         <translation>全屏</translation>
+    </message>
+    <message>
+        <source>Trakt Resume</source>
+        <translation>Trakt 续播</translation>
+    </message>
+    <message>
+        <source>Trakt progress: %1 (%2)
+Continue from there?</source>
+        <translation>Trakt 进度：%1（%2）
+是否从该位置继续？</translation>
     </message>
 </context>
 
@@ -5926,6 +5960,18 @@ Do you want to continue?</source>
     <message>
         <source>Books</source>
         <translation>图书</translation>
+    </message>
+    <message>
+        <source>Not signed in</source>
+        <translation>未登录</translation>
+    </message>
+    <message>
+        <source>Signed in</source>
+        <translation>已登录</translation>
+    </message>
+    <message>
+        <source>Signed in as %1</source>
+        <translation>已登录为 %1</translation>
     </message>
 </context>
 
@@ -9858,6 +9904,78 @@ This cannot be undone.</source>
     <message>
         <source>Presets</source>
         <translation>预设</translation>
+    </message>
+</context>
+
+<context>
+    <name>PageTrakt</name>
+    <message>
+        <source>Trakt</source>
+        <translation>Trakt</translation>
+    </message>
+    <message>
+        <source>Trakt Account</source>
+        <translation>Trakt 账号</translation>
+    </message>
+    <message>
+        <source>Sign In</source>
+        <translation>登录</translation>
+    </message>
+    <message>
+        <source>Sign Out</source>
+        <translation>登出</translation>
+    </message>
+    <message>
+        <source>Real-time Scrobble</source>
+        <translation>实时追踪</translation>
+    </message>
+    <message>
+        <source>Report watch progress to Trakt while playing</source>
+        <translation>播放时向 Trakt 报告观看进度</translation>
+    </message>
+    <message>
+        <source>Sync Watched Status</source>
+        <translation>同步已看状态</translation>
+    </message>
+    <message>
+        <source>Show a Trakt sync button on detail pages</source>
+        <translation>在详情页显示 Trakt 同步按钮</translation>
+    </message>
+    <message>
+        <source>Resume Check</source>
+        <translation>续播检查</translation>
+    </message>
+    <message>
+        <source>Check Trakt progress on playback and offer to resume from it</source>
+        <translation>播放时检查 Trakt 进度，并询问是否从该处继续</translation>
+    </message>
+    <message>
+        <source>Requesting device code...</source>
+        <translation>正在获取设备码...</translation>
+    </message>
+    <message>
+        <source>Waiting for approval... (code %1)</source>
+        <translation>等待授权...（验证码 %1）</translation>
+    </message>
+    <message>
+        <source>Code expired, please try again</source>
+        <translation>验证码已过期，请重试</translation>
+    </message>
+    <message>
+        <source>Login failed, please try again</source>
+        <translation>登录失败，请重试</translation>
+    </message>
+    <message>
+        <source>Login failed: %1</source>
+        <translation>登录失败：%1</translation>
+    </message>
+</context>
+
+<context>
+    <name>TraktLoginDialog</name>
+    <message>
+        <source>Trakt Authorization</source>
+        <translation>Trakt 授权</translation>
     </message>
 </context>
 </TS>
