@@ -45,6 +45,8 @@ PageBilibili::PageBilibili(QEmbyCore *core, QWidget *parent)
     m_mainLayout->addWidget(m_accountCard);
     m_mainLayout->addStretch();
 
+    refreshAccountUi();
+
     connect(m_accountBtn, &QPushButton::clicked, this, [this]() {
         if (m_loginInProgress) {
             return;

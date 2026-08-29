@@ -282,7 +282,13 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
 {
     QList<DanmakuMatchCandidate> candidates;
     BiliBiliAuthService *auth = BiliBiliAuthService::instance();
-    if (!m_networkManager || !auth->isLoggedIn()) {
+    if (!m_networkManager) {
+        qWarning() << "[BiliBili] search aborted: no network manager";
+        co_return candidates;
+    }
+    if (!auth->isLoggedIn()) {
+        qWarning() << "[BiliBili] search aborted: not logged in"
+                   << "| (SESSDATA missing in ConfigStore)";
         co_return candidates;
     }
 
@@ -294,12 +300,25 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             ? (context.isEpisode() ? context.seriesName.trimmed()
                                    : context.title.trimmed())
             : manualKeyword.trimmed();
+    qDebug().noquote() << "[BiliBili] search begin"
+                       << "| querySubject:" << querySubject
+                       << "| isEpisode:" << context.isEpisode()
+                       << "| episodeNumber:" << context.episodeNumber
+                       << "| seriesName:" << context.seriesName
+                       << "| manualKeyword:" << manualKeyword.trimmed()
+                       << "| cookie length:" << cookie.size();
     if (querySubject.isEmpty()) {
+        qWarning() << "[BiliBili] search aborted: empty querySubject"
+                   << "| context.title:" << context.title
+                   << "| context.seriesName:" << context.seriesName;
         co_return candidates;
     }
 
     const WbiKeys wbi = co_await fetchWbiKeys(m_networkManager, cookie);
     if (wbi.imgKey.isEmpty() || wbi.subKey.isEmpty()) {
+        qWarning() << "[BiliBili] search aborted: WBI keys unavailable"
+                   << "| imgKey empty:" << wbi.imgKey.isEmpty()
+                   << "| subKey empty:" << wbi.subKey.isEmpty();
         co_return candidates;
     }
 
@@ -325,18 +344,24 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
         searchResponse = co_await m_networkManager->get(
             searchUrl.toString(), requestHeaders(cookie), requestOptions());
     } catch (const std::exception &e) {
-        qWarning().noquote() << "[BiliBili] media_bangumi search failed"
-                             << "| error:" << e.what();
+        qWarning().noquote() << "[BiliBili] media_bangumi search failed (network)"
+                             << "| error:" << e.what()
+                             << "| url:" << searchUrl.toString().left(160);
         co_return candidates;
     }
+    const int searchCode = searchResponse.value(QStringLiteral("code")).toInt(-999);
     const QJsonArray results =
         searchResponse.value(QStringLiteral("data"))
             .toObject()
             .value(QStringLiteral("result"))
             .toArray();
+    qDebug().noquote() << "[BiliBili] media_bangumi search response"
+                       << "| top-level code:" << searchCode
+                       << "| result count:" << results.size();
     if (results.isEmpty()) {
         qDebug().noquote() << "[BiliBili] media_bangumi search returned no results"
-                           << "| keyword:" << querySubject;
+                           << "| keyword:" << querySubject
+                           << "| top-level code:" << searchCode;
         co_return candidates;
     }
 
@@ -353,6 +378,9 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
         const QString seriesTitle = stripHtmlTags(
             result.value(QStringLiteral("title")).toString());
         if (seasonId <= 0 || seriesTitle.isEmpty()) {
+            qDebug().noquote() << "[BiliBili] skip search result: missing fields"
+                               << "| seasonId:" << seasonId
+                               << "| seriesTitle:" << seriesTitle;
             continue;
         }
 
@@ -367,7 +395,7 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             seasonResponse = co_await m_networkManager->get(
                 seasonUrl, requestHeaders(cookie), requestOptions());
         } catch (const std::exception &e) {
-            qWarning().noquote() << "[BiliBili] season detail failed"
+            qWarning().noquote() << "[BiliBili] season detail failed (network)"
                                  << "| seasonId:" << seasonId
                                  << "| error:" << e.what();
             continue;
@@ -377,6 +405,16 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
                 .toObject()
                 .value(QStringLiteral("episodes"))
                 .toArray();
+        int mainEpisodes = 0;
+        for (const QJsonValue &ep : episodes) {
+            if (ep.toObject().value(QStringLiteral("section_type")).toInt(-1) == 0) {
+                ++mainEpisodes;
+            }
+        }
+        qDebug().noquote() << "[BiliBili] season detail"
+                           << "| seasonId:" << seasonId
+                           << "| total episodes:" << episodes.size()
+                           << "| main (section_type=0):" << mainEpisodes;
         if (episodes.isEmpty()) {
             continue;
         }
@@ -436,6 +474,9 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
     if (candidates.size() > kMaxSearchCandidates) {
         candidates.resize(kMaxSearchCandidates);
     }
+    qDebug().noquote() << "[BiliBili] search done"
+                       << "| querySubject:" << querySubject
+                       << "| candidates:" << candidates.size();
     co_return candidates;
 }
 
