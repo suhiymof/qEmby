@@ -467,11 +467,44 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
                                  << "| error:" << e.what();
             continue;
         }
-        const QJsonArray episodes =
-            seasonResponse.value(QStringLiteral("data"))
+        // The /pgc/view/web/season endpoint returns the season payload under
+        // the top-level "result" key (NOT "data" as for /x/web-interface/*).
+        // A parent season_id that maps to a multi-season series (e.g. "凡人
+        // 修仙传" which has 风起天南/魔道争锋/... under one series page) will
+        // return episodes=[] at this level and instead carry the sub-seasons
+        // under result.seasons[]. We accept both shapes; the second one is
+        // flattened here into the unified episodes array.
+        const QJsonArray directEpisodes =
+            seasonResponse.value(QStringLiteral("result"))
                 .toObject()
                 .value(QStringLiteral("episodes"))
                 .toArray();
+        QJsonArray episodes = directEpisodes;
+        if (episodes.isEmpty()) {
+            const QJsonArray seasons =
+                seasonResponse.value(QStringLiteral("result"))
+                    .toObject()
+                    .value(QStringLiteral("seasons"))
+                    .toArray();
+            qDebug().noquote() << "[BiliBili] season expansion"
+                               << "| seasonId:" << seasonId
+                               << "| direct episodes:" << directEpisodes.size()
+                               << "| sub seasons:" << seasons.size();
+            for (const QJsonValue &sVal : seasons) {
+                const QJsonObject sub = sVal.toObject();
+                for (const QJsonValue &epVal :
+                     sub.value(QStringLiteral("episodes")).toArray()) {
+                    QJsonObject epObj = epVal.toObject();
+                    // Inherit section_type=0 from the sub-season scope when the
+                    // merged entry lacks it (each sub-season already filters
+                    // by section_type, so missing usually means main).
+                    if (!epObj.contains(QStringLiteral("section_type"))) {
+                        epObj.insert(QStringLiteral("section_type"), 0);
+                    }
+                    episodes.append(epObj);
+                }
+            }
+        }
         int mainEpisodes = 0;
         for (const QJsonValue &ep : episodes) {
             if (ep.toObject().value(QStringLiteral("section_type")).toInt(-1) == 0) {
