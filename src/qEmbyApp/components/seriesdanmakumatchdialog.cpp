@@ -494,8 +494,17 @@ QCoro::Task<void> SeriesDanmakuMatchDialog::searchSeries(QString queryText)
     updateUiState();
 
     try {
+        // Single-server search: only the danmaku sources enabled on the
+        // current Emby server are queried. The cross-server aggregator
+        // (searchAllCandidatesAcrossServers) previously pulled sources
+        // from every configured Emby server, which duplicated the same
+        // service when it was registered under multiple servers (e.g.
+        // the same ziji endpoint on A服 and B服) and inflated episode
+        // counts (风起天南 590 = 295 × 2). The user explicitly wants
+        // "search the sources enabled on the server I'm using" — no
+        // cross-server traversal, no duplicate queries.
         const QList<DanmakuMatchCandidate> results =
-            co_await core->danmakuService()->searchAllCandidatesAcrossServers(
+            co_await core->danmakuService()->searchAllCandidates(
                 context, queryText);
         if (!safeThis) {
             co_return;

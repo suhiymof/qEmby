@@ -923,7 +923,7 @@ EpisodeSearchBatchOutcome processEpisodeSearchResponses(
         QList<DanmakuMatchCandidate> candidates =
             parseSearchResponse(response.object, context, keyword,
                                 requestedEpisodeNumber,
-                                excludeClearlyEpisodicWorks, isManualSearch);
+                                excludeClearlyEpisodicWorks);
         if (context.isEpisode() && !isManualSearch) {
             candidates.erase(
                 std::remove_if(
