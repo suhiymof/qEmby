@@ -138,6 +138,14 @@ QCoro::Task<void> PageBilibili::startLogin()
         // When the cookies are in place the login is complete even if the
         // poll has not yet flipped to code 0.
         if (code == 0 || service->isLoggedIn()) {
+            // Make sure the display name is fetched: pollLogin only does it
+            // inside its data.code==0 branch, but the cookie-first path may
+            // break out before that branch runs.
+            try {
+                co_await service->fetchProfile();
+            } catch (const std::exception &e) {
+                qWarning().noquote() << "[BiliBili] fetchProfile error:" << e.what();
+            }
             break;
         }
         if (code == 86038) { // expired

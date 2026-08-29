@@ -48,6 +48,10 @@ public:
     // to our m_nam, so we capture the cookies here.
     void onCookieAdded(const QNetworkCookie &cookie);
 
+    // Best-effort fetch of the account profile (display name) for the
+    // already-captured SESSDATA. Safe to call after isLoggedIn() is true.
+    QCoro::Task<void> fetchProfile();
+
 private:
     explicit BiliBiliAuthService(QObject *parent = nullptr);
 

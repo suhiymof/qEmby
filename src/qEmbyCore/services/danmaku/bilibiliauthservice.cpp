@@ -206,6 +206,22 @@ void BiliBiliAuthService::onCookieAdded(const QNetworkCookie &cookie)
     }
 }
 
+QCoro::Task<void> BiliBiliAuthService::fetchProfile()
+{
+    if (!isLoggedIn()) {
+        co_return;
+    }
+    const RawReply nav = co_await getRaw(
+        QStringLiteral("https://api.bilibili.com/x/web-interface/nav"));
+    const QJsonObject navBody = QJsonDocument::fromJson(nav.body).object();
+    const QJsonObject navData = navBody.value(QStringLiteral("data")).toObject();
+    const QString uname =
+        navData.value(QStringLiteral("uname")).toString().trimmed();
+    if (!uname.isEmpty()) {
+        ConfigStore::instance()->set(ConfigKeys::BilibiliUname, uname);
+    }
+}
+
 QCoro::Task<BiliBiliAuthService::RawReply> BiliBiliAuthService::getRaw(const QString &url)
 {
     QNetworkRequest request((QUrl(url)));
