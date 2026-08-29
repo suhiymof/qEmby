@@ -560,6 +560,14 @@ Error: </source>
         <source>Remove from History</source>
         <translation>从历史记录移除</translation>
     </message>
+    <message>
+        <source>Match Danmaku</source>
+        <translation>匹配弹幕</translation>
+    </message>
+    <message>
+        <source>Match danmaku for this item</source>
+        <translation>为当前条目匹配弹幕</translation>
+    </message>
 </context>
 
 <context>
@@ -1481,6 +1489,10 @@ Choose a file, paste an image URL, or drag one onto the preview.</source>
     <message>
         <source>Trakt sync failed (item not found or offline)</source>
         <translation>Trakt 同步失败（未找到条目或离线）</translation>
+    </message>
+    <message>
+        <source>Saved %1 danmaku match(es) for this series</source>
+        <translation>已为本剧集保存 %1 个弹幕匹配</translation>
     </message>
 </context>
 
@@ -10056,6 +10068,102 @@ This cannot be undone.</source>
     <message>
         <source>BiliBili 登录</source>
         <translation>BiliBili 登录</translation>
+    </message>
+</context>
+
+<context>
+    <name>SeriesDanmakuMatchDialog</name>
+    <message>
+        <source>Match Danmaku for Series</source>
+        <translation>为剧集匹配弹幕</translation>
+    </message>
+    <message>
+        <source>Search Danmaku</source>
+        <translation>搜索弹幕</translation>
+    </message>
+    <message>
+        <source>Choose the series to match danmaku for.</source>
+        <translation>选择要匹配弹幕的剧集。</translation>
+    </message>
+    <message>
+        <source>Enter series title or keyword</source>
+        <translation>输入剧集标题或关键词</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>搜索</translation>
+    </message>
+    <message>
+        <source>Searching danmaku servers...</source>
+        <translation>正在搜索弹幕服务器...</translation>
+    </message>
+    <message>
+        <source>Filter results</source>
+        <translation>筛选结果</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>返回</translation>
+    </message>
+    <message>
+        <source>Episode offset</source>
+        <translation>分集偏移</translation>
+    </message>
+    <message>
+        <source>Add N to every episode number when the danmaku source numbers differ from your library (e.g. source starts at 3).</source>
+        <translation>当弹幕源集数与媒体库不一致时，为每集编号加上 N（例如源从第 3 集开始）。</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>全选</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>确认</translation>
+    </message>
+    <message>
+        <source>No danmaku sources found for "%1"</source>
+        <translation>未找到「%1」的弹幕源</translation>
+    </message>
+    <message>
+        <source>%1 result(s) found</source>
+        <translation>找到 %1 个结果</translation>
+    </message>
+    <message>
+        <source>Search failed</source>
+        <translation>搜索失败</translation>
+    </message>
+    <message>
+        <source>Failed to search danmaku: %1</source>
+        <translation>搜索弹幕失败：%1</translation>
+    </message>
+    <message>
+        <source>Click to choose episodes</source>
+        <translation>点击选择分集</translation>
+    </message>
+    <message>
+        <source>Click to load danmaku</source>
+        <translation>点击加载弹幕</translation>
+    </message>
+    <message>
+        <source>1 episode selected</source>
+        <translation>已选择 1 集</translation>
+    </message>
+    <message>
+        <source>Select an episode</source>
+        <translation>选择一集</translation>
+    </message>
+    <message>
+        <source>%1 / %2 episodes selected</source>
+        <translation>已选择 %1 / %2 集</translation>
+    </message>
+    <message>
+        <source>BiliBili</source>
+        <translation>B站</translation>
     </message>
 </context>
 </TS>
