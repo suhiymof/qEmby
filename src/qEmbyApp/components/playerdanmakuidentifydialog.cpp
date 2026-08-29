@@ -421,7 +421,7 @@ void PlayerDanmakuIdentifyDialog::openSeriesEpisodePicker(
     auto *dialog = new SeriesDanmakuMatchDialog(
         m_core, SeriesDanmakuMatchDialog::Mode::Single,
         {seriesCandidate}, m_context, QString(), m_activeTargetId,
-        m_activeEndpointId, this);
+        m_activeEndpointId, QList<int>(), this);
     connect(dialog, &SeriesDanmakuMatchDialog::finished, this,
             [this, dialog](int result) {
                 if (result == PlayerOverlayDialog::Accepted) {
