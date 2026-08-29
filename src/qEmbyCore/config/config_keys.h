@@ -215,6 +215,13 @@ constexpr const char* DanmakuAutoMatch = "danmaku/auto_match";
 constexpr const char* DanmakuWithRelated = "danmaku/with_related";
 constexpr const char* DanmakuCacheHours = "danmaku/cache_hours";
 
+// Bilibili danmaku source (QR login required). Account-level, not per-server.
+constexpr const char* BilibiliSessData = "danmaku/bilibili/sessdata";
+constexpr const char* BilibiliJct = "danmaku/bilibili/jct";
+constexpr const char* BilibiliUid = "danmaku/bilibili/uid";
+constexpr const char* BilibiliUname = "danmaku/bilibili/uname";
+constexpr const char* BilibiliBuvid3 = "danmaku/bilibili/buvid3";
+
 
 
 

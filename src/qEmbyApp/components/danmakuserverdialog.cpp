@@ -41,7 +41,8 @@ bool isSupportedProvider(const QString &provider)
 {
     const QString normalized = provider.trimmed().toLower();
     return normalized == QLatin1String("dandanplay") ||
-           normalized == QLatin1String("danmu_api");
+           normalized == QLatin1String("danmu_api") ||
+           normalized == QLatin1String("bilibili");
 }
 
 } 
@@ -150,6 +151,8 @@ DanmakuServerDialog::DanmakuServerDialog(QWidget *parent)
                                  QStringLiteral("dandanplay"));
     m_providerTypeCombo->addItem(tr("LogVar / danmu_api"),
                                  QStringLiteral("danmu_api"));
+    m_providerTypeCombo->addItem(tr("BiliBili"),
+                                 QStringLiteral("bilibili"));
     formLayout->addRow(m_providerTypeLabel, m_providerTypeCombo);
 
     auto *urlLabel = new QLabel(tr("Server URL"), editorPanel);
@@ -307,18 +310,34 @@ void DanmakuServerDialog::setServers(QList<DanmakuServerDefinition> servers,
             server.id = createServerId();
         }
         if (server.builtIn) {
-            const DanmakuServerDefinition builtIn =
-                DanmakuSettings::builtInOfficialDandanplayServer();
-            server.id = builtIn.id;
-            server.provider = builtIn.provider;
-            server.baseUrl = builtIn.baseUrl;
-            server.appId = builtIn.appId;
-            server.appSecret = builtIn.appSecret;
-            server.accessToken.clear();
-            server.description.clear();
-            server.contentScope = builtIn.contentScope;
-            if (server.name.isEmpty()) {
-                server.name = builtIn.name;
+            if (server.provider == QLatin1String("bilibili")) {
+                const DanmakuServerDefinition builtIn =
+                    DanmakuSettings::builtInBilibiliServer();
+                server.id = builtIn.id;
+                server.provider = builtIn.provider;
+                server.baseUrl = builtIn.baseUrl;
+                server.appId.clear();
+                server.appSecret.clear();
+                server.accessToken.clear();
+                server.description.clear();
+                server.contentScope.clear();
+                if (server.name.isEmpty()) {
+                    server.name = builtIn.name;
+                }
+            } else {
+                const DanmakuServerDefinition builtIn =
+                    DanmakuSettings::builtInOfficialDandanplayServer();
+                server.id = builtIn.id;
+                server.provider = builtIn.provider;
+                server.baseUrl = builtIn.baseUrl;
+                server.appId = builtIn.appId;
+                server.appSecret = builtIn.appSecret;
+                server.accessToken.clear();
+                server.description.clear();
+                server.contentScope = builtIn.contentScope;
+                if (server.name.isEmpty()) {
+                    server.name = builtIn.name;
+                }
             }
         }
         if (server.provider.isEmpty()) {

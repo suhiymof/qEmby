@@ -2,6 +2,7 @@
 
 #include "../managers/thememanager.h"
 #include "modernswitch.h"
+#include <services/danmaku/bilibiliauthservice.h>
 
 #include <QEvent>
 #include <QHBoxLayout>
@@ -196,8 +197,19 @@ void DanmakuServerListItemWidget::refreshCredentialsLabel()
     const bool isDanmuApi =
         m_server.provider.trimmed().compare(
             QStringLiteral("danmu_api"), Qt::CaseInsensitive) == 0;
-    parts.append(isDanmuApi ? tr("LogVar / danmu_api")
-                            : tr("DandanPlay"));
+    const bool isBilibili =
+        m_server.provider.trimmed().compare(
+            QStringLiteral("bilibili"), Qt::CaseInsensitive) == 0;
+    if (isBilibili) {
+        BiliBiliAuthService *auth = BiliBiliAuthService::instance();
+        parts.append(QStringLiteral("BiliBili"));
+        parts.append(auth->isLoggedIn()
+                         ? tr("Signed in as %1").arg(auth->userName())
+                         : tr("Not signed in"));
+    } else {
+        parts.append(isDanmuApi ? tr("LogVar / danmu_api")
+                                : tr("DandanPlay"));
+    }
     if (m_server.builtIn &&
         m_server.contentScope.trimmed().compare(QStringLiteral("anime"),
                                                 Qt::CaseInsensitive) == 0) {

@@ -10,6 +10,7 @@ class NetworkManager;
 class ServerManager;
 class DandanplayProvider;
 class DanmuApiProvider;
+class BiliBiliDanmakuProvider;
 class DanmakuCacheStore;
 
 class QEMBYCORE_EXPORT DanmakuService : public QObject
@@ -84,6 +85,7 @@ private:
     ServerManager *m_serverManager;
     DandanplayProvider *m_dandanplayProvider;
     DanmuApiProvider *m_danmuApiProvider;
+    BiliBiliDanmakuProvider *m_bilibiliProvider;
     DanmakuCacheStore *m_cacheStore;
 };
 

@@ -5,6 +5,7 @@
 #include "../../config/configstore.h"
 #include "../manager/servermanager.h"
 #include "dandanplayprovider.h"
+#include "bilibilidanmakuprovider.h"
 #include "danmakuasscomposer.h"
 #include "danmakucachestore.h"
 #include "danmakusettings.h"
@@ -1034,7 +1035,9 @@ QList<DanmakuComment> parseLocalXmlComments(const QByteArray &rawData)
 DanmakuService::DanmakuService(NetworkManager *networkManager, ServerManager *serverManager, QObject *parent)
     : QObject(parent), m_networkManager(networkManager), m_serverManager(serverManager),
       m_dandanplayProvider(new DandanplayProvider(networkManager)),
-      m_danmuApiProvider(new DanmuApiProvider(networkManager)), m_cacheStore(new DanmakuCacheStore())
+      m_danmuApiProvider(new DanmuApiProvider(networkManager)),
+      m_bilibiliProvider(new BiliBiliDanmakuProvider(networkManager)),
+      m_cacheStore(new DanmakuCacheStore())
 {
 }
 
@@ -1042,6 +1045,7 @@ DanmakuService::~DanmakuService()
 {
     delete m_dandanplayProvider;
     delete m_danmuApiProvider;
+    delete m_bilibiliProvider;
     delete m_cacheStore;
 }
 
@@ -1502,6 +1506,13 @@ QCoro::Task<DanmakuLoadResult> DanmakuService::prepareDanmakuForCandidate(Danmak
                                    << "| endpointName:" << config.endpointName << "| targetId:" << candidate.targetId;
                 comments = co_await m_danmuApiProvider->fetchComments(candidate, config);
             }
+            else if (config.provider == QStringLiteral("bilibili"))
+            {
+                qDebug().noquote() << "[Danmaku][Service] Fetching comments from provider"
+                                   << "| provider:" << config.provider << "| endpointId:" << config.endpointId
+                                   << "| endpointName:" << config.endpointName << "| targetId:" << candidate.targetId;
+                comments = co_await m_bilibiliProvider->fetchComments(candidate, config);
+            }
             if (!comments.isEmpty())
             {
                 
@@ -1622,6 +1633,10 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmakuService::searchCandidatesForCon
     else if (config.provider == QStringLiteral("danmu_api"))
     {
         candidates = co_await m_danmuApiProvider->searchCandidates(context, config, manualKeyword);
+    }
+    else if (config.provider == QStringLiteral("bilibili"))
+    {
+        candidates = co_await m_bilibiliProvider->searchCandidates(context, config, manualKeyword);
     }
     const QString cacheScope = cacheScopeForConfig(config);
     for (DanmakuMatchCandidate &candidate : candidates)

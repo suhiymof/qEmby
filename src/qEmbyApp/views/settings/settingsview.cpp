@@ -3,6 +3,7 @@
 #include "../../managers/thememanager.h" 
 #include "pageabout.h"
 #include "pageappearance.h"
+#include "pagebilibili.h"
 #include "pagegeneral.h"
 #include "pageplayer.h"
 #include "pagelibrary.h"
@@ -79,6 +80,10 @@ void SettingsView::setupUi() {
       ThemeManager::getAdaptiveIcon(":/svg/dark/user.svg"), tr(" Trakt"));
   itemTrakt->setData(Qt::UserRole, ":/svg/dark/user.svg");
 
+  auto *itemBilibili = new QListWidgetItem(
+      ThemeManager::getAdaptiveIcon(":/svg/dark/user.svg"), tr(" BiliBili"));
+  itemBilibili->setData(Qt::UserRole, ":/svg/dark/user.svg");
+
   auto *itemAbout = new QListWidgetItem(
       ThemeManager::getAdaptiveIcon(":/svg/dark/about.svg"), tr(" About"));
   itemAbout->setData(Qt::UserRole, ":/svg/dark/about.svg");
@@ -89,6 +94,7 @@ void SettingsView::setupUi() {
   itemPlayer->setSizeHint(QSize(220, 44));
   itemLibrary->setSizeHint(QSize(220, 44));
   itemTrakt->setSizeHint(QSize(220, 44));
+  itemBilibili->setSizeHint(QSize(220, 44));
   itemAbout->setSizeHint(QSize(220, 44));
 
   m_navMenu->addItem(itemGeneral);
@@ -96,6 +102,7 @@ void SettingsView::setupUi() {
   m_navMenu->addItem(itemLibrary);
   m_navMenu->addItem(itemPlayer);
   m_navMenu->addItem(itemTrakt);
+  m_navMenu->addItem(itemBilibili);
   m_navMenu->addItem(itemAbout);
 
   leftLayout->addWidget(m_titleLabel);
@@ -109,7 +116,7 @@ void SettingsView::setupUi() {
   
   
   
-  const int kPageCount = 6;
+  const int kPageCount = 7;
   m_scrollAreas.reserve(kPageCount);
   m_scrollAnims.reserve(kPageCount);
   m_scrollTargets.reserve(kPageCount);
@@ -193,6 +200,9 @@ void SettingsView::ensurePageAt(int row) {
     page = new PageTrakt(m_core, m_stack);
     break;
   case 5:
+    page = new PageBilibili(m_core, m_stack);
+    break;
+  case 6:
     page = new PageAbout(m_core, m_stack);
     break;
   default:

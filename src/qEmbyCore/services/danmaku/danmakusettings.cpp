@@ -24,6 +24,11 @@ constexpr auto kOfficialDandanplayContentScope = "anime";
 constexpr auto kBuiltInOfficialDandanplayAppId = "wyptw278x3";
 constexpr auto kBuiltInOfficialDandanplayAppSecret = "ApQZbydpeafcDTe8pBX3EJxifAuhfkSn";
 
+constexpr auto kBilibiliServerId = "bilibili";
+constexpr auto kBilibiliProvider = "bilibili";
+constexpr auto kBilibiliName = "Bilibili";
+constexpr auto kBilibiliBaseUrl = "https://www.bilibili.com";
+
 QString settingKey(const QString &serverId, const char *baseKey)
 {
     return ConfigKeys::forServer(serverId.trimmed(), baseKey);
@@ -52,8 +57,19 @@ bool isOfficialDandanplayEndpoint(const QString &baseUrl)
 
 bool isBuiltInOfficialDandanplayServer(const DanmakuServerDefinition &server)
 {
+    // Scope the builtIn flag to the dandanplay provider so other built-in
+    // sources (bilibili) are not mistaken for the official dandanplay server.
+    if (server.provider != QLatin1String(kOfficialDandanplayProvider))
+    {
+        return false;
+    }
     return server.builtIn ||
            (server.id == QLatin1String(kOfficialDandanplayServerId) && isOfficialDandanplayEndpoint(server.baseUrl));
+}
+
+bool isBuiltInBilibiliServer(const DanmakuServerDefinition &server)
+{
+    return server.builtIn && server.provider == QLatin1String(kBilibiliProvider);
 }
 
 QString defaultServerName(const QString &baseUrl)
@@ -84,6 +100,20 @@ DanmakuServerDefinition makeBuiltInOfficialDandanplayServer()
     server.contentScope = QString::fromLatin1(kOfficialDandanplayContentScope);
     server.builtIn = true;
     server.enabled = true;
+    return server;
+}
+
+DanmakuServerDefinition makeBuiltInBilibiliServer()
+{
+    DanmakuServerDefinition server;
+    server.id = QString::fromLatin1(kBilibiliServerId);
+    server.name = QString::fromLatin1(kBilibiliName);
+    server.provider = QString::fromLatin1(kBilibiliProvider);
+    server.baseUrl = QString::fromLatin1(kBilibiliBaseUrl);
+    server.builtIn = true;
+    // Opt-in: the source requires a logged-in Bilibili account, so it is
+    // disabled until the user enables it and signs in.
+    server.enabled = false;
     return server;
 }
 
@@ -189,7 +219,7 @@ QList<DanmakuServerDefinition> normalizedServers(QList<DanmakuServerDefinition> 
         server.appSecret = server.appSecret.trimmed();
         server.accessToken = server.accessToken.trimmed();
         server.contentScope = server.contentScope.trimmed().toLower();
-        server.builtIn = isBuiltInOfficialDandanplayServer(server);
+        server.builtIn = isBuiltInOfficialDandanplayServer(server) || isBuiltInBilibiliServer(server);
 
         if (server.provider.isEmpty())
         {
@@ -239,6 +269,20 @@ QList<DanmakuServerDefinition> normalizedServers(QList<DanmakuServerDefinition> 
     {
         normalized.prepend(makeBuiltInOfficialDandanplayServer());
     }
+
+    bool hasBuiltInBilibiliServer = false;
+    for (const DanmakuServerDefinition &server : std::as_const(normalized))
+    {
+        if (isBuiltInBilibiliServer(server))
+        {
+            hasBuiltInBilibiliServer = true;
+            break;
+        }
+    }
+    if (!hasBuiltInBilibiliServer)
+    {
+        normalized.append(makeBuiltInBilibiliServer());
+    }
     return normalized;
 }
 
@@ -279,7 +323,7 @@ QJsonArray toJsonArray(const QList<DanmakuServerDefinition> &servers)
     for (const DanmakuServerDefinition &server : servers)
     {
         DanmakuServerDefinition savedServer = server;
-        if (isBuiltInOfficialDandanplayServer(savedServer))
+        if (isBuiltInOfficialDandanplayServer(savedServer) || isBuiltInBilibiliServer(savedServer))
         {
             savedServer.builtIn = true;
             savedServer.description.clear();
@@ -312,12 +356,17 @@ DanmakuServerDefinition DanmakuSettings::builtInOfficialDandanplayServer()
     return makeBuiltInOfficialDandanplayServer();
 }
 
+DanmakuServerDefinition DanmakuSettings::builtInBilibiliServer()
+{
+    return makeBuiltInBilibiliServer();
+}
+
 QList<DanmakuServerDefinition> DanmakuSettings::loadServers(QString serverId)
 {
     serverId = serverId.trimmed();
     if (serverId.isEmpty())
     {
-        return {builtInOfficialDandanplayServer()};
+        return {builtInOfficialDandanplayServer(), builtInBilibiliServer()};
     }
 
     const QString storedJson = ConfigStore::instance()->get<QString>(settingKey(serverId, ConfigKeys::DanmakuServers));
