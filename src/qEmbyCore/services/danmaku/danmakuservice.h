@@ -104,6 +104,15 @@ private:
     QString assCacheKey(const DanmakuMatchCandidate &candidate,
                         const DanmakuRenderOptions &options) const;
 
+    // Collapse flat episode-level candidates (one row per episode, as
+    // returned by dandanplay / danmu_api) into series-level groups keyed
+    // by (provider, animeTitle, seasonNumber). Bilibili already returns
+    // series-level candidates with embedded episodes[] and pass through
+    // unchanged. The two-stage SeriesDanmakuMatchDialog wants one row per
+    // (work, provider, season) so multi-season works split naturally.
+    QList<DanmakuMatchCandidate> aggregateEpisodesToSeries(
+        const QList<DanmakuMatchCandidate> &flatCandidates) const;
+
     NetworkManager *m_networkManager;
     ServerManager *m_serverManager;
     DandanplayProvider *m_dandanplayProvider;

@@ -4,8 +4,10 @@
 #include "loadingoverlay.h"
 #include "moderntoast.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -13,11 +15,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPainter>
 #include <QPointer>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSet>
 #include <QShowEvent>
+#include <QStyle>
+#include <QStyledItemDelegate>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <config/configstore.h>
@@ -29,6 +34,89 @@
 namespace {
 
 constexpr int kSeriesCandidateRole = Qt::UserRole + 1;
+constexpr int kSeriesProviderRole = Qt::UserRole + 100;
+
+// Draws a QListWidgetItem with the main text on the left and the
+// candidate's provider name (BiliBili / dandanplay / danmu_api) right-
+// aligned and dimmed on the same row. Used in the series picker so the
+// user can tell at a glance which danmaku source each row comes from
+// when several providers have entries for the same work.
+class SeriesProviderItemDelegate : public QStyledItemDelegate
+{
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    void paint(QPainter *painter,
+               const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override
+    {
+        QStyleOptionViewItem opt = option;
+        initStyleOption(&opt, index);
+        const QString text = index.data(Qt::DisplayRole).toString();
+        const QString provider =
+            index.data(kSeriesProviderRole).toString();
+
+        painter->save();
+
+        // 1. Draw the default item chrome (background, focus rect, etc.)
+        //    with the text field cleared so we can lay out the two
+        //    columns ourselves.
+        opt.text.clear();
+        QStyle *style = opt.widget ? opt.widget->style()
+                                   : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
+
+        // 2. Foreground colour: highlighted when selected, normal
+        //    otherwise. We dim the provider label so the main title
+        //    stays the visual anchor.
+        QColor mainColor = opt.palette.text().color();
+        if (opt.state.testFlag(QStyle::State_Selected)) {
+            mainColor = opt.palette.highlightedText().color();
+        }
+        QColor dimColor = mainColor;
+        dimColor.setAlpha(170);
+
+        // 3. Lay out the two columns inside the item rect with sensible
+        //    padding; reserve room on the right for the provider label.
+        const int hPad = 8;
+        const int vPad = 2;
+        QRect itemRect = opt.rect.adjusted(hPad, vPad, -hPad, -vPad);
+
+        QFont providerFont = opt.font;
+        providerFont.setPointSizeF(opt.font.pointSizeF() * 0.88);
+        QFontMetrics providerFm(providerFont);
+        const int providerWidth = provider.isEmpty()
+                                      ? 0
+                                      : providerFm.horizontalAdvance(provider) + 16;
+
+        QRect mainRect = itemRect;
+        if (providerWidth > 0 && mainRect.width() > providerWidth + 32) {
+            mainRect.setRight(mainRect.right() - providerWidth);
+        }
+        QRect providerRect = itemRect;
+        providerRect.setLeft(providerRect.right() - providerWidth + 8);
+
+        // 4. Main title — elide if the row is too narrow.
+        painter->setPen(mainColor);
+        painter->setFont(opt.font);
+        const QString elidedText =
+            opt.fontMetrics.elidedText(text, Qt::ElideRight, mainRect.width());
+        painter->drawText(mainRect,
+                          Qt::AlignVCenter | Qt::AlignLeft | Qt::TextSingleLine,
+                          elidedText);
+
+        // 5. Provider label — smaller and dimmer, right-aligned.
+        if (!provider.isEmpty()) {
+            painter->setPen(dimColor);
+            painter->setFont(providerFont);
+            painter->drawText(providerRect,
+                              Qt::AlignVCenter | Qt::AlignRight,
+                              provider);
+        }
+
+        painter->restore();
+    }
+};
 
 constexpr char kEpisodeOffsetKey[] = "danmaku/episode_offset";
 
@@ -128,6 +216,10 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     m_seriesList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_seriesList->setWordWrap(true);
     m_seriesList->setMinimumHeight(240);
+    // Custom delegate draws the provider name (BiliBili / dandanplay /
+    // danmu_api) right-aligned in each row so the user can tell at a
+    // glance which danmaku source each series row came from.
+    m_seriesList->setItemDelegate(new SeriesProviderItemDelegate(m_seriesList));
     listLayout->addWidget(m_seriesList);
 
     m_loadingOverlay = new LoadingOverlay(m_seriesListContainer);
@@ -401,6 +493,10 @@ void SeriesDanmakuMatchDialog::rebuildSeriesList()
         }
         auto *item = new QListWidgetItem(text, m_seriesList);
         item->setData(kSeriesCandidateRole, i);
+        // Picked up by SeriesProviderItemDelegate to render a right-
+        // aligned "BiliBili" / "dandanplay" / "danmu_api" label.
+        item->setData(kSeriesProviderRole,
+                      providerDisplayName(candidate.provider));
         item->setToolTip(candidate.isSeries()
                              ? tr("Click to choose episodes")
                              : tr("Click to load danmaku"));
