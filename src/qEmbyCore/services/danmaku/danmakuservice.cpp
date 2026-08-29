@@ -1199,6 +1199,18 @@ QList<DanmakuProviderConfig> DanmakuService::enabledProviderConfigs(QString serv
         }
         appendServerConfig(server);
     }
+
+    // 用户偏好：B 站（bilibili）弹幕源始终排第一，其余保持原配置顺序。
+    // stable_sort 保证非 bilibili 配置之间的相对顺序不变，只把 bilibili
+    // 挪到列表头部。影响：searchAllCandidates / resolveMatch 遍历顺序、
+    // 候选弹窗展示顺序、providerConfigForCandidate lookup 顺序。
+    std::stable_sort(configs.begin(), configs.end(),
+                     [](const DanmakuProviderConfig &a,
+                        const DanmakuProviderConfig &b) {
+                         const bool aIsBili = a.provider == QLatin1String("bilibili");
+                         const bool bIsBili = b.provider == QLatin1String("bilibili");
+                         return aIsBili && !bIsBili;
+                     });
     return configs;
 }
 

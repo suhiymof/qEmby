@@ -446,18 +446,25 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             candidate.durationMs = static_cast<qint64>(
                 episode.value(QStringLiteral("duration")).toVariant().toDouble() * 1000.0);
             candidate.matchReason = QStringLiteral("media_bangumi");
-            // Score weights: long_title contains both the series name and the
-            // sub-season name, so a series-name match scores reasonably; the
-            // episode number bonus keeps the right episode on top.
-            candidate.score = titleScore(querySubject, episodePartTitle) * 60.0;
-            if (context.isEpisode() && context.episodeNumber > 0 &&
-                candidate.episodeNumber == context.episodeNumber) {
-                candidate.score += 24.0;
-            }
+            // B站 long_title 只含子季名 + 集号（如 "风起天南1重制版"），
+            // 不含剧名前缀；裸用 titleScore("凡人修仙传", "风起天南1") 字
+            // 符 bigram 重叠几乎为 0。改用 [剧名, 子季名+集号] 双键评分：
+            // 任意一边命中都能拿到分。
+            const double titleScorePart = titleScore(querySubject, episodePartTitle);
+            const double seriesScorePart =
+                parsed.first.isEmpty() ? 0.0
+                                       : titleScore(querySubject,
+                                                    seriesTitle + QStringLiteral(" ") + parsed.first);
+            candidate.score = qMax(titleScorePart, seriesScorePart) * 60.0;
+            // 同一季名出现的 ep 视为更相关（与 seriesName 含子季名加分一致）。
             if (!parsed.first.isEmpty() &&
                 !context.seriesName.trimmed().isEmpty() &&
                 parsed.first.contains(context.seriesName.trimmed(), Qt::CaseInsensitive)) {
                 candidate.score += 6.0;
+            }
+            if (context.isEpisode() && context.episodeNumber > 0 &&
+                candidate.episodeNumber == context.episodeNumber) {
+                candidate.score += 24.0;
             }
             if (candidate.isValid()) {
                 candidates.append(candidate);
