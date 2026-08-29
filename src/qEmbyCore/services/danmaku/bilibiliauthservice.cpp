@@ -125,12 +125,22 @@ QCoro::Task<int> BiliBiliAuthService::pollLogin()
         QStringLiteral("https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=%1")
             .arg(m_qrcodeKey));
     if (reply.status != 200) {
+        qWarning().noquote() << "[BiliBili] poll HTTP" << reply.status;
         co_return -1;
     }
     const QJsonObject body = QJsonDocument::fromJson(reply.body).object();
-    const int code = body.value(QStringLiteral("code")).toInt(-1);
-    if (code != 0) {
-        co_return code; // 86101 / 86090 / 86038 ...
+    if (body.value(QStringLiteral("code")).toInt(-1) != 0) {
+        co_return -1;
+    }
+    // Bilibili nests the real login status under data.code:
+    //   86101 = not scanned, 86090 = scanned (not confirmed), 86038 = expired,
+    //   0 = success. The outer `code:0` just signals the HTTP call worked.
+    const int dataCode = body.value(QStringLiteral("data"))
+                             .toObject()
+                             .value(QStringLiteral("code"))
+                             .toInt(-1);
+    if (dataCode != 0) {
+        co_return dataCode;
     }
 
     auto *store = ConfigStore::instance();
@@ -158,7 +168,8 @@ QCoro::Task<int> BiliBiliAuthService::pollLogin()
         store->set(ConfigKeys::BilibiliUname, uname);
     }
 
-    qDebug().noquote() << "[BiliBili] QR login success | user:" << uname;
+    qDebug().noquote() << "[BiliBili] QR login success | user:" << uname
+                       << "| sessData set:" << !sessData.isEmpty();
     co_return 0;
 }
 
