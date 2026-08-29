@@ -3,6 +3,8 @@
 #include <services/danmaku/bilibiliauthservice.h>
 
 #include <QLocale>
+#include <QUrl>
+#include <QVBoxLayout>
 #include <QWebEngineCookieStore>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
