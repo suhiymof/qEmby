@@ -803,7 +803,7 @@ void DanmakuServerDialog::updateEditorState()
     const bool isBuiltIn = hasCurrentServer && m_servers.at(index).builtIn;
     const bool isDanmuApi =
         hasCurrentServer && isDanmuApiProvider(m_servers.at(index));
-    m_nameEdit->setEnabled(hasCurrentServer && !isBuiltIn);
+    m_nameEdit->setEnabled(hasCurrentServer);
     m_providerTypeCombo->setEnabled(hasCurrentServer && !isBuiltIn);
     m_baseUrlEdit->setEnabled(hasCurrentServer && !isBuiltIn);
     m_descriptionLabel->setVisible(hasCurrentServer && !isBuiltIn);
@@ -864,9 +864,11 @@ void DanmakuServerDialog::updateCurrentServerName(const QString &name)
     if (index < 0 || index >= m_servers.size()) {
         return;
     }
-    if (m_servers.at(index).builtIn) {
-        return;
-    }
+    // Built-in servers (official dandanplay / bilibili) keep their
+    // protocol URL, provider type, credentials, etc. locked, but the
+    // display name must stay editable — the user wants to relabel them
+    // (e.g. "DandanPlay Open API" -> "dandanplay", "Bilibili" -> "B站")
+    // and the name is preserved by saveServers/toJsonArray.
 
     m_servers[index].name = name.trimmed();
     refreshServerListItem(index);
