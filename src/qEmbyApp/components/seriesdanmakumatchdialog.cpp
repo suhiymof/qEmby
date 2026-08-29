@@ -20,6 +20,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <config/configstore.h>
+#include <qembycore.h>
 #include <services/danmaku/danmakuservice.h>
 #include <qcorotimer.h>
 #include <stdexcept>
