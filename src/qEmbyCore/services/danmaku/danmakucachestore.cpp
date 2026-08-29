@@ -1,5 +1,6 @@
 #include "danmakucachestore.h"
 
+#include <algorithm>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -7,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 
@@ -191,6 +193,148 @@ void DanmakuCacheStore::removeMatch(const DanmakuMediaContext &context) const
             << "| mediaId:" << context.mediaId
             << "| sourceId:" << context.mediaSourceId;
     }
+}
+
+QString seriesBindingDirPath(const QString &baseDir,
+                             const QString &serverId,
+                             const QString &seriesId)
+{
+    const QByteArray rawKey =
+        QStringLiteral("%1|%2").arg(serverId, seriesId).toUtf8();
+    const QString hashedKey = QString::fromLatin1(
+        QCryptographicHash::hash(rawKey, QCryptographicHash::Sha1).toHex());
+    return baseDir + QStringLiteral("/series-bindings/%1/%2").arg(serverId, hashedKey);
+}
+
+QString seriesBindingFilePath(const QString &baseDir,
+                              const QString &serverId,
+                              const QString &seriesId,
+                              int seasonNumber,
+                              int episodeNumber)
+{
+    return seriesBindingDirPath(baseDir, serverId, seriesId) +
+           QStringLiteral("/s%1e%2.json")
+               .arg(seasonNumber >= 0 ? seasonNumber : 0)
+               .arg(episodeNumber > 0 ? episodeNumber : 0);
+}
+
+void DanmakuCacheStore::saveSeriesBinding(const QString &serverId,
+                                          const QString &seriesId,
+                                          int seasonNumber,
+                                          int episodeNumber,
+                                          const DanmakuMatchCandidate &candidate) const
+{
+    if (serverId.isEmpty() || seriesId.isEmpty() || episodeNumber <= 0 ||
+        !candidate.isValid()) {
+        return;
+    }
+    const QString filePath = seriesBindingFilePath(baseDirPath(), serverId,
+                                                  seriesId, seasonNumber,
+                                                  episodeNumber);
+    if (!ensureParentDir(filePath)) {
+        return;
+    }
+    QJsonObject entry;
+    entry["candidate"] = candidateToJson(candidate);
+    entry["serverId"] = serverId;
+    entry["seriesId"] = seriesId;
+    entry["seasonNumber"] = seasonNumber;
+    entry["episodeNumber"] = episodeNumber;
+    entry["manualOverride"] = true;
+    entry["updatedAt"] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    QSaveFile file(filePath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        file.write(QJsonDocument(entry).toJson(QJsonDocument::Compact));
+        file.commit();
+    }
+}
+
+bool DanmakuCacheStore::loadSeriesBinding(const QString &serverId,
+                                          const QString &seriesId,
+                                          int seasonNumber,
+                                          int episodeNumber,
+                                          DanmakuMatchCandidate *candidate) const
+{
+    if (serverId.isEmpty() || seriesId.isEmpty() || episodeNumber <= 0 ||
+        !candidate) {
+        return false;
+    }
+    const QString filePath = seriesBindingFilePath(baseDirPath(), serverId,
+                                                  seriesId, seasonNumber,
+                                                  episodeNumber);
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return false;
+    }
+    const QJsonObject entry = QJsonDocument::fromJson(file.readAll()).object();
+    if (entry.isEmpty()) {
+        return false;
+    }
+    *candidate = candidateFromJson(entry.value("candidate").toObject());
+    return candidate->isValid();
+}
+
+void DanmakuCacheStore::clearSeriesBindings(const QString &serverId,
+                                            const QString &seriesId) const
+{
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return;
+    }
+    const QString dir =
+        seriesBindingDirPath(baseDirPath(), serverId, seriesId);
+    QDir d(dir);
+    if (d.exists()) {
+        d.removeRecursively();
+    }
+}
+
+int DanmakuCacheStore::countSeriesBindings(const QString &serverId,
+                                           const QString &seriesId) const
+{
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return 0;
+    }
+    const QString dir =
+        seriesBindingDirPath(baseDirPath(), serverId, seriesId);
+    QDir d(dir);
+    if (!d.exists()) {
+        return 0;
+    }
+    const QFileInfoList files =
+        d.entryInfoList(QStringList{"s*e*.json"}, QDir::Files);
+    return files.size();
+}
+
+QList<int> DanmakuCacheStore::listBoundEpisodeNumbers(const QString &serverId,
+                                                      const QString &seriesId) const
+{
+    QList<int> episodes;
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return episodes;
+    }
+    const QString dir =
+        seriesBindingDirPath(baseDirPath(), serverId, seriesId);
+    QDir d(dir);
+    if (!d.exists()) {
+        return episodes;
+    }
+    const QFileInfoList files =
+        d.entryInfoList(QStringList{"s*e*.json"}, QDir::Files);
+    // Filename pattern: s{season}e{episode}.json. We only need the episode
+    // number to feed back into the matcher.
+    QRegularExpression re(QStringLiteral("^s\\d+e(-?\\d+)\\.json$"));
+    for (const QFileInfo &info : files) {
+        const auto match = re.match(info.fileName());
+        if (match.hasMatch()) {
+            const int ep = match.captured(1).toInt();
+            if (ep > 0) {
+                episodes.append(ep);
+            }
+        }
+    }
+    std::sort(episodes.begin(), episodes.end());
+    return episodes;
 }
 
 bool DanmakuCacheStore::loadFingerprint(const DanmakuMediaContext &context,

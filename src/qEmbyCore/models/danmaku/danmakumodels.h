@@ -61,6 +61,10 @@ struct QEMBYCORE_EXPORT DanmakuMediaContext {
     QString title;
     QString originalTitle;
     QString seriesName;
+    // For an Episode item, the Emby series id (so the playback context can
+    // reach the series-level bindings saved from the detail page's multi
+    // matcher).
+    QString parentSeriesId;
     int productionYear = 0;
     int seasonNumber = -1;
     int episodeNumber = -1;

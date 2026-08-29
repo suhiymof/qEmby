@@ -682,6 +682,10 @@ void DetailView::setupUi()
             { co_await traktSyncWatched(m_currentMediaItem, false); });
     connect(m_actionWidget, &DetailActionWidget::danmakuMatchRequested, this,
             [this]() { openDanmakuSeriesMatch(); });
+    connect(m_actionWidget, &DetailActionWidget::danmakuRematchRequested, this,
+            [this]() { openDanmakuSeriesMatch(); });
+    connect(m_actionWidget, &DetailActionWidget::danmakuClearBindingsRequested,
+            this, [this]() { clearDanmakuSeriesBindings(); });
 
     m_taglineLabel = new QLabel(m_textContainer);
     m_taglineLabel->setObjectName("detail-tagline");
@@ -1741,6 +1745,7 @@ void DetailView::applySeedToUi(const MediaItem &seed)
     {
         m_actionWidget->setupNormalMode(seed);
     }
+    refreshDanmakuMatchState();
 
     
     
@@ -2286,6 +2291,7 @@ void DetailView::applySeriesPlayableItemToUi(const MediaItem &playableItem, bool
     {
         const QString actionTag = episodeTag.isEmpty() ? playableItem.name : episodeTag;
         m_actionWidget->setupSeriesMode(playableItem, actionTag);
+        refreshDanmakuMatchState();
         updateMetaRow(m_currentMediaItem, episodeTag);
 
         m_actionWidget->setSources(playableItem.mediaSources,
@@ -2722,35 +2728,103 @@ void DetailView::openDanmakuSeriesMatch()
     context.title = m_currentMediaItem.name;
     context.originalTitle = m_currentMediaItem.originalTitle;
     context.seriesName = m_currentMediaItem.seriesName;
+    context.parentSeriesId =
+        m_currentMediaItem.type == QLatin1String("Series")
+            ? m_currentMediaItem.id
+            : m_currentMediaItem.seriesId;
     context.productionYear = m_currentMediaItem.productionYear;
     context.seasonNumber = m_currentMediaItem.parentIndexNumber;
     context.episodeNumber = m_currentMediaItem.indexNumber;
     context.providerIds = m_currentMediaItem.providerIds;
 
+    // For series-level binding we want the picker to reopen with already
+    // bound episodes pre-ticked so the user can audit / extend instead of
+    // starting from scratch.
+    QList<int> preSelected;
+    if (m_currentMediaItem.type == QLatin1String("Series"))
+    {
+        preSelected = m_core->danmakuService()->listBoundEpisodeNumbers(
+            context.serverId, m_currentMediaItem.id);
+    }
+
     // Multi mode: pre-bind several episodes of the chosen series at once.
     auto *dialog = new SeriesDanmakuMatchDialog(
         m_core, SeriesDanmakuMatchDialog::Mode::Multi,
         {}, context, m_currentMediaItem.seriesName, QString(), QString(),
-        this);
+        preSelected, this);
     connect(dialog, &SeriesDanmakuMatchDialog::finished, this,
             [this, dialog, context](int result) {
                 if (result == PlayerOverlayDialog::Accepted) {
                     const QList<DanmakuMatchCandidate> picked =
                         dialog->selectedEpisodes();
+                    DanmakuService *service = m_core->danmakuService();
                     if (!picked.isEmpty()) {
-                        DanmakuService *service = m_core->danmakuService();
-                        for (const DanmakuMatchCandidate &candidate : picked) {
-                            service->saveManualMatch(context, candidate);
-                        }
+                        // Series-level save: the dialog emits one candidate
+                        // per picked episode, each carrying its own
+                        // adjusted episodeNumber. Hand them to the service
+                        // so the per-episode binding files get written
+                        // under the right (serverId, seriesId) key.
+                        service->saveSeriesBindings(
+                            context.serverId,
+                            context.parentSeriesId.isEmpty()
+                                ? context.mediaId
+                                : context.parentSeriesId,
+                            context.seasonNumber, picked);
                         ModernToast::showMessage(
                             tr("Saved %1 danmaku match(es) for this series")
                                 .arg(picked.size()),
                             2500);
                     }
+                    refreshDanmakuMatchState();
                 }
                 dialog->deleteLater();
             });
     dialog->open();
+}
+
+void DetailView::clearDanmakuSeriesBindings()
+{
+    if (!m_core || !m_core->danmakuService()) {
+        return;
+    }
+    const QString serverId = activeServerId(m_core);
+    const QString seriesId =
+        m_currentMediaItem.type == QLatin1String("Series")
+            ? m_currentMediaItem.id
+            : m_currentMediaItem.seriesId;
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return;
+    }
+    m_core->danmakuService()->clearSeriesBindings(serverId, seriesId);
+    refreshDanmakuMatchState();
+    ModernToast::showMessage(tr("Cleared danmaku bindings for this series"),
+                              2500);
+}
+
+void DetailView::refreshDanmakuMatchState()
+{
+    if (!m_actionWidget || !m_core || !m_core->danmakuService()) {
+        return;
+    }
+    const bool supportsMatch =
+        m_currentMediaItem.type == QLatin1String("Movie") ||
+        m_currentMediaItem.type == QLatin1String("Episode") ||
+        m_currentMediaItem.type == QLatin1String("Series");
+    if (!supportsMatch) {
+        m_actionWidget->setDanmakuMatchBoundCount(0);
+        return;
+    }
+    const QString serverId = activeServerId(m_core);
+    const QString seriesId =
+        m_currentMediaItem.type == QLatin1String("Series")
+            ? m_currentMediaItem.id
+            : m_currentMediaItem.seriesId;
+    const int bound =
+        seriesId.isEmpty()
+            ? 0
+            : m_core->danmakuService()->countSeriesBindings(serverId,
+                                                            seriesId);
+    m_actionWidget->setDanmakuMatchBoundCount(bound);
 }
 
 void DetailView::updateBackdrop()
@@ -3233,6 +3307,7 @@ QCoro::Task<void> DetailView::updateUi(MediaItem item, bool isSilentRefresh)
         
         m_currentPlayableItem = item;
         m_actionWidget->setupNormalMode(item);
+        refreshDanmakuMatchState();
     }
 
     

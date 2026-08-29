@@ -51,6 +51,7 @@ public:
                                       QString initialKeyword,
                                       QString activeTargetId,
                                       QString activeEndpointId,
+                                      QList<int> preSelectedEpisodes = {},
                                       QWidget *parent = nullptr);
 
     // Episode-level candidates selected at stage 2 (one per picked episode).
@@ -70,6 +71,7 @@ private:
     void rebuildEpisodeList();
     void applyEpisodeOffset();
     void updateSelectionSummary();
+    void updateSelectAllLabel();
     void updateUiState();
     void updateLoadingOverlayGeometry();
     void updateStatusText(const QString &text);
@@ -105,8 +107,13 @@ private:
     DanmakuMatchCandidate m_currentSeries;
     int m_episodeOffset = 0;
     QList<DanmakuMatchCandidate> m_selectedEpisodes;
+    QList<int> m_preSelectedEpisodes;
     bool m_isLoading = false;
     bool m_loaded = false;
+    // Multi-mode helpers: tracks whether the select-all button is currently
+    // in the "all selected" state, so a second click on the same button
+    // toggles back to "nothing selected".
+    bool m_allSelected = false;
     std::optional<QCoro::Task<void>> m_pendingTask;
 };
 

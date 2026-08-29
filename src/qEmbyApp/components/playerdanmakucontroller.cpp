@@ -514,6 +514,7 @@ DanmakuMediaContext PlayerDanmakuController::buildMediaContext(
     mediaContext.title = item.name;
     mediaContext.originalTitle = item.originalTitle;
     mediaContext.seriesName = item.seriesName;
+    mediaContext.parentSeriesId = item.seriesId;
     mediaContext.productionYear = item.productionYear;
     mediaContext.seasonNumber = item.parentIndexNumber;
     mediaContext.episodeNumber = item.indexNumber;

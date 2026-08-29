@@ -66,6 +66,18 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   m_danmakuMatchBtn->setToolTip(tr("Match danmaku for this item"));
   m_danmakuMatchBtn->hide();
 
+  m_danmakuRematchBtn = new QPushButton(QStringLiteral("\u21BB ") + tr("Rematch Danmaku"), this);
+  m_danmakuRematchBtn->setObjectName("detail-danmaku-rematch-btn");
+  m_danmakuRematchBtn->setCursor(Qt::PointingHandCursor);
+  m_danmakuRematchBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_danmakuRematchBtn->hide();
+
+  m_danmakuClearBtn = new QPushButton(QStringLiteral("\u2715 ") + tr("Clear Danmaku Binding"), this);
+  m_danmakuClearBtn->setObjectName("detail-danmaku-clear-btn");
+  m_danmakuClearBtn->setCursor(Qt::PointingHandCursor);
+  m_danmakuClearBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_danmakuClearBtn->hide();
+
   m_progressWidget = new QWidget(this);
   m_progressWidget->setMaximumWidth(450);
   auto *progressLayout = new QHBoxLayout(m_progressWidget);
@@ -100,6 +112,8 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   actionsLayout->addWidget(m_playedBtn);
   actionsLayout->addWidget(m_traktBtn);
   actionsLayout->addWidget(m_danmakuMatchBtn);
+  actionsLayout->addWidget(m_danmakuRematchBtn);
+  actionsLayout->addWidget(m_danmakuClearBtn);
   actionsLayout->addWidget(m_progressWidget);
   actionsLayout->addStretch();
 
@@ -130,6 +144,10 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
           &DetailActionWidget::playedToggleRequested);
   connect(m_danmakuMatchBtn, &QPushButton::clicked, this,
           &DetailActionWidget::danmakuMatchRequested);
+  connect(m_danmakuRematchBtn, &QPushButton::clicked, this,
+          &DetailActionWidget::danmakuRematchRequested);
+  connect(m_danmakuClearBtn, &QPushButton::clicked, this,
+          &DetailActionWidget::danmakuClearBindingsRequested);
   connect(m_traktBtn, &QPushButton::clicked, this, [this]() {
     QMenu menu(m_traktBtn);
     QAction* markAction = menu.addAction(tr("Mark as Watched"));
@@ -169,6 +187,11 @@ void DetailActionWidget::clear() {
     m_traktBtn->hide();
   if (m_danmakuMatchBtn)
     m_danmakuMatchBtn->hide();
+  if (m_danmakuRematchBtn)
+    m_danmakuRematchBtn->hide();
+  if (m_danmakuClearBtn)
+    m_danmakuClearBtn->hide();
+  m_danmakuBoundCount = 0;
 
   m_versionComboBox->blockSignals(true);
   m_versionComboBox->clear();
@@ -195,6 +218,27 @@ void DetailActionWidget::setTraktItemType(const QString& itemType) {
 void DetailActionWidget::setDanmakuMatchVisible(bool visible) {
   if (m_danmakuMatchBtn) {
     m_danmakuMatchBtn->setVisible(visible);
+  }
+}
+
+void DetailActionWidget::setDanmakuMatchBoundCount(int count) {
+  m_danmakuBoundCount = count;
+  const bool bound = count > 0;
+  if (m_danmakuMatchBtn) {
+    m_danmakuMatchBtn->setVisible(!bound);
+  }
+  if (m_danmakuRematchBtn) {
+    m_danmakuRematchBtn->setVisible(bound);
+    if (bound) {
+      m_danmakuRematchBtn->setToolTip(
+          tr("Re-open the danmaku matcher. %1 episode binding(s) saved.")
+              .arg(count));
+    } else {
+      m_danmakuRematchBtn->setToolTip(QString());
+    }
+  }
+  if (m_danmakuClearBtn) {
+    m_danmakuClearBtn->setVisible(bound);
   }
 }
 

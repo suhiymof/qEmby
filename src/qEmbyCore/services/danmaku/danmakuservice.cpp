@@ -609,19 +609,34 @@ bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const Danmak
     }
 
     const double minimumTitleScore = context.isEpisode() ? 0.48 : 0.58;
-    if (bestCandidateTitleScore(context, candidate) < minimumTitleScore)
+    const double ts = bestCandidateTitleScore(context, candidate);
+    if (ts < minimumTitleScore)
     {
+        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (titleScore)"
+                           << "| ts:" << ts << "| min:" << minimumTitleScore
+                           << "| ctx.seriesName:" << context.seriesName
+                           << "| ctx.title:" << context.title
+                           << "| cand.title:" << candidate.title
+                           << "| cand.subtitle:" << candidate.subtitle;
         return false;
     }
 
     if (context.isEpisode() && context.episodeNumber > 0 && candidate.episodeNumber > 0 &&
         context.episodeNumber != candidate.episodeNumber)
     {
+        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (epNumber)"
+                           << "| ctx.epNumber:" << context.episodeNumber
+                           << "| cand.epNumber:" << candidate.episodeNumber
+                           << "| cand.targetId:" << candidate.targetId;
         return false;
     }
     if (context.isEpisode() && context.seasonNumber > 0 && candidate.seasonNumber > 0 &&
         context.seasonNumber != candidate.seasonNumber)
     {
+        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (seasonNumber)"
+                           << "| ctx.seasonNumber:" << context.seasonNumber
+                           << "| cand.seasonNumber:" << candidate.seasonNumber
+                           << "| cand.targetId:" << candidate.targetId;
         return false;
     }
 
@@ -630,6 +645,9 @@ bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const Danmak
     if (!context.isEpisode() && context.productionYear > 0 && candidateYear > 0 &&
         std::abs(context.productionYear - candidateYear) > 1)
     {
+        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (year)"
+                           << "| ctx.year:" << context.productionYear
+                           << "| cand.year:" << candidateYear;
         return false;
     }
 
@@ -638,6 +656,10 @@ bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const Danmak
         const qint64 allowedDifference = std::max<qint64>(5 * 60 * 1000, context.durationMs * 18 / 100);
         if (std::llabs(context.durationMs - candidate.durationMs) > allowedDifference)
         {
+            qDebug().noquote() << "[Danmaku][Service] plausible REJECT (duration)"
+                               << "| ctx.dur:" << context.durationMs
+                               << "| cand.dur:" << candidate.durationMs
+                               << "| allowed:" << allowedDifference;
             return false;
         }
     }
@@ -1907,6 +1929,43 @@ QCoro::Task<DanmakuMatchResult> DanmakuService::resolveMatch(DanmakuMediaContext
         }
     }
 
+    // Series binding fallback: when the detail page multi matcher pre-bound
+    // the whole series to specific danmaku sources (e.g. B站 season -> per
+    // episode cid), each playback looks up the per-episode binding here.
+    DanmakuMatchCandidate seriesBoundCandidate;
+    bool seriesBoundHit = false;
+    if (trimmedManualKeyword.isEmpty() && !hasCachedMatch &&
+        context.isEpisode() && context.episodeNumber > 0 &&
+        !context.parentSeriesId.isEmpty())
+    {
+        seriesBoundHit = m_cacheStore->loadSeriesBinding(
+            context.serverId, context.parentSeriesId, context.seasonNumber,
+            context.episodeNumber, &seriesBoundCandidate);
+        if (seriesBoundHit && seriesBoundCandidate.isValid() &&
+            cachedCandidateAvailable(seriesBoundCandidate) &&
+            sourceModeAllowsCandidate(seriesBoundCandidate))
+        {
+            // Persist as episode-level manual override so future lookups
+            // skip the series scan and go straight to the cache hit.
+            m_cacheStore->saveMatch(context, seriesBoundCandidate, true);
+            result.matched = true;
+            result.cacheHit = true;
+            result.manualOverride = true;
+            result.selected = seriesBoundCandidate;
+            qDebug().noquote()
+                << "[Danmaku][Service] Series binding hit"
+                << "| mediaId:" << context.mediaId
+                << "| seriesId:" << context.parentSeriesId
+                << "| episodeNumber:" << context.episodeNumber
+                << "| targetId:" << seriesBoundCandidate.targetId
+                << "| endpointName:" << seriesBoundCandidate.endpointName;
+            if (result.matched)
+            {
+                co_return result;
+            }
+        }
+    }
+
     if (trimmedManualKeyword.isEmpty() && !autoMatchEnabled(context.serverId))
     {
         qDebug().noquote() << "[Danmaku][Service] Auto match disabled"
@@ -2154,10 +2213,83 @@ void DanmakuService::saveManualMatch(const DanmakuMediaContext &context, const D
     {
         return;
     }
+    // Series-level save: each picked episode carries its own episodeNumber.
+    // Land them in the series-binding table so the player picks them up via
+    // loadSeriesBinding on every subsequent playback.
+    const bool isSeries =
+        context.itemType.compare(QStringLiteral("Series"),
+                                 Qt::CaseInsensitive) == 0;
+    if (isSeries && candidate.episodeNumber > 0 &&
+        !context.mediaId.isEmpty())
+    {
+        m_cacheStore->saveSeriesBinding(context.serverId, context.mediaId,
+                                       context.seasonNumber,
+                                       candidate.episodeNumber, candidate);
+        qDebug().noquote() << "[Danmaku][Service] Series binding saved"
+                           << "| serverId:" << context.serverId
+                           << "| seriesId:" << context.mediaId
+                           << "| episodeNumber:" << candidate.episodeNumber
+                           << "| targetId:" << candidate.targetId;
+        return;
+    }
     m_cacheStore->saveMatch(context, candidate, true);
     qDebug().noquote() << "[Danmaku][Service] Manual match saved"
                        << "| mediaId:" << context.mediaId << "| endpointId:" << candidate.endpointId
                        << "| endpointName:" << candidate.endpointName << "| targetId:" << candidate.targetId;
+}
+
+void DanmakuService::saveSeriesBindings(const QString &serverId,
+                                        const QString &seriesId,
+                                        int seasonNumber,
+                                        const QList<DanmakuMatchCandidate> &candidates)
+{
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return;
+    }
+    int saved = 0;
+    for (const DanmakuMatchCandidate &candidate : candidates) {
+        if (!candidate.isValid() || candidate.episodeNumber <= 0) {
+            continue;
+        }
+        m_cacheStore->saveSeriesBinding(serverId, seriesId, seasonNumber,
+                                        candidate.episodeNumber, candidate);
+        ++saved;
+    }
+    qDebug().noquote() << "[Danmaku][Service] Series bindings saved"
+                       << "| serverId:" << serverId
+                       << "| seriesId:" << seriesId
+                       << "| saved:" << saved
+                       << "| submitted:" << candidates.size();
+}
+
+void DanmakuService::clearSeriesBindings(const QString &serverId,
+                                         const QString &seriesId)
+{
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return;
+    }
+    m_cacheStore->clearSeriesBindings(serverId, seriesId);
+    qDebug().noquote() << "[Danmaku][Service] Series bindings cleared"
+                       << "| serverId:" << serverId
+                       << "| seriesId:" << seriesId;
+}
+
+int DanmakuService::countSeriesBindings(const QString &serverId,
+                                       const QString &seriesId) const
+{
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return 0;
+    }
+    return m_cacheStore->countSeriesBindings(serverId, seriesId);
+}
+
+QList<int> DanmakuService::listBoundEpisodeNumbers(const QString &serverId,
+                                                   const QString &seriesId) const
+{
+    if (serverId.isEmpty() || seriesId.isEmpty()) {
+        return {};
+    }
+    return m_cacheStore->listBoundEpisodeNumbers(serverId, seriesId);
 }
 
 void DanmakuService::clearCache()

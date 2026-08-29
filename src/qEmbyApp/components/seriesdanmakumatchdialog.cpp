@@ -16,6 +16,7 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QSet>
 #include <QShowEvent>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -56,7 +57,7 @@ QString providerDisplayName(const QString &provider)
 SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     QEmbyCore *core, Mode mode, QList<DanmakuMatchCandidate> seriesCandidates,
     DanmakuMediaContext context, QString initialKeyword, QString activeTargetId,
-    QString activeEndpointId, QWidget *parent)
+    QString activeEndpointId, QList<int> preSelectedEpisodes, QWidget *parent)
     : PlayerOverlayDialog(parent),
       m_core(core),
       m_mode(mode),
@@ -64,7 +65,8 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
       m_initialKeyword(std::move(initialKeyword)),
       m_activeTargetId(std::move(activeTargetId)),
       m_activeEndpointId(std::move(activeEndpointId)),
-      m_seriesResults(std::move(seriesCandidates))
+      m_seriesResults(std::move(seriesCandidates)),
+      m_preSelectedEpisodes(std::move(preSelectedEpisodes))
 {
     setSurfaceObjectName("seriesDanmakuMatchDialog");
     setSurfacePreferredSize(QSize(720, 520));
@@ -169,8 +171,12 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
 
     m_episodeList = new QListWidget(m_episodePanel);
     m_episodeList->setObjectName("ManageLibPathList");
+    // MultiSelection: each click toggles the row's selection, no modifier
+    // needed. ExtendedSelection would replace the previous selection on a
+    // fresh click — the user wants individual items to stay selected while
+    // they pick others.
     m_episodeList->setSelectionMode(m_mode == Mode::Multi
-                                        ? QAbstractItemView::ExtendedSelection
+                                        ? QAbstractItemView::MultiSelection
                                         : QAbstractItemView::SingleSelection);
     m_episodeList->setWordWrap(true);
     m_episodeList->setMinimumHeight(240);
@@ -239,11 +245,37 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
         }
     });
     connect(m_episodeList, &QListWidget::itemSelectionChanged, this,
-            [this]() { updateSelectionSummary(); });
+            [this]() {
+                updateSelectionSummary();
+                updateSelectAllLabel();
+            });
     if (m_selectAllButton) {
         connect(m_selectAllButton, &QPushButton::clicked, this, [this]() {
-            m_episodeList->selectAll();
-            updateSelectionSummary();
+            if (!m_episodeList || m_episodeList->count() == 0) {
+                return;
+            }
+            if (m_allSelected) {
+                // Already all selected: a second click clears the list.
+                m_episodeList->clearSelection();
+                // clearSelection does not trigger itemSelectionChanged on
+                // all Qt backports when going from "all selected" to
+                // "nothing"; drive the bookkeeping manually.
+                m_allSelected = false;
+                updateSelectAllLabel();
+                updateSelectionSummary();
+            } else {
+                m_episodeList->selectAll();
+                m_allSelected = true;
+                // selectAll() fires itemSelectionChanged but on some Qt
+                // builds it does not fire if the list was already fully
+                // selected; refresh once to be safe.
+                if (m_episodeList->selectedItems().size() !=
+                    m_episodeList->count()) {
+                    m_episodeList->selectAll();
+                }
+                updateSelectAllLabel();
+                updateSelectionSummary();
+            }
         });
     }
     if (m_offsetEdit) {
@@ -416,7 +448,17 @@ void SeriesDanmakuMatchDialog::rebuildEpisodeList()
         return;
     }
     m_episodeList->clear();
-    for (const DanmakuEpisode &ep : m_currentSeries.episodes) {
+    // Build a quick lookup of pre-ticked adjusted episode numbers so the
+    // episode picker can restore the user's prior selections.
+    QSet<int> preTicked;
+    for (const int ep : m_preSelectedEpisodes) {
+        if (ep > 0) {
+            preTicked.insert(ep);
+        }
+    }
+    int ticked = 0;
+    for (int row = 0; row < m_currentSeries.episodes.size(); ++row) {
+        const DanmakuEpisode &ep = m_currentSeries.episodes.at(row);
         const int adjusted = ep.episodeNumber + m_episodeOffset;
         const QString label =
             QStringLiteral("%1. %2")
@@ -424,7 +466,13 @@ void SeriesDanmakuMatchDialog::rebuildEpisodeList()
                 .arg(ep.longTitle.isEmpty() ? ep.title : ep.longTitle);
         auto *item = new QListWidgetItem(label, m_episodeList);
         item->setData(kSeriesCandidateRole, QVariant());
+        if (preTicked.contains(adjusted)) {
+            m_episodeList->item(row)->setSelected(true);
+            ++ticked;
+        }
     }
+    m_allSelected = (ticked > 0 && ticked == m_currentSeries.episodes.size());
+    updateSelectAllLabel();
 }
 
 void SeriesDanmakuMatchDialog::applyEpisodeOffset()
@@ -489,6 +537,23 @@ void SeriesDanmakuMatchDialog::updateSelectionSummary()
     if (m_confirmButton) {
         m_confirmButton->setEnabled(!m_selectedEpisodes.isEmpty());
     }
+}
+
+void SeriesDanmakuMatchDialog::updateSelectAllLabel()
+{
+    if (!m_selectAllButton || !m_episodeList) {
+        return;
+    }
+    // Mirror the user-visible "all selected" state derived from the actual
+    // selection. Each user-driven click on the button still toggles between
+    // select-all and clear-selection, but the label should also flip back
+    // automatically if the user manually deselects items, so the button is
+    // never misleading.
+    m_allSelected =
+        m_episodeList->count() > 0 &&
+        m_episodeList->selectedItems().size() == m_episodeList->count();
+    m_selectAllButton->setText(
+        m_allSelected ? tr("Deselect All") : tr("Select All"));
 }
 
 void SeriesDanmakuMatchDialog::updateUiState()

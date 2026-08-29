@@ -51,6 +51,22 @@ public:
 
     void saveManualMatch(const DanmakuMediaContext &context,
                          const DanmakuMatchCandidate &candidate);
+
+    // Per-episode series bindings: the detail-page multi matcher saves one
+    // candidate per picked episode, keyed by (seriesId, seasonNumber,
+    // episodeNumber). The player uses these as the manual override when
+    // an episode plays back.
+    void saveSeriesBindings(const QString &serverId,
+                            const QString &seriesId,
+                            int seasonNumber,
+                            const QList<DanmakuMatchCandidate> &candidates);
+    void clearSeriesBindings(const QString &serverId,
+                             const QString &seriesId);
+    int countSeriesBindings(const QString &serverId,
+                            const QString &seriesId) const;
+    QList<int> listBoundEpisodeNumbers(const QString &serverId,
+                                       const QString &seriesId) const;
+
     void clearCache();
 
 private:

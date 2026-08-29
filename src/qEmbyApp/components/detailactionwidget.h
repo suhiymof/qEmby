@@ -36,6 +36,12 @@ public:
     // Danmaku match button: visible for Movie / Episode / Series. The detail
     // view connects danmakuMatchRequested to the two-stage series matcher.
     void setDanmakuMatchVisible(bool visible);
+    // Bound count > 0: switch the button area to a "rematch + clear"
+    // pair, since at least one episode is already wired to a danmaku
+    // source. count == 0 hides the pair and reverts to a single "match"
+    // button. The count also surfaces as a tooltip on the rematch button
+    // so the user can see how many episodes are wired.
+    void setDanmakuMatchBoundCount(int count);
 
     int currentSourceIndex() const;
     int currentAudioIndex() const;
@@ -52,6 +58,8 @@ signals:
     void traktMarkWatchedRequested();
     void traktUnmarkWatchedRequested();
     void danmakuMatchRequested();
+    void danmakuRematchRequested();
+    void danmakuClearBindingsRequested();
     void sourceVersionChanged(int index);
     void audioStreamChanged(int streamIndex);
     void subtitleStreamChanged(int streamIndex);
@@ -66,7 +74,10 @@ private:
     QPushButton* m_playedBtn;
     QPushButton* m_traktBtn = nullptr;
     QPushButton* m_danmakuMatchBtn = nullptr;
+    QPushButton* m_danmakuRematchBtn = nullptr;
+    QPushButton* m_danmakuClearBtn = nullptr;
     QString m_traktItemType;
+    int m_danmakuBoundCount = 0;
 
     QWidget* m_progressWidget;
     QProgressBar* m_progressBar;

@@ -542,6 +542,9 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
 
         for (const QJsonValue &episodeValue : episodes) {
             const QJsonObject episode = episodeValue.toObject();
+            // Drop PV/trailers (B站 section_type=1 are 30~50s previews; they
+            // have no usable danmaku and would only confuse the picker). Only
+            // section_type=0 entries (the 189 main episodes) are kept.
             if (episode.value(QStringLiteral("section_type")).toInt(-1) != 0) {
                 continue;
             }
@@ -552,14 +555,19 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             }
             const QString longTitle =
                 episode.value(QStringLiteral("long_title")).toString().trimmed();
-            const QPair<QString, int> parsed = parseLongTitle(longTitle);
+            // Use the post-filter index (1..N) as the candidate's episode
+            // number, so the picker renders "1 凡人风起天南1重制版", "2 凡人
+            // 风起天南2重制版", ... and resolveMatch aligns Emby's global
+            // episode number to the same flat sequence. parseLongTitle's
+            // per-season number would reset to 1 at every season boundary.
+            const int flatIndex = seriesCandidate.episodes.size() + 1;
 
             DanmakuEpisode ep;
-            ep.episodeNumber = parsed.second;
+            ep.episodeNumber = flatIndex;
             ep.cid = cid;
             ep.title = episode.value(QStringLiteral("title")).toString().trimmed();
             ep.longTitle = longTitle.isEmpty() ? ep.title : longTitle;
-            ep.seasonName = parsed.first;
+            ep.seasonName = QString();  // 季名信息已在 longTitle 文本里
             ep.durationMs = static_cast<qint64>(
                 episode.value(QStringLiteral("duration")).toVariant().toDouble() * 1000.0);
             seriesCandidate.episodes.append(ep);
