@@ -1918,7 +1918,11 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmakuService::searchAllCandidates(Da
     sortDanmakuCandidates(aggregatedCandidates, context,
                           trimmedManualKeyword);
 
-    co_return aggregatedCandidates;
+    // Collapse the flat episode-level rows from dandanplay / danmu_api
+    // into series-level groups so the picker shows one row per (work,
+    // provider, season) instead of one row per episode — same step the
+    // cross-server aggregator applies (searchAllCandidatesAcrossServers).
+    co_return aggregateEpisodesToSeries(aggregatedCandidates);
 }
 
 QCoro::Task<QList<DanmakuMatchCandidate>>
