@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <zlib.h>
 
 namespace {
 
@@ -187,27 +188,40 @@ QCoro::Task<WbiKeys> fetchWbiKeys(NetworkManager *networkManager,
 
 // Inflates the raw-deflate payload Bilibili serves for comment.xml. The bytes
 // are wrapped into a full zlib stream (constant header + adler32) so that
-// qUncompress can process it.
+// Bilibili serves the comment payload as raw deflate (no zlib header, no
+// trailing adler32). qUncompress can't decode it because its adler32
+// verification rejects any stream where the trailer is computed on the
+// compressed payload rather than the decompressed one. Use zlib directly
+// in -15 (raw deflate) mode and let the caller decide what to do with the
+// trailing bytes.
 QByteArray rawDeflateInflate(const QByteArray &raw)
 {
-    QByteArray stream;
-    stream.reserve(raw.size() + 6);
-    stream.append('\x78');
-    stream.append('\x9c');
-    stream.append(raw);
-
-    quint32 a = 1;
-    quint32 b = 0;
-    for (const char c : raw) {
-        a = (a + static_cast<quint8>(c)) % 65521;
-        b = (b + a) % 65521;
+    if (raw.isEmpty()) {
+        return {};
     }
-    const quint32 adler = (b << 16) | a;
-    stream.append(static_cast<char>((adler >> 24) & 0xff));
-    stream.append(static_cast<char>((adler >> 16) & 0xff));
-    stream.append(static_cast<char>((adler >> 8) & 0xff));
-    stream.append(static_cast<char>(adler & 0xff));
-    return qUncompress(stream);
+    z_stream stream;
+    std::memset(&stream, 0, sizeof(stream));
+    stream.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(raw.constData()));
+    stream.avail_in = static_cast<uInt>(raw.size());
+    if (inflateInit2(&stream, -15) != Z_OK) {
+        return {};
+    }
+    QByteArray out;
+    out.reserve(raw.size() * 4);
+    char buffer[8192];
+    int ret = Z_OK;
+    do {
+        stream.next_out = reinterpret_cast<Bytef *>(buffer);
+        stream.avail_out = sizeof(buffer);
+        ret = inflate(&stream, Z_NO_FLUSH);
+        if (ret != Z_OK && ret != Z_STREAM_END) {
+            inflateEnd(&stream);
+            return {};
+        }
+        out.append(buffer, sizeof(buffer) - stream.avail_out);
+    } while (ret == Z_OK);
+    inflateEnd(&stream);
+    return out;
 }
 
 // Parses a JSON payload. The primary path requests Accept-Encoding: identity

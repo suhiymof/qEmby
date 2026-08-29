@@ -339,8 +339,8 @@ QCoro::Task<void> SeriesDanmakuMatchDialog::searchSeries(QString queryText)
 
     try {
         const QList<DanmakuMatchCandidate> results =
-            co_await core->danmakuService()->searchAllCandidates(context,
-                                                                 queryText);
+            co_await core->danmakuService()->searchAllCandidatesAcrossServers(
+                context, queryText);
         if (!safeThis) {
             co_return;
         }

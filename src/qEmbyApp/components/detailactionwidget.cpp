@@ -62,20 +62,23 @@ DetailActionWidget::DetailActionWidget(QWidget *parent) : QWidget(parent) {
   m_danmakuMatchBtn = new QPushButton(QStringLiteral("\U0001F4AC ") + tr("Match Danmaku"), this);
   m_danmakuMatchBtn->setObjectName("detail-danmaku-match-btn");
   m_danmakuMatchBtn->setCursor(Qt::PointingHandCursor);
-  m_danmakuMatchBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_danmakuMatchBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+  m_danmakuMatchBtn->setMinimumWidth(0);
   m_danmakuMatchBtn->setToolTip(tr("Match danmaku for this item"));
   m_danmakuMatchBtn->hide();
 
   m_danmakuRematchBtn = new QPushButton(QStringLiteral("\u21BB ") + tr("Rematch Danmaku"), this);
   m_danmakuRematchBtn->setObjectName("detail-danmaku-rematch-btn");
   m_danmakuRematchBtn->setCursor(Qt::PointingHandCursor);
-  m_danmakuRematchBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_danmakuRematchBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+  m_danmakuRematchBtn->setMinimumWidth(0);
   m_danmakuRematchBtn->hide();
 
   m_danmakuClearBtn = new QPushButton(QStringLiteral("\u2715 ") + tr("Clear Danmaku Binding"), this);
   m_danmakuClearBtn->setObjectName("detail-danmaku-clear-btn");
   m_danmakuClearBtn->setCursor(Qt::PointingHandCursor);
-  m_danmakuClearBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_danmakuClearBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+  m_danmakuClearBtn->setMinimumWidth(0);
   m_danmakuClearBtn->hide();
 
   m_progressWidget = new QWidget(this);

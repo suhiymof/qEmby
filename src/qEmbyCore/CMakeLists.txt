@@ -19,6 +19,7 @@ target_link_libraries(qEmbyCore PUBLIC Qt${QT_VERSION_MAJOR}::Gui
     Qt${QT_VERSION_MAJOR}::WebSockets
     QCoro6::Core
     QCoro6::Network
+    ZLIB::ZLIB
 )
 
 target_compile_definitions(qEmbyCore PRIVATE QEMBYCORE_LIBRARY)

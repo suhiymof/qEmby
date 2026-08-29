@@ -45,6 +45,13 @@ public:
     QCoro::Task<QList<DanmakuMatchCandidate>> searchAllCandidates(
         DanmakuMediaContext context,
         QString manualKeyword = QString());
+    // Series-level picker only: aggregate every enabled danmaku provider
+    // across ALL configured Emby servers (not just the active one), so
+    // users who happen to have their danmaku sources attached to a
+    // different server still see them in the series matcher.
+    QCoro::Task<QList<DanmakuMatchCandidate>> searchAllCandidatesAcrossServers(
+        DanmakuMediaContext context,
+        QString manualKeyword = QString());
     QCoro::Task<DanmakuMatchResult> resolveMatch(
         DanmakuMediaContext context,
         QString manualKeyword = QString());

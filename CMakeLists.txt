@@ -81,6 +81,13 @@ if(UNIX AND NOT APPLE)
     find_package(Qt6 QUIET COMPONENTS DBus)
 endif()
 
+# zlib: used by bilibilidanmakuprovider to inflate B站 raw-deflate danmaku
+# payloads (the B站 comment.bilibili.com endpoint returns Content-Encoding:
+# deflate without the zlib header, so Qt's qUncompress wrapper can't decode
+# it). On Windows Qt ships a private zlib but the public headers may not be
+# in the default include path; rely on the system one.
+find_package(ZLIB REQUIRED)
+
 # ==========================================
 # 为第三方子模块 (qwindowkit/qmsetup) 注入所需的 Qt 版本环境变量
 # ==========================================

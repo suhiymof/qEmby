@@ -1858,6 +1858,81 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmakuService::searchAllCandidates(Da
     co_return aggregatedCandidates;
 }
 
+QCoro::Task<QList<DanmakuMatchCandidate>>
+DanmakuService::searchAllCandidatesAcrossServers(DanmakuMediaContext context, QString manualKeyword)
+{
+    const QString trimmedManualKeyword = manualKeyword.trimmed();
+
+    // Aggregate enabled providers across every configured Emby server so
+    // series-level pickers (which are not tied to a specific playback
+    // server) surface danmaku sources the user has set up anywhere.
+    QList<DanmakuProviderConfig> aggregatedProviders;
+    {
+        QSet<QString> seenKeys;
+        auto appendFromServer = [&](const QString &serverId)
+        {
+            for (const DanmakuProviderConfig &config :
+                 enabledProviderConfigs(serverId)) {
+                const QString dedupKey = config.provider + QChar('|') +
+                                         config.baseUrl + QChar('|') +
+                                         config.endpointId;
+                if (seenKeys.contains(dedupKey)) {
+                    continue;
+                }
+                seenKeys.insert(dedupKey);
+                aggregatedProviders.append(config);
+            }
+        };
+        appendFromServer(context.serverId);
+        if (m_serverManager) {
+            for (const ServerProfile &profile : m_serverManager->servers()) {
+                if (profile.id == context.serverId) {
+                    continue;
+                }
+                appendFromServer(profile.id);
+            }
+        }
+    }
+
+    QList<DanmakuMatchCandidate> aggregatedCandidates;
+    if (aggregatedProviders.isEmpty()) {
+        qDebug().noquote() << "[Danmaku][Service] Search all candidates across servers"
+                           << "| mediaId:" << context.mediaId
+                           << "| manualKeyword:" << trimmedManualKeyword
+                           << "| enabledProviderCount: 0";
+        co_return aggregatedCandidates;
+    }
+
+    qDebug().noquote() << "[Danmaku][Service] Search all candidates across servers"
+                       << "| mediaId:" << context.mediaId
+                       << "| manualKeyword:" << trimmedManualKeyword
+                       << "| enabledProviderCount:" << aggregatedProviders.size();
+
+    const QList<ProviderSearchOutcome> outcomes =
+        co_await searchProvidersInParallel(context, aggregatedProviders,
+                                          trimmedManualKeyword);
+    for (const ProviderSearchOutcome &outcome : outcomes) {
+        if (outcome.errorMessage.isEmpty()) {
+            aggregatedCandidates.append(outcome.candidates);
+            qDebug().noquote() << "[Danmaku][Service] Search all online candidates (cross-server)"
+                               << "| mediaId:" << context.mediaId
+                               << "| endpointId:" << outcome.config.endpointId
+                               << "| endpointName:" << outcome.config.endpointName
+                               << "| count:" << outcome.candidates.size();
+        } else {
+            qWarning().noquote()
+                << "[Danmaku][Service] Search all online candidates failed (cross-server)"
+                << "| mediaId:" << context.mediaId
+                << "| endpointId:" << outcome.config.endpointId
+                << "| endpointName:" << outcome.config.endpointName
+                << "| error:" << outcome.errorMessage;
+        }
+    }
+
+    sortDanmakuCandidates(aggregatedCandidates, context, trimmedManualKeyword);
+    co_return aggregatedCandidates;
+}
+
 QCoro::Task<DanmakuMatchResult> DanmakuService::resolveMatch(DanmakuMediaContext context, QString manualKeyword)
 {
     DanmakuMatchResult result;

@@ -14,6 +14,30 @@
 
 namespace {
 
+QJsonObject episodeToJson(const DanmakuEpisode &episode)
+{
+    QJsonObject obj;
+    obj["episodeNumber"] = episode.episodeNumber;
+    obj["cid"] = episode.cid;
+    obj["title"] = episode.title;
+    obj["longTitle"] = episode.longTitle;
+    obj["seasonName"] = episode.seasonName;
+    obj["durationMs"] = QString::number(episode.durationMs);
+    return obj;
+}
+
+DanmakuEpisode episodeFromJson(const QJsonObject &obj)
+{
+    DanmakuEpisode episode;
+    episode.episodeNumber = obj["episodeNumber"].toInt(-1);
+    episode.cid = obj["cid"].toString();
+    episode.title = obj["title"].toString();
+    episode.longTitle = obj["longTitle"].toString();
+    episode.seasonName = obj["seasonName"].toString();
+    episode.durationMs = obj["durationMs"].toVariant().toLongLong();
+    return episode;
+}
+
 QJsonObject candidateToJson(const DanmakuMatchCandidate &candidate)
 {
     QJsonObject obj;
@@ -30,6 +54,15 @@ QJsonObject candidateToJson(const DanmakuMatchCandidate &candidate)
     obj["score"] = candidate.score;
     obj["matchReason"] = candidate.matchReason;
     obj["commentCount"] = candidate.commentCount;
+    // Series-level candidates carry the full per-episode list (cid,
+    // longTitle, ...) so fetchComments can still resolve an episode cid
+    // after a roundtrip through the cache. Without this, isSeries() goes
+    // false on reload and the wrong targetId is used as the cid.
+    QJsonArray episodesArray;
+    for (const DanmakuEpisode &ep : candidate.episodes) {
+        episodesArray.append(episodeToJson(ep));
+    }
+    obj["episodes"] = episodesArray;
     return obj;
 }
 
@@ -49,6 +82,10 @@ DanmakuMatchCandidate candidateFromJson(const QJsonObject &obj)
     candidate.score = obj["score"].toDouble();
     candidate.matchReason = obj["matchReason"].toString();
     candidate.commentCount = obj["commentCount"].toInt();
+    const QJsonArray episodesArray = obj["episodes"].toArray();
+    for (const QJsonValue &value : episodesArray) {
+        candidate.episodes.append(episodeFromJson(value.toObject()));
+    }
     return candidate;
 }
 
