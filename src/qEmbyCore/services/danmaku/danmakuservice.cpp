@@ -638,7 +638,11 @@ QList<DanmakuMatchCandidate> DanmakuService::aggregateEpisodesToSeries(
             // First episode in this group seeds the candidate's metadata.
             // episodeNumber / durationMs are series-level meaning-less so
             // we reset them; the per-episode values live in episodes[].
+            // title is also reset to the anime title so the series
+            // picker shows "凡人修仙传 - 凡人修仙传 (N)" rather than
+            // "<anime> - <some single episode title>".
             DanmakuMatchCandidate sc = c;
+            sc.title = animeTitle;
             sc.episodeNumber = -1;
             sc.durationMs = 0;
             sc.episodes.clear();
