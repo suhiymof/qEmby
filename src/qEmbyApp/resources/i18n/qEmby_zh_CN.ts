@@ -2096,6 +2096,10 @@ Continue from there?</source>
         <source> About</source>
         <translation> 关于</translation>
     </message>
+    <message>
+        <source> BiliBili</source>
+        <translation> BiliBili</translation>
+    </message>
 </context>
 
 <context>
@@ -8779,6 +8783,10 @@ Comments: %4</source>
         <source>Server URL must be a valid http or https address.</source>
         <translation>服务器地址必须是合法的 http 或 https 地址。</translation>
     </message>
+    <message>
+        <source>BiliBili</source>
+        <translation>BiliBili</translation>
+    </message>
 </context>
 
 <context>
@@ -8814,6 +8822,14 @@ Comments: %4</source>
     <message>
         <source>App Secret: %1</source>
         <translation>App Secret：%1</translation>
+    </message>
+    <message>
+        <source>Signed in as %1</source>
+        <translation>已登录为 %1</translation>
+    </message>
+    <message>
+        <source>Not signed in</source>
+        <translation>未登录</translation>
     </message>
 </context>
 
@@ -9976,6 +9992,54 @@ This cannot be undone.</source>
     <message>
         <source>Trakt Authorization</source>
         <translation>Trakt 授权</translation>
+    </message>
+</context>
+
+<context>
+    <name>PageBilibili</name>
+    <message>
+        <source>BiliBili</source>
+        <translation>BiliBili</translation>
+    </message>
+    <message>
+        <source>BiliBili Account</source>
+        <translation>BiliBili 账号</translation>
+    </message>
+    <message>
+        <source>Scan to Sign In</source>
+        <translation>扫码登录</translation>
+    </message>
+    <message>
+        <source>Sign Out</source>
+        <translation>登出</translation>
+    </message>
+    <message>
+        <source>Generating QR code...</source>
+        <translation>正在生成二维码...</translation>
+    </message>
+    <message>
+        <source>Login failed: %1</source>
+        <translation>登录失败：%1</translation>
+    </message>
+    <message>
+        <source>Scan the QR code with the BiliBili app...</source>
+        <translation>请使用 BiliBili App 扫码登录...</translation>
+    </message>
+    <message>
+        <source>QR code expired, please try again</source>
+        <translation>二维码已过期，请重试</translation>
+    </message>
+    <message>
+        <source>Login failed, please try again</source>
+        <translation>登录失败，请重试</translation>
+    </message>
+</context>
+
+<context>
+    <name>BiliBiliLoginDialog</name>
+    <message>
+        <source>BiliBili 登录</source>
+        <translation>BiliBili 登录</translation>
     </message>
 </context>
 </TS>
