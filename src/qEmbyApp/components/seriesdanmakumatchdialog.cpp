@@ -137,8 +137,19 @@ QString offsetConfigKey(const QString &provider, const QString &seriesId)
         .arg(QLatin1String(kEpisodeOffsetKey), provider, seriesId);
 }
 
-QString providerDisplayName(const QString &provider)
+// Returns the user-visible label for the right-aligned "where this row
+// came from" badge. Prefer the per-endpoint display name (e.g. "ziji",
+// the name the user gave their LogVar/danmu_api instance) over the
+// generic provider type ("danmu_api") so the user can tell at a glance
+// which configured instance produced the row — matches the
+// PlayerDanmakuIdentifyDialog logic.
+QString providerBadgeLabel(const DanmakuMatchCandidate &candidate)
 {
+    const QString endpointName = candidate.endpointName.trimmed();
+    if (!endpointName.isEmpty()) {
+        return endpointName;
+    }
+    const QString provider = candidate.provider.trimmed();
     if (provider == QLatin1String("bilibili")) {
         return QCoreApplication::translate("SeriesDanmakuMatchDialog", "BiliBili");
     }
@@ -547,9 +558,10 @@ void SeriesDanmakuMatchDialog::rebuildSeriesList()
         auto *item = new QListWidgetItem(text, m_seriesList);
         item->setData(kSeriesCandidateRole, i);
         // Picked up by SeriesProviderItemDelegate to render a right-
-        // aligned "BiliBili" / "dandanplay" / "danmu_api" label.
+        // aligned "BiliBili" / "dandanplay" / "ziji" label (prefers the
+        // user-named endpoint over the generic provider type).
         item->setData(kSeriesProviderRole,
-                      providerDisplayName(candidate.provider));
+                      providerBadgeLabel(candidate));
         item->setToolTip(candidate.isSeries()
                              ? tr("Click to choose episodes")
                              : tr("Click to load danmaku"));
