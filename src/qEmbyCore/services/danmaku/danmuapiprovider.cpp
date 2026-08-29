@@ -541,17 +541,27 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmuApiProvider::searchCandidates(
     }
     QList<DanmakuMatchCandidate> searchCandidates = parseEpisodeSearchResponse(
         response, searchContext, hint.subject, hint.episodeNumber);
-    searchCandidates.erase(
-        std::remove_if(
-            searchCandidates.begin(), searchCandidates.end(),
-            [&searchContext](const DanmakuMatchCandidate &candidate) {
-                if (!searchContext.isEpisode()) {
-                    return false;
-                }
-                if (searchContext.episodeNumber > 0 &&
-                    candidate.episodeNumber > 0 &&
-                    candidate.episodeNumber != searchContext.episodeNumber) {
-                    return true;
+    // Client-side exact-match filter: only on auto-match paths, not on
+    // manual search. When the user opens the picker from the player
+    // (isEpisode()==true, e.g. episode 6) and types "凡人修仙传", we
+    // want the full candidate catalogue so they can pick a different
+    // series/season; stripping everything that isn't candidate.episode
+    // == 6 collapses the 589 ziji rows to 5 and hides the actual
+    // alternatives. resolveMatch already supplies a precise
+    // candidate.targetId when needed, so this filter is redundant on
+    // the search-all-candidates-across-servers picker path.
+    if (!manual) {
+        searchCandidates.erase(
+            std::remove_if(
+                searchCandidates.begin(), searchCandidates.end(),
+                [&searchContext](const DanmakuMatchCandidate &candidate) {
+                    if (!searchContext.isEpisode()) {
+                        return false;
+                    }
+                    if (searchContext.episodeNumber > 0 &&
+                        candidate.episodeNumber > 0 &&
+                        candidate.episodeNumber != searchContext.episodeNumber) {
+                        return true;
                 }
                 if (searchContext.seasonNumber > 0 &&
                     candidate.seasonNumber > 0 &&
@@ -564,6 +574,7 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmuApiProvider::searchCandidates(
                 return false;
             }),
         searchCandidates.end());
+    }
     allCandidates.append(searchCandidates);
 
     qDebug().noquote()

@@ -902,7 +902,8 @@ EpisodeSearchBatchOutcome processEpisodeSearchResponses(
     int requestedEpisodeNumber,
     QString stage,
     bool tmdbConstrained,
-    bool excludeClearlyEpisodicWorks)
+    bool excludeClearlyEpisodicWorks,
+    bool isManualSearch)
 {
     EpisodeSearchBatchOutcome outcome;
     for (int i = 0; i < responses.size(); ++i) {
@@ -922,8 +923,8 @@ EpisodeSearchBatchOutcome processEpisodeSearchResponses(
         QList<DanmakuMatchCandidate> candidates =
             parseSearchResponse(response.object, context, keyword,
                                 requestedEpisodeNumber,
-                                excludeClearlyEpisodicWorks);
-        if (context.isEpisode()) {
+                                excludeClearlyEpisodicWorks, isManualSearch);
+        if (context.isEpisode() && !isManualSearch) {
             candidates.erase(
                 std::remove_if(
                     candidates.begin(), candidates.end(),
@@ -1445,7 +1446,7 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DandanplayProvider::searchCandidates(
             processEpisodeSearchResponses(
                 responses, keywords, searchContext, requestedEpisodeNumber,
                 QStringLiteral("v2-direct"), !tmdbId.isEmpty(),
-                excludeClearlyEpisodicWorks);
+                excludeClearlyEpisodicWorks, isManualSearch);
         hadSuccessfulSearchResponse |= outcome.hadSuccessfulResponse;
         if (!outcome.lastError.isEmpty()) {
             lastSearchError = outcome.lastError;
@@ -1507,7 +1508,7 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DandanplayProvider::searchCandidates(
                     canonicalResponses, canonicalTitles, searchContext,
                     requestedEpisodeNumber,
                     QStringLiteral("v2-anime-episodes"), false,
-                    excludeClearlyEpisodicWorks);
+                    excludeClearlyEpisodicWorks, isManualSearch);
             hadSuccessfulSearchResponse |= outcome.hadSuccessfulResponse;
             if (!outcome.lastError.isEmpty()) {
                 lastSearchError = outcome.lastError;
@@ -1543,7 +1544,7 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DandanplayProvider::searchCandidates(
             processEpisodeSearchResponses(
                 legacyResponses, legacyKeywords, searchContext,
                 requestedEpisodeNumber, QStringLiteral("legacy-episodes"),
-                false, excludeClearlyEpisodicWorks);
+                false, excludeClearlyEpisodicWorks, isManualSearch);
         hadSuccessfulSearchResponse |= outcome.hadSuccessfulResponse;
         if (!outcome.lastError.isEmpty()) {
             lastSearchError = outcome.lastError;

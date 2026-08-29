@@ -83,7 +83,18 @@ public:
         QRect itemRect = opt.rect.adjusted(hPad, vPad, -hPad, -vPad);
 
         QFont providerFont = opt.font;
-        providerFont.setPointSizeF(opt.font.pointSizeF() * 0.88);
+        // QFont::pointSizeF() returns -1 when only the pixel size is set
+        // (the common case for Qt widgets, which use the platform's DPI-
+        // aware point size). Passing -0.88 to setPointSizeF triggers a
+        // "Point size <= 0" warning every paint — squelch that by only
+        // scaling when the font has a real point size; otherwise derive a
+        // smaller pixel size directly.
+        const qreal basePoint = opt.font.pointSizeF();
+        if (basePoint > 0.0) {
+            providerFont.setPointSizeF(basePoint * 0.88);
+        } else if (opt.font.pixelSize() > 0) {
+            providerFont.setPixelSize(qMax(1, qRound(opt.font.pixelSize() * 0.88)));
+        }
         QFontMetrics providerFm(providerFont);
         const int providerWidth = provider.isEmpty()
                                       ? 0
