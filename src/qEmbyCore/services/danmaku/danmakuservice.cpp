@@ -1272,6 +1272,19 @@ QList<DanmakuProviderConfig> DanmakuService::enabledProviderConfigs(QString serv
         serverId = m_serverManager->activeProfile().id;
     }
 
+    // Skip servers that have no user-configured danmaku source.
+    // loadServers() falls back to a single enabled dandanplay builtIn
+    // (legacyServerDefinition sets enabled=true) when the
+    // danmaku\servers JSON is empty, so an Emby server that has
+    // danmaku_enabled=true on the player side but no actual source
+    // configured would still get queried in the cross-server search
+    // aggregator and pollute results with dandanplay entries the user
+    // never opted in to.
+    if (!DanmakuSettings::hasConfiguredServers(serverId))
+    {
+        return configs;
+    }
+
     const QList<DanmakuServerDefinition> servers = DanmakuSettings::loadServers(serverId);
     const QString selectedId = DanmakuSettings::selectedServerId(serverId);
     auto appendServerConfig = [&configs, &serverId](const DanmakuServerDefinition &server)

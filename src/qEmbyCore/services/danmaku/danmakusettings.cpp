@@ -361,6 +361,20 @@ DanmakuServerDefinition DanmakuSettings::builtInBilibiliServer()
     return makeBuiltInBilibiliServer();
 }
 
+bool DanmakuSettings::hasConfiguredServers(QString serverId)
+{
+    serverId = serverId.trimmed();
+    if (serverId.isEmpty()) {
+        // loadServers returns the two built-ins in that case; treat as
+        // "configured" so the search path doesn't accidentally empty
+        // out when the caller has no concrete serverId.
+        return true;
+    }
+    const QString storedJson = ConfigStore::instance()->get<QString>(
+        settingKey(serverId, ConfigKeys::DanmakuServers));
+    return !storedJson.trimmed().isEmpty();
+}
+
 QList<DanmakuServerDefinition> DanmakuSettings::loadServers(QString serverId)
 {
     serverId = serverId.trimmed();
