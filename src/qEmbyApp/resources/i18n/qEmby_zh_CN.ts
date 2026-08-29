@@ -2472,6 +2472,22 @@ This will remove the current log and rotated backups. This action cannot be undo
         <source>Rendering backend used by the player engine</source>
         <translation>播放引擎使用的渲染后端</translation>
     </message>
+    <message>
+        <source>Enable BiliBili Danmaku</source>
+        <translation>启用 B 站弹幕</translation>
+    </message>
+    <message>
+        <source>Requires a logged-in BiliBili account (Settings -&gt; BiliBili). When enabled, matched anime will also pull danmaku from BiliBili.</source>
+        <translation>需要先在 BiliBili 设置页登录。启用后，匹配到的番剧也会从 B 站拉取弹幕。</translation>
+    </message>
+    <message>
+        <source>BiliBili danmaku enabled</source>
+        <translation>已启用 B 站弹幕</translation>
+    </message>
+    <message>
+        <source>BiliBili danmaku disabled</source>
+        <translation>已停用 B 站弹幕</translation>
+    </message>
 </context>
 
 <context>

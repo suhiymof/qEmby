@@ -723,6 +723,48 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
       danmakuRendererCombo, ConfigKeys::PlayerDanmakuRenderer,
       QVariant(DanmakuRendererUtils::defaultRendererId()));
 
+  // Bilibili danmaku source toggle (built-in, opt-in; requires a logged-in
+  // BiliBili account). The state lives in the bilibili entry of the per-server
+  // danmaku server list, so toggling here just calls saveServers().
+  const auto bilibiliServerIndex = [sid]() {
+    QList<DanmakuServerDefinition> servers =
+        DanmakuSettings::loadServers(sid);
+    for (int i = 0; i < servers.size(); ++i) {
+      if (servers.at(i).id == QLatin1String("bilibili") ||
+          servers.at(i).provider.trimmed().toLower() ==
+              QLatin1String("bilibili")) {
+        return i;
+      }
+    }
+    return -1;
+  };
+  auto *bilibiliSwitch = new ModernSwitch(this);
+  bilibiliSwitch->setChecked(
+      bilibiliServerIndex() >= 0
+          ? DanmakuSettings::loadServers(sid).at(bilibiliServerIndex()).enabled
+          : false);
+  connect(bilibiliSwitch, &ModernSwitch::toggled, this, [sid](bool on) {
+    QList<DanmakuServerDefinition> servers =
+        DanmakuSettings::loadServers(sid);
+    for (DanmakuServerDefinition &server : servers) {
+      if (server.id == QLatin1String("bilibili") ||
+          server.provider.trimmed().toLower() ==
+              QLatin1String("bilibili")) {
+        server.enabled = on;
+        break;
+      }
+    }
+    DanmakuSettings::saveServers(sid, servers, QString());
+    ModernToast::showMessage(
+        on ? tr("BiliBili danmaku enabled")
+           : tr("BiliBili danmaku disabled"),
+        2000);
+  });
+  addDanmakuSubPanel(
+      ":/svg/dark/danmaku.svg", tr("Enable BiliBili Danmaku"),
+      tr("Requires a logged-in BiliBili account (Settings -> BiliBili). When enabled, matched anime will also pull danmaku from BiliBili."),
+      bilibiliSwitch);
+
   auto *danmakuServerPanel =
       new SettingsSubPanel(":/svg/dark/danmaku-server.svg", this);
   auto *danmakuServerTextContainer = new QWidget(danmakuServerPanel);
