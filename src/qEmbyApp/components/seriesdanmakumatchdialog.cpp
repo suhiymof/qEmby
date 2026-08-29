@@ -21,7 +21,6 @@
 #include <QVBoxLayout>
 #include <config/configstore.h>
 #include <services/danmaku/danmakuservice.h>
-#include <services/server/servermanager.h>
 #include <qcorotimer.h>
 #include <stdexcept>
 
