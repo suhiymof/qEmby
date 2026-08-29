@@ -50,6 +50,10 @@ QMap<QString, QString> requestHeaders(const QString &cookie)
     QMap<QString, QString> headers;
     headers.insert(QStringLiteral("User-Agent"), QString::fromLatin1(kUserAgent));
     headers.insert(QStringLiteral("Referer"), QString::fromLatin1(kReferer));
+    // 强制 identity：B 站 pgc 接口对 QNAM 的 gzip 自动解压有时返回空 body
+    // （1.6MB 响应），明确要求不压缩可稳定拿到完整 JSON。
+    headers.insert(QStringLiteral("Accept-Encoding"),
+                   QStringLiteral("identity"));
     if (!cookie.trimmed().isEmpty()) {
         headers.insert(QStringLiteral("Cookie"), cookie.trimmed());
     }
@@ -204,6 +208,53 @@ QByteArray rawDeflateInflate(const QByteArray &raw)
     stream.append(static_cast<char>((adler >> 8) & 0xff));
     stream.append(static_cast<char>(adler & 0xff));
     return qUncompress(stream);
+}
+
+// Parses a JSON payload. The primary path requests Accept-Encoding: identity
+// so Bilibili sends plain JSON; this helper only needs to handle the case
+// where the server ignored that header and returned raw gzip bytes anyway.
+QJsonObject parseJsonResponse(const QByteArray &raw)
+{
+    QByteArray payload = raw;
+    if (payload.size() > 18 && payload.startsWith('\x1f') &&
+        static_cast<quint8>(payload.at(1)) == 0x8b) {
+        // gzip: 10-byte header + deflate + 8-byte trailer (CRC32+ISIZE).
+        // qUncompress needs a zlib stream; wrap the deflate part with a
+        // constant zlib header + computed adler32.
+        const QByteArray deflated = payload.mid(10, payload.size() - 18);
+        QByteArray stream;
+        stream.reserve(deflated.size() + 6);
+        stream.append('\x78');
+        stream.append('\x9c');
+        stream.append(deflated);
+        quint32 a = 1;
+        quint32 b = 0;
+        for (const char c : deflated) {
+            a = (a + static_cast<quint8>(c)) % 65521;
+            b = (b + a) % 65521;
+        }
+        const quint32 adler = (b << 16) | a;
+        stream.append(static_cast<char>((adler >> 24) & 0xff));
+        stream.append(static_cast<char>((adler >> 16) & 0xff));
+        stream.append(static_cast<char>((adler >> 8) & 0xff));
+        stream.append(static_cast<char>(adler & 0xff));
+        payload = qUncompress(stream);
+        if (payload.isEmpty()) {
+            qWarning() << "[BiliBili] gzip payload inflate failed"
+                       << "| raw size:" << raw.size();
+        }
+    }
+    QJsonParseError parseError;
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(payload, &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        qWarning() << "[BiliBili] season JSON parse failed"
+                   << "| size:" << payload.size()
+                   << "| error:" << parseError.errorString()
+                   << "| head:" << QString::fromUtf8(payload.left(120));
+        return QJsonObject();
+    }
+    return doc.object();
 }
 
 QList<DanmakuComment> parseDanmakuXml(const QByteArray &xml)
@@ -401,8 +452,15 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             .arg(seasonId);
         QJsonObject seasonResponse;
         try {
-            seasonResponse = co_await m_networkManager->get(
+            // B站 pgc/view/web/season 对 QNAM 可能返回空 body（gzip 自动解压
+            // 异常），这里直接拿原始字节并手动解压，保证 1.6MB 响应能读到。
+            const QByteArray rawSeason = co_await m_networkManager->getBytes(
                 seasonUrl, requestHeaders(cookie), requestOptions());
+            qDebug().noquote() << "[BiliBili] season raw bytes"
+                               << "| seasonId:" << seasonId
+                               << "| size:" << rawSeason.size()
+                               << "| head:" << QString::fromUtf8(rawSeason.left(80));
+            seasonResponse = parseJsonResponse(rawSeason);
         } catch (const std::exception &e) {
             qWarning().noquote() << "[BiliBili] season detail failed (network)"
                                  << "| seasonId:" << seasonId
