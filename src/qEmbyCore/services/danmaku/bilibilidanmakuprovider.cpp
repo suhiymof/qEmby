@@ -470,10 +470,6 @@ QCoro::Task<QList<DanmakuMatchCandidate>> BiliBiliDanmakuProvider::searchCandida
             // 异常），这里直接拿原始字节并手动解压，保证 1.6MB 响应能读到。
             const QByteArray rawSeason = co_await m_networkManager->getBytes(
                 seasonUrl, requestHeaders(cookie), requestOptions());
-            qDebug().noquote() << "[BiliBili] season raw bytes"
-                               << "| seasonId:" << seasonId
-                               << "| size:" << rawSeason.size()
-                               << "| head:" << QString::fromUtf8(rawSeason.left(80));
             seasonResponse = parseJsonResponse(rawSeason);
         } catch (const std::exception &e) {
             qWarning().noquote() << "[BiliBili] season detail failed (network)"

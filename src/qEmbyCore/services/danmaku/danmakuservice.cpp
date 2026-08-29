@@ -612,31 +612,20 @@ bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const Danmak
     const double ts = bestCandidateTitleScore(context, candidate);
     if (ts < minimumTitleScore)
     {
-        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (titleScore)"
-                           << "| ts:" << ts << "| min:" << minimumTitleScore
-                           << "| ctx.seriesName:" << context.seriesName
-                           << "| ctx.title:" << context.title
-                           << "| cand.title:" << candidate.title
-                           << "| cand.subtitle:" << candidate.subtitle;
+        
         return false;
     }
 
     if (context.isEpisode() && context.episodeNumber > 0 && candidate.episodeNumber > 0 &&
         context.episodeNumber != candidate.episodeNumber)
     {
-        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (epNumber)"
-                           << "| ctx.epNumber:" << context.episodeNumber
-                           << "| cand.epNumber:" << candidate.episodeNumber
-                           << "| cand.targetId:" << candidate.targetId;
+        
         return false;
     }
     if (context.isEpisode() && context.seasonNumber > 0 && candidate.seasonNumber > 0 &&
         context.seasonNumber != candidate.seasonNumber)
     {
-        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (seasonNumber)"
-                           << "| ctx.seasonNumber:" << context.seasonNumber
-                           << "| cand.seasonNumber:" << candidate.seasonNumber
-                           << "| cand.targetId:" << candidate.targetId;
+        
         return false;
     }
 
@@ -645,9 +634,7 @@ bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const Danmak
     if (!context.isEpisode() && context.productionYear > 0 && candidateYear > 0 &&
         std::abs(context.productionYear - candidateYear) > 1)
     {
-        qDebug().noquote() << "[Danmaku][Service] plausible REJECT (year)"
-                           << "| ctx.year:" << context.productionYear
-                           << "| cand.year:" << candidateYear;
+        
         return false;
     }
 
@@ -656,10 +643,7 @@ bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const Danmak
         const qint64 allowedDifference = std::max<qint64>(5 * 60 * 1000, context.durationMs * 18 / 100);
         if (std::llabs(context.durationMs - candidate.durationMs) > allowedDifference)
         {
-            qDebug().noquote() << "[Danmaku][Service] plausible REJECT (duration)"
-                               << "| ctx.dur:" << context.durationMs
-                               << "| cand.dur:" << candidate.durationMs
-                               << "| allowed:" << allowedDifference;
+            
             return false;
         }
     }
