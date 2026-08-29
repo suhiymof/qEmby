@@ -10,7 +10,7 @@
 #include "../../components/mediasectionwidget.h"
 #include "../../components/modernmenubutton.h"
 #include "../../components/moderntoast.h"
-#include "seriesdanmakumatchdialog.h"
+#include "../../components/seriesdanmakumatchdialog.h"
 #include "../../managers/playbackmanager.h"
 #include <models/media/playerlaunchcontext.h>
 #include "../../managers/thememanager.h"
