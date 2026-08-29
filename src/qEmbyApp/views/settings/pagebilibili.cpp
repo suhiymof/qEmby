@@ -102,9 +102,27 @@ QCoro::Task<void> PageBilibili::startLogin()
     waitTimer.setSingleShot(true);
 
     while (true) {
+        if (!guard) {
+            co_return;
+        }
+        if (!dialog->isVisible()) {
+            // The user closed the login dialog manually; treat as cancel
+            // and unblock the button for the next attempt.
+            m_loginInProgress = false;
+            m_accountBtn->setEnabled(true);
+            refreshAccountUi();
+            co_return;
+        }
+
         waitTimer.start(2000);
         co_await waitTimer;
         if (!guard) {
+            co_return;
+        }
+        if (!dialog->isVisible()) {
+            m_loginInProgress = false;
+            m_accountBtn->setEnabled(true);
+            refreshAccountUi();
             co_return;
         }
 
@@ -115,8 +133,12 @@ QCoro::Task<void> PageBilibili::startLogin()
             qWarning().noquote() << "[BiliBili] QR poll error:" << e.what();
         }
 
-        if (code == 0) {
-            break; // success
+        // The SESSDATA cookie is delivered to the WebView profile, not our
+        // m_nam, so cookieAdded -> onCookieAdded stores it asynchronously.
+        // When the cookies are in place the login is complete even if the
+        // poll has not yet flipped to code 0.
+        if (code == 0 || service->isLoggedIn()) {
+            break;
         }
         if (code == 86038) { // expired
             updateStatusText(tr("QR code expired, please try again"));
@@ -126,7 +148,8 @@ QCoro::Task<void> PageBilibili::startLogin()
             refreshAccountUi();
             co_return;
         }
-        if (code < 0) { // network/parse failure
+        if (code < 0 && !service->isLoggedIn()) {
+            // network/parse failure, and cookies still missing
             updateStatusText(tr("Login failed, please try again"));
             dialog->close();
             m_loginInProgress = false;

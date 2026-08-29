@@ -135,9 +135,27 @@ QCoro::Task<void> PageTrakt::startLogin()
     waitTimer.setSingleShot(true);
 
     while (QDateTime::currentDateTime() < deadline) {
+        if (!guard) {
+            co_return;
+        }
+        if (!dialog->isVisible()) {
+            // User closed the login dialog; treat as cancel and unblock
+            // the button for the next attempt.
+            m_loginInProgress = false;
+            m_accountBtn->setEnabled(true);
+            refreshAccountUi();
+            co_return;
+        }
+
         waitTimer.start(intervalMs);
         co_await waitTimer;
         if (!guard) {
+            co_return;
+        }
+        if (!dialog->isVisible()) {
+            m_loginInProgress = false;
+            m_accountBtn->setEnabled(true);
+            refreshAccountUi();
             co_return;
         }
 

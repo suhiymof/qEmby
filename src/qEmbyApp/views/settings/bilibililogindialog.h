@@ -2,6 +2,7 @@
 #define BILIBILILOGINDIALOG_H
 
 #include <QDialog>
+#include <QUrl>
 
 class QWebEngineView;
 
@@ -15,7 +16,11 @@ public:
     explicit BiliBiliLoginDialog(const QUrl &loginUrl, QWidget *parent = nullptr);
 
 private:
+    void navigateToLogin();
+
     QWebEngineView *m_view = nullptr;
+    QUrl m_loginUrl;
+    bool m_warmedUp = false;
 };
 
 #endif // BILIBILILOGINDIALOG_H

@@ -10,6 +10,7 @@
 #include <qcorotask.h>
 
 class QNetworkAccessManager;
+class QNetworkCookie;
 
 // Bilibili QR login for the danmaku source. The account cookie (SESSDATA /
 // bili_jct) gates the danmaku provider; the device cookie (buvid3) keeps the
@@ -41,6 +42,11 @@ public:
     QCoro::Task<int> pollLogin();
 
     void signOut();
+
+    // Public slot fed by QWebEngineCookieStore::cookieAdded. The Bilibili
+    // QR-confirm page writes SESSDATA / bili_jct to the WebView profile, not
+    // to our m_nam, so we capture the cookies here.
+    void onCookieAdded(const QNetworkCookie &cookie);
 
 private:
     explicit BiliBiliAuthService(QObject *parent = nullptr);

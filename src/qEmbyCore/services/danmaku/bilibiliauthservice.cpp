@@ -184,6 +184,28 @@ void BiliBiliAuthService::signOut()
     qDebug().noquote() << "[BiliBili] Signed out";
 }
 
+void BiliBiliAuthService::onCookieAdded(const QNetworkCookie &cookie)
+{
+    const QString name = QString::fromLatin1(cookie.name());
+    const QString value = QString::fromLatin1(cookie.value());
+    if (name.isEmpty() || value.isEmpty()) {
+        return;
+    }
+    const QString domain = QString::fromLatin1(cookie.domain());
+    if (!domain.contains(QLatin1String("bilibili.com"))) {
+        return;
+    }
+    auto *store = ConfigStore::instance();
+    if (name == QLatin1String("SESSDATA")) {
+        store->set(ConfigKeys::BilibiliSessData, value);
+        qDebug().noquote() << "[BiliBili] SESSDATA captured via WebView";
+    } else if (name == QLatin1String("bili_jct")) {
+        store->set(ConfigKeys::BilibiliJct, value);
+    } else if (name == QLatin1String("DedeUserID")) {
+        store->set(ConfigKeys::BilibiliUid, value);
+    }
+}
+
 QCoro::Task<BiliBiliAuthService::RawReply> BiliBiliAuthService::getRaw(const QString &url)
 {
     QNetworkRequest request((QUrl(url)));
