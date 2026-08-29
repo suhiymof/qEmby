@@ -191,7 +191,7 @@ void BiliBiliAuthService::onCookieAdded(const QNetworkCookie &cookie)
     if (name.isEmpty() || value.isEmpty()) {
         return;
     }
-    const QString domain = QString::fromLatin1(cookie.domain());
+    const QString domain = cookie.domain();
     if (!domain.contains(QLatin1String("bilibili.com"))) {
         return;
     }
