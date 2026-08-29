@@ -10118,8 +10118,16 @@ This cannot be undone.</source>
         <translation>筛选结果</translation>
     </message>
     <message>
-        <source>Back</source>
-        <translation>返回</translation>
+        <source>Back to Search</source>
+        <translation>返回搜索</translation>
+    </message>
+    <message>
+        <source>Filter episodes</source>
+        <translation>搜索剧集</translation>
+    </message>
+    <message>
+        <source>Select Episode: %1</source>
+        <translation>选择分集：%1</translation>
     </message>
     <message>
         <source>Episode offset</source>

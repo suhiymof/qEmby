@@ -214,6 +214,12 @@ constexpr const char* DanmakuAutoLoad = "danmaku/auto_load";
 constexpr const char* DanmakuAutoMatch = "danmaku/auto_match";
 constexpr const char* DanmakuWithRelated = "danmaku/with_related";
 constexpr const char* DanmakuCacheHours = "danmaku/cache_hours";
+// Which UI the in-player danmaku search opens with:
+//   "series"  (default) -> SeriesDanmakuMatchDialog::Single (aggregated
+//              series rows + per-episode single picker)
+//   "classic"            -> PlayerDanmakuIdentifyDialog (flat
+//              episode-level rows, kept for rollback).
+constexpr const char* DanmakuPlayerSearchUi = "danmaku/player_search_ui";
 
 // Bilibili danmaku source (QR login required). Account-level, not per-server.
 constexpr const char* BilibiliSessData = "danmaku/bilibili/sessdata";

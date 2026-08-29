@@ -4,6 +4,7 @@
 #include "../../components/nativedanmakuoverlay.h"
 #include "../../components/playerdanmakuidentifydialog.h"
 #include "../../components/playerdanmakusettingsdialog.h"
+#include "../../components/seriesdanmakumatchdialog.h"
 #include "../../components/playerlongpresshandler.h"
 #include "../../components/playermediaswitcherpanel.h"
 #include "../../components/playerosdlayer.h"
@@ -3903,18 +3904,51 @@ void PlayerView::showDanmakuIdentifyDialog()
 
     const QString activeTargetId = m_danmakuController ? m_danmakuController->activeTargetId() : QString();
     const QString activeEndpointId = m_danmakuController ? m_danmakuController->activeEndpointId() : QString();
-    auto *dialog = new PlayerDanmakuIdentifyDialog(m_core, m_danmakuController->mediaContext(), QString(),
-                                                   activeTargetId, activeEndpointId, this);
-    connect(dialog, &PlayerDanmakuIdentifyDialog::finished, this,
+
+    // Rollback switch: "classic" keeps the old flat PlayerDanmakuIdentifyDialog
+    // (one row per episode, right-hand details panel). "series" (default) uses
+    // the same aggregated two-stage picker as the detail page — series rows
+    // (per provider/season) then a single-episode picker. If the new flow
+    // misbehaves, flip danmaku/player_search_ui back to "classic" in config.
+    const QString playerSearchUi = ConfigStore::instance()->get<QString>(
+        QString::fromLatin1(ConfigKeys::DanmakuPlayerSearchUi),
+        QString::fromLatin1("series"));
+    if (playerSearchUi == QLatin1String("classic"))
+    {
+        auto *dialog = new PlayerDanmakuIdentifyDialog(m_core, m_danmakuController->mediaContext(), QString(),
+                                                       activeTargetId, activeEndpointId, this);
+        connect(dialog, &PlayerDanmakuIdentifyDialog::finished, this,
+                [this, dialog](int result)
+                {
+                    if (result != PlayerOverlayDialog::Accepted || !dialog->selectedCandidate().isValid() ||
+                        !m_danmakuController)
+                    {
+                        return;
+                    }
+
+                    m_danmakuController->loadFromCandidate(dialog->selectedCandidate(), true);
+                });
+        trackPlayerDialog(dialog);
+        return;
+    }
+
+    auto *dialog = new SeriesDanmakuMatchDialog(
+        m_core, SeriesDanmakuMatchDialog::Mode::Single, {},
+        m_danmakuController->mediaContext(), QString(), activeTargetId,
+        activeEndpointId, QList<int>(), this);
+    connect(dialog, &SeriesDanmakuMatchDialog::finished, this,
             [this, dialog](int result)
             {
-                if (result != PlayerOverlayDialog::Accepted || !dialog->selectedCandidate().isValid() ||
-                    !m_danmakuController)
+                if (result != PlayerOverlayDialog::Accepted || !m_danmakuController)
                 {
                     return;
                 }
-
-                m_danmakuController->loadFromCandidate(dialog->selectedCandidate(), true);
+                const QList<DanmakuMatchCandidate> picked = dialog->selectedEpisodes();
+                if (picked.isEmpty() || !picked.constFirst().isValid())
+                {
+                    return;
+                }
+                m_danmakuController->loadFromCandidate(picked.constFirst(), true);
             });
     trackPlayerDialog(dialog);
 }

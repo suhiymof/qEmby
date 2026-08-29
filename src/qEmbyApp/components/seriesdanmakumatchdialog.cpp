@@ -236,7 +236,9 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     episodeLayout->setSpacing(6);
 
     auto *episodeHeader = new QHBoxLayout();
-    m_backButton = new QPushButton(QStringLiteral("\u2190 ") + tr("Back"), m_episodePanel);
+    m_backButton = new QPushButton(QStringLiteral("\u2190 ") +
+                                       tr("Back to Search"),
+                                   m_episodePanel);
     m_backButton->setObjectName("dialog-btn-cancel");
     m_backButton->setCursor(Qt::PointingHandCursor);
     episodeHeader->addWidget(m_backButton);
@@ -260,6 +262,22 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
         episodeHeader->addWidget(m_selectAllButton);
     }
     episodeLayout->addLayout(episodeHeader);
+
+    if (m_mode == Mode::Single) {
+        // The player-side picker is per-episode (pick exactly one row for
+        // the currently playing episode); a filter box helps when a series
+        // carries hundreds of episodes. Multi mode intentionally keeps the
+        // offset + select-all header instead.
+        m_episodeFilterEdit = new QLineEdit(m_episodePanel);
+        m_episodeFilterEdit->setObjectName("PlaylistSearchEdit");
+        m_episodeFilterEdit->setPlaceholderText(tr("Filter episodes"));
+        m_episodeFilterEdit->setClearButtonEnabled(true);
+        m_episodeFilterEdit->addAction(
+            ThemeManager::getAdaptiveIcon(
+                QStringLiteral(":/svg/light/search.svg")),
+            QLineEdit::LeadingPosition);
+        episodeLayout->addWidget(m_episodeFilterEdit);
+    }
 
     m_episodeList = new QListWidget(m_episodePanel);
     m_episodeList->setObjectName("ManageLibPathList");
@@ -295,14 +313,25 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     connect(m_confirmButton, &QPushButton::clicked, this, [this]() {
         if (m_mode != Mode::Multi) {
             // Single mode: materialise the episode candidate from the
-            // current row right before accepting.
+            // current row right before accepting. The item data holds the
+            // original episodes[] index — currentRow() is the *visible*
+            // row, which drifts when the filter box skips rows.
             const int currentRow =
                 m_episodeList ? m_episodeList->currentRow() : -1;
-            if (currentRow < 0 || currentRow >= m_currentSeries.episodes.size()) {
+            if (currentRow < 0 || !m_episodeList->item(currentRow)) {
+                return;
+            }
+            bool ok = false;
+            const int epIndex =
+                m_episodeList->item(currentRow)
+                    ->data(kSeriesCandidateRole)
+                    .toInt(&ok);
+            if (!ok || epIndex < 0 ||
+                epIndex >= m_currentSeries.episodes.size()) {
                 return;
             }
             const DanmakuEpisode &ep =
-                m_currentSeries.episodes.at(currentRow);
+                m_currentSeries.episodes.at(epIndex);
             DanmakuMatchCandidate episodeCandidate = m_currentSeries;
             episodeCandidate.episodes.clear();
             episodeCandidate.targetId = ep.cid;
@@ -331,9 +360,13 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     connect(m_seriesFilterEdit, &QLineEdit::textChanged, this,
             [this](const QString &) { rebuildSeriesList(); });
     connect(m_seriesList, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
-        const int row = m_seriesList->row(item);
-        if (row >= 0 && row < m_seriesResults.size()) {
-            enterEpisodePicker(row);
+        // Read the original m_seriesResults index from the item data —
+        // row() is the *visible* row, which drifts after the filter box
+        // skips rows.
+        bool ok = false;
+        const int idx = item->data(kSeriesCandidateRole).toInt(&ok);
+        if (ok && idx >= 0 && idx < m_seriesResults.size()) {
+            enterEpisodePicker(idx);
         }
     });
     connect(m_episodeList, &QListWidget::itemSelectionChanged, this,
@@ -373,6 +406,15 @@ SeriesDanmakuMatchDialog::SeriesDanmakuMatchDialog(
     if (m_offsetEdit) {
         connect(m_offsetEdit, &QLineEdit::textChanged, this,
                 [this](const QString &) { applyEpisodeOffset(); });
+    }
+    if (m_episodeFilterEdit) {
+        connect(m_episodeFilterEdit, &QLineEdit::textChanged, this,
+                [this](const QString &) {
+                    // Re-filtering rebuilds the list, which clears the
+                    // selection; refresh the confirm-button state too.
+                    rebuildEpisodeList();
+                    updateSelectionSummary();
+                });
     }
     connect(m_backButton, &QPushButton::clicked, this, [this]() {
         m_episodePanel->hide();
@@ -529,7 +571,16 @@ void SeriesDanmakuMatchDialog::enterEpisodePicker(int row)
     }
 
     m_selectedEpisodes.clear();
-    m_episodeTitleLabel->setText(m_currentSeries.displayText());
+    // Single mode (player-side) labels the stage "Select Episode" — the
+    // user is picking exactly one danmaku source for the current episode.
+    // Multi mode keeps the plain series title as the heading.
+    m_episodeTitleLabel->setText(
+        m_mode == Mode::Single
+            ? tr("Select Episode: %1").arg(m_currentSeries.displayText())
+            : m_currentSeries.displayText());
+    if (m_episodeFilterEdit) {
+        m_episodeFilterEdit->clear();
+    }
     rebuildEpisodeList();
     m_seriesListContainer->hide();
     m_promptLabel->hide();
@@ -543,6 +594,9 @@ void SeriesDanmakuMatchDialog::rebuildEpisodeList()
     if (!m_episodeList) {
         return;
     }
+    const QString filter = m_episodeFilterEdit
+                               ? m_episodeFilterEdit->text().trimmed()
+                               : QString();
     m_episodeList->clear();
     // Build a quick lookup of pre-ticked adjusted episode numbers so the
     // episode picker can restore the user's prior selections.
@@ -560,10 +614,19 @@ void SeriesDanmakuMatchDialog::rebuildEpisodeList()
             QStringLiteral("%1. %2")
                 .arg(adjusted > 0 ? adjusted : 0, 2, 10, QChar('0'))
                 .arg(ep.longTitle.isEmpty() ? ep.title : ep.longTitle);
+        if (!filter.isEmpty() &&
+            !label.contains(filter, Qt::CaseInsensitive)) {
+            continue;
+        }
         auto *item = new QListWidgetItem(label, m_episodeList);
-        item->setData(kSeriesCandidateRole, QVariant());
+        // Original episodes[] index, so confirm / updateSelectionSummary
+        // survive the filter box (visible row != episodes index).
+        item->setData(kSeriesCandidateRole, row);
+        // setSelected on the freshly created item (not item(row) — the
+        // row index no longer maps 1:1 to episodes when filtering skips
+        // rows).
         if (preTicked.contains(adjusted)) {
-            m_episodeList->item(row)->setSelected(true);
+            item->setSelected(true);
             ++ticked;
         }
     }
@@ -604,15 +667,20 @@ void SeriesDanmakuMatchDialog::updateSelectionSummary()
 
     QList<int> selectedIndexes;
     for (int i = 0; i < m_episodeList->count(); ++i) {
-        if (m_episodeList->item(i)->isSelected()) {
-            selectedIndexes.append(i);
+        QListWidgetItem *item = m_episodeList->item(i);
+        if (!item || !item->isSelected()) {
+            continue;
+        }
+        // item data carries the original episodes[] index (visible row
+        // != episodes index once the filter box skips rows).
+        bool ok = false;
+        const int epIndex = item->data(kSeriesCandidateRole).toInt(&ok);
+        if (ok && epIndex >= 0 && epIndex < m_currentSeries.episodes.size()) {
+            selectedIndexes.append(epIndex);
         }
     }
     m_selectedEpisodes.clear();
     for (const int idx : selectedIndexes) {
-        if (idx < 0 || idx >= m_currentSeries.episodes.size()) {
-            continue;
-        }
         const DanmakuEpisode &ep = m_currentSeries.episodes.at(idx);
         DanmakuMatchCandidate episodeCandidate = m_currentSeries;
         episodeCandidate.episodes.clear();

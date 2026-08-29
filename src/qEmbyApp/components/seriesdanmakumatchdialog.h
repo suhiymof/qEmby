@@ -100,6 +100,7 @@ private:
     QPushButton *m_backButton = nullptr;
     QLineEdit *m_offsetEdit = nullptr;   // multi mode only
     QPushButton *m_selectAllButton = nullptr; // multi mode only
+    QLineEdit *m_episodeFilterEdit = nullptr; // single mode only
     QListWidget *m_episodeList = nullptr;
     QLabel *m_selectionSummaryLabel = nullptr;
     QPushButton *m_confirmButton = nullptr;
