@@ -25,6 +25,10 @@ struct SearchHint {
     QString subject;
     int seasonNumber = -1;
     int episodeNumber = -1;
+    // True when the search input itself carried an explicit episode
+    // ("S01E06" / "第1季第6话" / "第6集") as opposed to inheriting the
+    // current playback context's episode number.
+    bool hasExplicitEpisode = false;
 };
 
 NetworkRequestOptions requestOptions()
@@ -229,6 +233,7 @@ SearchHint parseSearchHint(const QString &input,
         }
         hint.seasonNumber = match.captured(1).toInt();
         hint.episodeNumber = match.captured(2).toInt();
+        hint.hasExplicitEpisode = true;
         hint.subject.remove(match.capturedStart(), match.capturedLength());
         hint.subject = hint.subject.trimmed();
         break;

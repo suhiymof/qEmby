@@ -1082,8 +1082,6 @@ QList<DanmakuMatchCandidate> DanmakuService::aggregateEpisodesToSeries(
 
     QMap<QString, DanmakuMatchCandidate> groupTemplate;
     QMap<QString, QList<DanmakuEpisode>> groupEpisodes;
-    groupTemplate.reserve(flatCandidates.size());
-    groupEpisodes.reserve(flatCandidates.size());
 
     for (const DanmakuMatchCandidate &c : flatCandidates) {
         if (c.isSeries()) {
