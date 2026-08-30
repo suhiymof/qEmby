@@ -229,6 +229,12 @@ private:
 
     std::optional<QCoro::Task<void>> m_pendingProfileRefreshTask;
     int m_profileRefreshGeneration = 0;
+    // Independent generation counter for server-reachability probes.
+    // Must NOT share m_profileRefreshGeneration: trySwitchToServer starts
+    // the probe right after setActiveServer, and a shared counter would
+    // invalidate the sidebar refresh (generation bumped mid-flight) so the
+    // new server's libraries never get applied.
+    int m_serverProbeGeneration = 0;
     QString m_sidebarLibraryServerId;
     QString m_sidebarLibraryUserId;
     QString m_lastRouteType;

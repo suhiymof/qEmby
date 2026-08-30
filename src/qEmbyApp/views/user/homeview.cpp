@@ -2841,10 +2841,14 @@ QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
     // old server's contents; the active server still flips because the
     // user explicitly picked one and we'd rather show a recoverable error
     // than refuse to navigate. Stale probes from earlier switches
-    // self-cancel via m_profileRefreshGeneration (no need to hold the
-    // Task here — every co_await inside verifyServerReachability can be
-    // abandoned the same way as if the user had been routed away).
-    const int generation = ++m_profileRefreshGeneration;
+    // self-cancel via m_serverProbeGeneration (independent from
+    // m_profileRefreshGeneration — a shared counter would make
+    // trySwitchToServer's probe invalidate the sidebar library refresh
+    // that setActiveServer just started, leaving the new server's
+    // libraries unapplied). No need to hold the Task here — every
+    // co_await inside verifyServerReachability can be abandoned the same
+    // way as if the user had been routed away.
+    const int generation = ++m_serverProbeGeneration;
     launchTask(verifyServerReachability(target, generation, displayName), this);
 }
 
@@ -2877,7 +2881,7 @@ QCoro::Task<void> HomeView::verifyServerReachability(const ServerProfile &target
 
     // A newer switch has been initiated; the user already moved on, drop
     // this stale verification quietly.
-    if (generation != m_profileRefreshGeneration) co_return;
+    if (generation != m_serverProbeGeneration) co_return;
 
     if (reachable) co_return;
 
