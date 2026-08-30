@@ -595,6 +595,25 @@ void sortDanmakuCandidates(QList<DanmakuMatchCandidate> &candidates,
             }
             return lhs.targetId < rhs.targetId;
         });
+
+    // Group rows by provider so all bilibili results sit together, all
+    // danmu_api results sit together, etc. The intra-group relative order
+    // is whatever the comparator above produced (priority + work title +
+    // score + commentCount). stable_sort preserves that order, so the
+    // grouping is non-destructive.
+    std::stable_sort(
+        candidates.begin(), candidates.end(),
+        [](const DanmakuMatchCandidate &a, const DanmakuMatchCandidate &b) {
+            auto priority = [](const QString &p) {
+                if (p == QLatin1String("bilibili")) return 0;
+                if (p == QLatin1String("danmu_api")) return 1;
+                if (p == QLatin1String("dandanplay")) return 2;
+                return 3;
+            };
+            const int pa = priority(a.provider);
+            const int pb = priority(b.provider);
+            return pa < pb;
+        });
 }
 
 bool isPlausibleOnlineCandidate(const DanmakuMediaContext &context, const DanmakuMatchCandidate &candidate)
