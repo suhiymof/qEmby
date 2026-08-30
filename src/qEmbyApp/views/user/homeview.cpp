@@ -1780,10 +1780,6 @@ QCoro::Task<void> HomeView::refreshProfile()
 
         if (views.isEmpty())
         {
-            qDebug() << "[HomeView] Sidebar library refresh returned empty views, clearing cache and retrying"
-                     << "| generation=" << refreshGeneration
-                     << "| previousLibraryCount=" << previousLibraryCount
-                     << "| canReuseExistingLibraries=" << canReuseExistingLibraries;
             m_core->mediaService()->clearUserViewsCache();
             views = co_await m_core->mediaService()->getUserViews();
 
@@ -1794,10 +1790,6 @@ QCoro::Task<void> HomeView::refreshProfile()
                          << "| previousLibraryCount=" << previousLibraryCount;
                 co_return;
             }
-
-            qDebug() << "[HomeView] Sidebar library retry completed"
-                     << "| generation=" << refreshGeneration
-                     << "| retriedViewCount=" << views.size();
         }
 
         QWidget *currentView = m_contentSwitcher ? m_contentSwitcher->currentWidget() : nullptr;
@@ -1839,11 +1831,8 @@ QCoro::Task<void> HomeView::refreshProfile()
         }
         else
         {
-            qDebug() << "[HomeView] Keeping existing sidebar library list because refreshed views are unexpectedly empty"
-                     << "| generation=" << refreshGeneration
-                     << "| previousLibraryCount=" << previousLibraryCount
-                     << "| routeType=" << currentRouteType
-                     << "| routeId=" << currentRouteId;
+            qWarning().noquote() << "[HomeView] Keeping existing sidebar library list because refreshed views are unexpectedly empty"
+                                 << "| previousLibraryCount=" << previousLibraryCount;
         }
 
         if (!selectedLibraryItem && currentRouteType == "LibraryView")
@@ -1868,14 +1857,6 @@ QCoro::Task<void> HomeView::refreshProfile()
         {
             m_libraryList->clearSelection();
         }
-
-        qDebug() << "[HomeView] Sidebar library refresh applied"
-                 << "| generation=" << refreshGeneration
-                 << "| fetchedViewCount=" << views.size()
-                 << "| sidebarCount=" << m_libraryList->count()
-                 << "| preservedExisting=" << shouldKeepExistingLibraries
-                 << "| routeType=" << currentRouteType
-                 << "| routeId=" << currentRouteId;
     }
     catch (const std::exception &e)
     {
