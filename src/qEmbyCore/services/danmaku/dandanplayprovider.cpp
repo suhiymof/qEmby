@@ -1406,8 +1406,13 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DandanplayProvider::searchCandidates(
 
     QString requestedEpisodeParameter;
     int requestedEpisodeNumber = -1;
-    if ((searchContext.isEpisode() || manualHint.hasExplicitEpisode) &&
-        searchContext.episodeNumber > 0) {
+    // Same rule as DanmuApiProvider: pass the episode filter only when
+    // the caller wants a specific episode. resolveMatch (auto-match)
+    // always passes it; the manual picker skips it unless the user
+    // explicitly typed an episode in their search ("凡人修仙传 第6集").
+    const bool passEpisodeFilter =
+        !isManualSearch || manualHint.hasExplicitEpisode;
+    if (passEpisodeFilter && searchContext.episodeNumber > 0) {
         requestedEpisodeNumber = searchContext.episodeNumber;
         requestedEpisodeParameter =
             searchContext.seasonNumber == 0

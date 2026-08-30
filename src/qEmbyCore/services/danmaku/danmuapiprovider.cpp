@@ -499,7 +499,12 @@ QCoro::Task<QList<DanmakuMatchCandidate>> DanmuApiProvider::searchCandidates(
                                                    QChar('0'));
     }
     QString episodeParameter;
-    if (searchContext.isEpisode() && hint.episodeNumber > 0) {
+    // Pass the episode filter to the server only when the caller wants a
+    // specific episode. resolveMatch (auto-match) always wants it; the
+    // manual picker wants the full catalogue unless the user explicitly
+    // asked for a specific episode in their search ("凡人修仙传 第6集").
+    if (searchContext.isEpisode() && hint.episodeNumber > 0 &&
+        (!manual || hint.hasExplicitEpisode)) {
         episodeParameter = QString::number(hint.episodeNumber);
     }
     // When the active context is a Series/Movie (not an Episode), do NOT

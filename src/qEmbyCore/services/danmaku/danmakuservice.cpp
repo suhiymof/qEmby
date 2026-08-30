@@ -1080,8 +1080,8 @@ QList<DanmakuMatchCandidate> DanmakuService::aggregateEpisodesToSeries(
     QList<DanmakuMatchCandidate> seriesLevel;
     seriesLevel.reserve(flatCandidates.size());
 
-    QHash<QString, DanmakuMatchCandidate> groupTemplate;
-    QHash<QString, QList<DanmakuEpisode>> groupEpisodes;
+    QMap<QString, DanmakuMatchCandidate> groupTemplate;
+    QMap<QString, QList<DanmakuEpisode>> groupEpisodes;
     groupTemplate.reserve(flatCandidates.size());
     groupEpisodes.reserve(flatCandidates.size());
 
