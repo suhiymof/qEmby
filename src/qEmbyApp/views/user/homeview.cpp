@@ -1884,13 +1884,22 @@ QCoro::Task<void> HomeView::refreshProfile()
             qDebug() << "[HomeView] Ignoring stale sidebar library refresh failure"
                      << "| generation=" << refreshGeneration
                      << "| previousLibraryCount=" << previousLibraryCount
-                     << "| error=" << e.what();
+                     << "| error:" << e.what();
             co_return;
         }
-        qDebug() << "[HomeView] Failed to load library views for sidebar"
-                 << "| generation=" << refreshGeneration
-                 << "| previousLibraryCount=" << previousLibraryCount
-                 << "| error=" << e.what();
+        qWarning().noquote() << "[HomeView] Failed to load library views for sidebar"
+                             << "| generation=" << refreshGeneration
+                             << "| previousLibraryCount=" << previousLibraryCount
+                             << "| activeServerId:" << activeProfile.id
+                             << "| error:" << e.what();
+        // Clear stale entries so the user doesn't see a misleading list
+        // (e.g. the previous server's libraries) after a server switch
+        // when the new server's getUserViews() throws.
+        if (m_libraryList) {
+            m_libraryList->clear();
+        }
+        m_sidebarLibraryServerId = activeProfile.id;
+        m_sidebarLibraryUserId = activeProfile.userId;
     }
 }
 
