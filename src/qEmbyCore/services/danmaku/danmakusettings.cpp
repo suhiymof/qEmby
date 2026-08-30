@@ -9,6 +9,7 @@
 #include <QSet>
 #include <QUrl>
 #include <QUuid>
+#include <algorithm>
 #include <utility>
 
 namespace
@@ -270,19 +271,11 @@ QList<DanmakuServerDefinition> normalizedServers(QList<DanmakuServerDefinition> 
         normalized.prepend(makeBuiltInOfficialDandanplayServer());
     }
 
-    bool hasBuiltInBilibiliServer = false;
-    for (const DanmakuServerDefinition &server : std::as_const(normalized))
-    {
-        if (isBuiltInBilibiliServer(server))
-        {
-            hasBuiltInBilibiliServer = true;
-            break;
-        }
-    }
-    if (!hasBuiltInBilibiliServer)
-    {
-        normalized.append(makeBuiltInBilibiliServer());
-    }
+    // NOTE: the built-in bilibili server is intentionally NOT auto-
+    // appended here. It is conditional on the Bilibili login state and
+    // is added/removed dynamically by loadServers — signed in => present
+    // (enabled), signed out => absent. Auto-appending it in the
+    // normalisation step would resurrect it even when logged out.
     return normalized;
 }
 
@@ -363,52 +356,60 @@ DanmakuServerDefinition DanmakuSettings::builtInBilibiliServer()
 
 QList<DanmakuServerDefinition> DanmakuSettings::loadServers(QString serverId)
 {
-    serverId = serverId.trimmed();
-    if (serverId.isEmpty())
+    // Shared global config: ONE danmaku source list for ALL Emby servers.
+    // The user manages the sources once (in any server's danmaku settings
+    // page) and every Emby server shares the same list — no per-server
+    // duplication. When the global list is empty we return the dandanplay
+    // built-in as the default so the UI has something to show; the user
+    // then adds their own sources once and they apply everywhere.
+    Q_UNUSED(serverId);
+    QList<DanmakuServerDefinition> servers;
+    const QString globalJson = ConfigStore::instance()->get<QString>(
+        QString::fromLatin1(ConfigKeys::DanmakuServers));
+    if (!globalJson.trimmed().isEmpty())
     {
-        return {builtInOfficialDandanplayServer(), builtInBilibiliServer()};
+        servers = parseServers(globalJson);
+    }
+    if (servers.isEmpty())
+    {
+        servers = {builtInOfficialDandanplayServer()};
     }
 
-    const QString storedJson = ConfigStore::instance()->get<QString>(settingKey(serverId, ConfigKeys::DanmakuServers));
-    if (!storedJson.trimmed().isEmpty())
+    // The bilibili source is conditional on the Bilibili login state:
+    //   signed in  -> the built-in bilibili source is always present
+    //                 (auto-attached, enabled) so the user can search it
+    //                 without manually adding it per server;
+    //   signed out -> the built-in bilibili source is dropped entirely,
+    //                 even if it was stored in the global list.
+    const bool bilibiliLoggedIn = !ConfigStore::instance()
+                                      ->get<QString>(ConfigKeys::BilibiliSessData, QString())
+                                      .trimmed()
+                                      .isEmpty();
+    bool hasBilibili = false;
+    for (const DanmakuServerDefinition &server : std::as_const(servers))
     {
-        QList<DanmakuServerDefinition> servers = parseServers(storedJson);
-        if (!servers.isEmpty())
+        if (isBuiltInBilibiliServer(server))
         {
-            auto *store = ConfigStore::instance();
-            const QString legacySelectedId =
-                store->get<QString>(settingKey(serverId, ConfigKeys::DanmakuSelectedServer));
-            const QString legacyAppId = store->get<QString>(settingKey(serverId, ConfigKeys::DanmakuProviderAppId));
-            const QString legacyAppSecret =
-                store->get<QString>(settingKey(serverId, ConfigKeys::DanmakuProviderAppSecret));
-
-            if (!legacyAppId.trimmed().isEmpty() || !legacyAppSecret.trimmed().isEmpty())
-            {
-                int selectedIndex = 0;
-                for (int index = 0; index < servers.size(); ++index)
-                {
-                    if (servers.at(index).id == legacySelectedId)
-                    {
-                        selectedIndex = index;
-                        break;
-                    }
-                }
-
-                DanmakuServerDefinition &selectedServer = servers[selectedIndex];
-                if (!selectedServer.builtIn && selectedServer.appId.trimmed().isEmpty())
-                {
-                    selectedServer.appId = legacyAppId.trimmed();
-                }
-                if (!selectedServer.builtIn && selectedServer.appSecret.trimmed().isEmpty())
-                {
-                    selectedServer.appSecret = legacyAppSecret.trimmed();
-                }
-            }
-            return servers;
+            hasBilibili = true;
+            break;
         }
     }
-
-    return normalizedServers({legacyServerDefinition(serverId)});
+    if (bilibiliLoggedIn && !hasBilibili)
+    {
+        DanmakuServerDefinition bili = builtInBilibiliServer();
+        bili.enabled = true;
+        servers.append(bili);
+    }
+    if (!bilibiliLoggedIn)
+    {
+        servers.erase(
+            std::remove_if(servers.begin(), servers.end(),
+                           [](const DanmakuServerDefinition &s) {
+                               return isBuiltInBilibiliServer(s);
+                           }),
+            servers.end());
+    }
+    return servers;
 }
 
 DanmakuServerDefinition DanmakuSettings::selectedServer(QString serverId)
@@ -439,20 +440,15 @@ QString DanmakuSettings::selectedServerId(QString serverId)
         return QString();
     }
 
-    serverId = serverId.trimmed();
-    if (serverId.isEmpty())
-    {
-        const int enabledIndex = firstEnabledServerIndex(servers);
-        return enabledIndex >= 0 ? servers.at(enabledIndex).id : QString();
-    }
-
-    const QString selectedId =
-        ConfigStore::instance()->get<QString>(settingKey(serverId, ConfigKeys::DanmakuSelectedServer));
+    // Global selected server, shared across every Emby server (same
+    // globalisation as loadServers).
+    const QString globalSelectedId = ConfigStore::instance()->get<QString>(
+        QString::fromLatin1(ConfigKeys::DanmakuSelectedServer));
     for (const DanmakuServerDefinition &server : servers)
     {
-        if (server.id == selectedId && server.enabled)
+        if (server.id == globalSelectedId && server.enabled)
         {
-            return selectedId;
+            return globalSelectedId;
         }
     }
 
@@ -466,12 +462,10 @@ QString DanmakuSettings::selectedServerId(QString serverId)
 
 void DanmakuSettings::saveServers(QString serverId, QList<DanmakuServerDefinition> servers, QString selectedServerId)
 {
-    serverId = serverId.trimmed();
-    if (serverId.isEmpty())
-    {
-        return;
-    }
-
+    // The danmaku source list is shared across ALL Emby servers, so the
+    // serverId parameter no longer scopes the storage — it is kept for
+    // signature compatibility (UI call sites still pass their active
+    // server id). Saving from any server updates the single global list.
     servers = normalizedServers(std::move(servers));
     if (selectedServerId.trimmed().isEmpty())
     {
@@ -498,29 +492,7 @@ void DanmakuSettings::saveServers(QString serverId, QList<DanmakuServerDefinitio
     }
 
     auto *store = ConfigStore::instance();
-    store->set(settingKey(serverId, ConfigKeys::DanmakuServers),
+    store->set(QString::fromLatin1(ConfigKeys::DanmakuServers),
                QString::fromUtf8(QJsonDocument(toJsonArray(servers)).toJson(QJsonDocument::Compact)));
-    store->set(settingKey(serverId, ConfigKeys::DanmakuSelectedServer), selectedServerId);
-
-    DanmakuServerDefinition selected = servers.isEmpty() ? makeBuiltInOfficialDandanplayServer() : servers.first();
-    if (!selectedServerId.trimmed().isEmpty())
-    {
-        for (const DanmakuServerDefinition &server : std::as_const(servers))
-        {
-            if (server.id == selectedServerId)
-            {
-                selected = server;
-                break;
-            }
-        }
-    }
-    if (isBuiltInOfficialDandanplayServer(selected))
-    {
-        selected.appId.clear();
-        selected.appSecret.clear();
-    }
-    store->set(settingKey(serverId, ConfigKeys::DanmakuProvider), selected.provider);
-    store->set(settingKey(serverId, ConfigKeys::DanmakuProviderBaseUrl), selected.baseUrl);
-    store->set(settingKey(serverId, ConfigKeys::DanmakuProviderAppId), selected.appId);
-    store->set(settingKey(serverId, ConfigKeys::DanmakuProviderAppSecret), selected.appSecret);
+    store->set(QString::fromLatin1(ConfigKeys::DanmakuSelectedServer), selectedServerId);
 }

@@ -800,10 +800,14 @@ PagePlayer::PagePlayer(QEmbyCore *core, QWidget *parent)
   m_mainLayout->addWidget(danmakuServerPanel);
   danmakuPanels.append(danmakuServerPanel);
 
+  // Danmaku sources are shared globally across all Emby servers now
+  // (DanmakuSettings::loadServers/saveServers use the account-level
+  // danmaku/servers + danmaku/selected_server keys), so the UI listens
+  // to the global keys, not the per-server ones.
   const QString danmakuServersKey =
-      ConfigKeys::forServer(sid, ConfigKeys::DanmakuServers);
+      QString::fromLatin1(ConfigKeys::DanmakuServers);
   const QString danmakuSelectedServerKey =
-      ConfigKeys::forServer(sid, ConfigKeys::DanmakuSelectedServer);
+      QString::fromLatin1(ConfigKeys::DanmakuSelectedServer);
   const auto updateDanmakuServerSummary =
       [this, sid, danmakuServerDescLabel]() {
         const DanmakuServerDefinition selectedServer =
