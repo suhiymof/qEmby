@@ -18,6 +18,7 @@
 #include <QPainter>
 #include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QSet>
 #include <QShowEvent>
@@ -152,14 +153,31 @@ QString providerBadgeLabel(const DanmakuMatchCandidate &candidate)
     const QString provider = candidate.provider.trimmed();
     if (provider == QLatin1String("bilibili")) {
         return QCoreApplication::translate("SeriesDanmakuMatchDialog", "BiliBili");
-    }
-    if (provider == QLatin1String("dandanplay")) {
+    }    if (provider == QLatin1String("dandanplay")) {
         return QLatin1String("dandanplay");
     }
     if (provider == QLatin1String("danmu_api")) {
         return QLatin1String("danmu_api");
     }
     return provider;
+}
+
+// Heuristic: is this episode part of the main episode sequence?
+// Providers without a section_type field (ziji / danmu_api, dandanplay
+// public API) return every episode of a work including trailers, PVs and
+// extras — e.g. "凡人修仙传" from bilibili carries 189 main episodes plus
+// 106 "星海飞驳第N集预告 / 重逆天南第N集预告 / ...". We pick the main
+// sequence by excluding titles carrying trailer/extra keywords. 重制版 /
+// 重置版 are treated as main episodes (a re-release of the same episode,
+// not a preview).
+bool isMainEpisode(const DanmakuEpisode &ep)
+{
+    const QString text = ep.longTitle.isEmpty() ? ep.title : ep.longTitle;
+    static const QRegularExpression trailerPattern(
+        QStringLiteral(
+            R"(预告|PV|番外|特别篇|OVA|OAD|特典|先行版|CM|OP|ED)"),
+        QRegularExpression::CaseInsensitiveOption);
+    return !trailerPattern.match(text).hasMatch();
 }
 
 } // namespace
@@ -614,6 +632,28 @@ void SeriesDanmakuMatchDialog::enterEpisodePicker(int row)
         m_episodeFilterEdit->clear();
     }
     rebuildEpisodeList();
+    // Player-side (Single): auto-locate the row for the episode that is
+    // currently playing, and center it in the viewport, so the picker
+    // opens at the relevant main episode instead of the top of a long
+    // list (e.g. 295 rows for 凡人修仙传).
+    if (m_mode == Mode::Single && m_episodeList &&
+        m_context.episodeNumber > 0) {
+        for (int i = 0; i < m_episodeList->count(); ++i) {
+            bool ok = false;
+            const int epIndex = m_episodeList->item(i)
+                                    ->data(kSeriesCandidateRole)
+                                    .toInt(&ok);
+            if (ok && epIndex >= 0 &&
+                epIndex < m_currentSeries.episodes.size() &&
+                m_currentSeries.episodes.at(epIndex).episodeNumber ==
+                    m_context.episodeNumber) {
+                m_episodeList->setCurrentRow(i);
+                m_episodeList->scrollToItem(m_episodeList->item(i),
+                                            QAbstractItemView::PositionAtCenter);
+                break;
+            }
+        }
+    }
     m_seriesListContainer->hide();
     m_promptLabel->hide();
     m_episodePanel->show();
@@ -658,6 +698,12 @@ void SeriesDanmakuMatchDialog::rebuildEpisodeList()
         // row index no longer maps 1:1 to episodes when filtering skips
         // rows).
         if (preTicked.contains(adjusted)) {
+            item->setSelected(true);
+            ++ticked;
+        } else if (m_mode == Mode::Multi && isMainEpisode(ep)) {
+            // Detail-page picker: default to selecting the whole main
+            // episode sequence (trailers/PVs/extras stay unchecked). The
+            // user can still manually adjust individual rows afterwards.
             item->setSelected(true);
             ++ticked;
         }
