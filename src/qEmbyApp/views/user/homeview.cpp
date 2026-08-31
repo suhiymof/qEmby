@@ -2817,6 +2817,11 @@ QCoro::Task<void> HomeView::trySwitchToServer(const QString &serverId,
     sm->setActiveServer(serverId);
     ModernToast::showMessage(tr("Switched to %1").arg(displayName), 1500);
 
+    // 切服后内容区回主页：停留在旧服的详情页/媒体库页没有意义——旧服的
+    // item id / 库 id 在新服不存在，继续操作只会请求失败或显示空白。
+    // goHome() 在已是主页时刷新 dashboard 数据（新服），否则清栈回主页。
+    goHome();
+
     // Asynchronously verify reachability. If the probe later fails we tell
     // the dashboard to render an empty/error state instead of flashing the
     // old server's contents; the active server still flips because the
