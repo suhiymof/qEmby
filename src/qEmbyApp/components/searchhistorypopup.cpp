@@ -10,6 +10,7 @@
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QIcon>
 #include <QMouseEvent>
 #include <QPixmap>
@@ -112,13 +113,15 @@ SearchHistoryPopup::SearchHistoryPopup(QWidget *parent)
     setAttribute(Qt::WA_TranslucentBackground, true);
     setAutoFillBackground(false);
     setFocusPolicy(Qt::NoFocus);
-    // 顶层 Qt::Popup 窗口：鼠标事件由 popup 独占，点击条目/空白区域都不会
-    // 透传到下层部件（此前是普通子 widget，点击会落到 popup 下面的按钮/卡片）。
-    setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
-    // 弹出时不激活窗口：Qt::Popup 默认 show 时会抢走激活并把键盘事件
-    // 收归 popup（内部部件全是 NoFocus，按键被丢弃），表现为搜索框
-    // 无法输入。加 WA_ShowWithoutActivating 后键盘焦点留在锚点输入框，
-    // 打字/IME 正常；鼠标独占（防透传）不受影响。
+    // 顶层 Qt::ToolTip 窗口（此前是 Qt::Popup）：Qt::Popup 显示期间会
+    // grab 全部鼠标+键盘事件（Qt 固有行为，WA_ShowWithoutActivating 只
+    // 解决窗口激活、不解决 grab），表现为：搜索框无法打字、单击输入框
+    // 被 popup 消费（要双击/点空白处收起后才能拿回焦点）。Qt::ToolTip
+    // 同样是无边框置顶窗口，但不 grab 任何输入——键盘焦点留在锚点输入
+    // 框，打字/单击/IME 直接生效。"点击外部关闭"改由 application
+    // eventFilter 实现（见 eventFilter / hideEvent 的装/卸）。
+    setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    // 弹出时不激活窗口：焦点留在锚点输入框。
     setAttribute(Qt::WA_ShowWithoutActivating, true);
     hide();
 
@@ -422,6 +425,11 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
 
     stopVisibilityAnimation();
     m_anchor = anchor;
+    // 安装 application 级过滤器实现"点击外部关闭"（hideEvent 卸载）。
+    // 重复 install 无害（Qt 去重）。
+    if (auto *app = QGuiApplication::instance()) {
+        app->installEventFilter(this);
+    }
     // 宽度上限：不超出锚点所在主窗口（下拉比窗口还宽时整体移位也无济于事）。
     int preferredCardWidth = qMax(kSearchHistoryPopupMinWidth, anchor->width() + 12);
     if (QWidget *win = anchor->window()) {
@@ -489,16 +497,39 @@ void SearchHistoryPopup::showBelow(QWidget *anchor) {
 
 void SearchHistoryPopup::mousePressEvent(QMouseEvent *event)
 {
-    // Qt::Popup 抓取鼠标期间，落在 popup 外部的按压也会以本 popup 为
-    // receiver 投递进来（Qt 源码 QWidgetWindow::handleMouseEvent：外部点击
-    // 时 popupChild 为空 → receiver = popup）。此时落点不在自身矩形内 =
-    // 用户点了 popup 外部 → 收起（对齐 QMenu 的外部点击关闭语义；QFrame
-    // 默认不会自己关）。点击在 popup 内的（chip/空白）走默认处理。
-    if (event && !rect().contains(event->pos())) {
-        dismiss(true);
-        return;
-    }
+    // 点击落在 popup 内部（chip/空白）走默认处理。外部点击的关闭逻辑
+    // 在 eventFilter（Qt::ToolTip 不 grab 鼠标，外部点击不会投递进来）。
     QFrame::mousePressEvent(event);
+}
+
+bool SearchHistoryPopup::eventFilter(QObject *watched, QEvent *event)
+{
+    // "点击 popup 外部关闭"：Qt::ToolTip 不 grab 输入，外部点击不再
+    // 以本 popup 为 receiver 投递（此前 Qt::Popup 的 mousePressEvent
+    // 外部分支失效），改在 application 层监听全局鼠标按压：
+    // 落点既不在 popup 内、也不在锚点输入框内 → 收起。
+    // 不消费事件——点击继续传给下层（点搜索框时焦点/光标正常落位）。
+    if (event->type() == QEvent::MouseButtonPress && isVisible()) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        const QPoint gp = me->globalPosition().toPoint();
+        const bool insidePopup = rect().contains(mapFromGlobal(gp));
+        const bool insideAnchor =
+            m_anchor && m_anchor->isVisible() &&
+            m_anchor->rect().contains(m_anchor->mapFromGlobal(gp));
+        if (!insidePopup && !insideAnchor) {
+            dismiss(true);
+        }
+    }
+    return QFrame::eventFilter(watched, event);
+}
+
+void SearchHistoryPopup::hideEvent(QHideEvent *event)
+{
+    // 隐藏即卸载全局过滤器（showBelow 时安装）。
+    if (auto *app = QGuiApplication::instance()) {
+        app->removeEventFilter(this);
+    }
+    QFrame::hideEvent(event);
 }
 
 void SearchHistoryPopup::dismiss(bool immediate)

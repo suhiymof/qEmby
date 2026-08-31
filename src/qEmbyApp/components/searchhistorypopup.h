@@ -30,6 +30,8 @@ Q_SIGNALS:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 private:
     enum class SortMode {
