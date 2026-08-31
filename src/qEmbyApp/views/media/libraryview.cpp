@@ -657,37 +657,26 @@ QCoro::Task<void> LibraryView::loadInitialItems()
 
     try
     {
-        const MediaQueryPage probePage = co_await fetchPage(query, 0, 1);
+        // 首屏只拉一页（之前是 probe(limit=1) 后按 total 一次全量拉取——
+        // 大库（1万+ 项目）会让服务器序列化/网络传输/客户端解析/渲染全部
+        // 堆在首屏，右上角长时间"正在加载…"。分页增量由既有 load-more
+        // 机制接管（MediaGridWidget 滚动条剩余 ≤160px 触发
+        // loadMoreRequested → onLoadMoreRequested）。
+        constexpr int kInitialPageSize = 200;
+        const MediaQueryPage firstPage =
+            co_await fetchPage(query, 0, kInitialPageSize);
         if (!guard || generation != m_requestGeneration)
             co_return;
 
-        m_totalItemCount = qMax(probePage.totalRecordCount, probePage.items.size());
-        qDebug() << "[LibraryView] initial count probe"
+        m_totalItemCount = qMax(firstPage.totalRecordCount, firstPage.items.size());
+        qDebug() << "[LibraryView] initial page fetch"
                  << "| generation=" << generation
-                 << "| returned=" << probePage.items.size()
+                 << "| requested=" << kInitialPageSize
+                 << "| returned=" << firstPage.items.size()
                  << "| total=" << m_totalItemCount;
 
-        QList<MediaItem> initialItems = probePage.items;
-        int returnedCount = probePage.items.size();
-
-        if (m_totalItemCount > probePage.items.size())
-        {
-            const MediaQueryPage fullAttemptPage =
-                co_await fetchPage(query, 0, m_totalItemCount);
-            if (!guard || generation != m_requestGeneration)
-                co_return;
-
-            initialItems = fullAttemptPage.items;
-            returnedCount = fullAttemptPage.items.size();
-            m_totalItemCount = qMax(fullAttemptPage.totalRecordCount,
-                                    fullAttemptPage.items.size());
-
-            qDebug() << "[LibraryView] full fetch attempt"
-                     << "| generation=" << generation
-                     << "| requested=" << m_totalItemCount
-                     << "| returned=" << returnedCount
-                     << "| total=" << m_totalItemCount;
-        }
+        QList<MediaItem> initialItems = firstPage.items;
+        int returnedCount = firstPage.items.size();
 
         if (query.needsPlaylistEnrichment && !initialItems.isEmpty())
         {
