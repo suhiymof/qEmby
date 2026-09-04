@@ -91,6 +91,8 @@ public:
     QString protocol;                  
     QString extendedVideoType;
     QString extendedVideoSubType;
+    QString videoRange;
+    QString videoRangeType;
     long long attachmentSize = 0;
 
     static MediaStreamInfo fromJson(const QJsonObject& json);
