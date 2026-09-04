@@ -216,6 +216,18 @@ void MpvWidget::setCustomUserAgent(const QString &userAgent) {
     m_customUserAgent = userAgent.trimmed();
 }
 
+void MpvWidget::setForceSoftwareDecode(bool force) {
+    if (!m_controller)
+        return;
+    // hwdec 是运行时可改 option，下一次 loadfile 生效；每次 loadMedia 前
+    // 都会显式调用，状态始终确定。RDP 会话基线是 "no"，恢复时不会破坏。
+    const QString hwdec = force ? QStringLiteral("no")
+                                : m_controller->effectiveHwdec();
+    m_controller->setProperty(QStringLiteral("hwdec"), hwdec);
+    qInfo().noquote() << "[MpvWidget] hwdec override for source"
+                      << "| hwdec:" << hwdec;
+}
+
 void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool wasPending) {
 
 

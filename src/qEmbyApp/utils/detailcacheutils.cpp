@@ -127,6 +127,8 @@ QJsonObject streamToJson(const MediaStreamInfo &stream) {
                 stream.extendedVideoType);
   object.insert(QStringLiteral("ExtendedVideoSubType"),
                 stream.extendedVideoSubType);
+  object.insert(QStringLiteral("VideoRange"), stream.videoRange);
+  object.insert(QStringLiteral("VideoRangeType"), stream.videoRangeType);
   object.insert(QStringLiteral("AttachmentSize"),
                 QString::number(stream.attachmentSize));
   return object;

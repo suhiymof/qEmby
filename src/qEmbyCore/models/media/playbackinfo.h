@@ -49,6 +49,8 @@ struct QEMBYCORE_EXPORT MediaStreamInfo {
     Q_PROPERTY(QString protocol MEMBER protocol)
     Q_PROPERTY(QString extendedVideoType MEMBER extendedVideoType)
     Q_PROPERTY(QString extendedVideoSubType MEMBER extendedVideoSubType)
+    Q_PROPERTY(QString videoRange MEMBER videoRange)
+    Q_PROPERTY(QString videoRangeType MEMBER videoRangeType)
     Q_PROPERTY(long long attachmentSize MEMBER attachmentSize)
 
 public:

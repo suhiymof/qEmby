@@ -29,6 +29,11 @@ public:
     // whitelists). Empty = keep libmpv default ("libmpv").
     void setCustomUserAgent(const QString &userAgent);
 
+    // 按片源强制视频软解（hwdec=no）。用于纯 Dolby Vision（profile 5）：
+    // 硬解会把携带 DV 元数据的 RPU NAL 丢弃，mpv 无法应用 fallback 色彩
+    // 映射，画面发绿。false = 恢复 init 时的基线（含 RDP 强制软解）。
+    void setForceSoftwareDecode(bool force);
+
     MpvController* controller() const { return m_controller; }
 
 signals:

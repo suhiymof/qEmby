@@ -172,6 +172,7 @@ bool MpvController::init() {
     }
 #endif
     mpv_set_option_string(m_mpv, "hwdec", hwdec.toUtf8().constData());
+    m_effectiveHwdec = hwdec;
 
     
     

@@ -65,6 +65,35 @@ namespace
 {
 constexpr int kHudAutoHideDelayMs = 1800;
 
+// 纯 Dolby Vision（profile 5，无 HDR10/SDR 兼容层）。硬解会把携带 DV
+// 元数据的 RPU NAL 丢弃，mpv 无法应用 fallback 色彩映射 → 画面发绿。
+// 这类片源必须软解（mpv 0.40+ 的 vo_gpu fallback colorspace 修复生效）。
+// Emby 字段语义：VideoRangeType "DOVI" = 纯 DV；"DOVIWithHDR10/WithSDR/
+// WithHLG" = 有兼容层的 hybrid，硬解颜色正常，不做覆盖。
+// 旧版 Emby 只有 VideoRange=DOVI 时无法区分 profile，保守按纯 DV 处理
+//（误伤 hybrid 只多耗 CPU，漏判则发绿不可看）。
+bool sourceNeedsForcedSoftwareDecode(const MediaSourceInfo &source)
+{
+    for (const MediaStreamInfo &stream : source.mediaStreams)
+    {
+        if (stream.type != QStringLiteral("Video"))
+            continue;
+        const QString rangeType = stream.videoRangeType.trimmed();
+        if (rangeType.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0)
+            return true;
+        if (rangeType.compare(QStringLiteral("DOVIWithHDR10"), Qt::CaseInsensitive) == 0
+            || rangeType.compare(QStringLiteral("DOVIWithSDR"), Qt::CaseInsensitive) == 0
+            || rangeType.compare(QStringLiteral("DOVIWithHLG"), Qt::CaseInsensitive) == 0)
+            return false;
+        const QString range = stream.videoRange.trimmed();
+        if (range.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0)
+            return true;
+        return false;
+    }
+    return false;
+}
+
+
 bool isDanmakuEnabledConfigKey(const QString &key)
 {
     static const QString kDanmakuEnabledSuffix =
@@ -1099,6 +1128,10 @@ void PlayerView::restoreAfterWindowShow(bool shouldResumePlaying)
             sourceInfo = m_currentSourceInfoVar.value<PlayerLaunchContext>().selectedSource;
         else if (m_currentSourceInfoVar.canConvert<MediaSourceInfo>())
             sourceInfo = m_currentSourceInfoVar.value<MediaSourceInfo>();
+
+        // 纯 DV (profile 5) 片源覆盖 hwdec，防止硬解发绿（同主播放入口）。
+        m_mpvWidget->setForceSoftwareDecode(
+            sourceNeedsForcedSoftwareDecode(sourceInfo));
 
         // 跨服路由：恢复播放按当前 item 所属服务器重算 URL。
         const QString refreshedUrl = m_core->mediaService()->getStreamUrl(
@@ -5252,6 +5285,8 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     // Strict-UA servers reject the default libmpv UA on stream requests;
     // push the resolved UA (per-server > global > none) before loading.
     m_mpvWidget->setCustomUserAgent(activeProfile.effectiveUserAgent());
+    m_mpvWidget->setForceSoftwareDecode(
+        sourceNeedsForcedSoftwareDecode(resolvedSourceInfo));
     m_mpvWidget->loadMedia(actualStreamUrl, activeServerId);
 
     const bool hasCompleteDanmakuContext =

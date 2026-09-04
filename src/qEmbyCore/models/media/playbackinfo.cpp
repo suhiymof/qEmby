@@ -69,6 +69,8 @@ MediaStreamInfo MediaStreamInfo::fromJson(const QJsonObject& json) {
     info.protocol = json["Protocol"].toString();
     info.extendedVideoType = json["ExtendedVideoType"].toString();
     info.extendedVideoSubType = json["ExtendedVideoSubType"].toString();
+    info.videoRange = json["VideoRange"].toString();
+    info.videoRangeType = json["VideoRangeType"].toString();
     info.attachmentSize = json["AttachmentSize"].toVariant().toLongLong();
 
     return info;

@@ -15,6 +15,10 @@ public:
 
     mpv_handle *mpv() const { return m_mpv; }
 
+    // init() 实际生效的 hwdec 值（含 RDP 会话强制 "no" 的决策），
+    // 供按片源覆盖后恢复基线使用。
+    QString effectiveHwdec() const { return m_effectiveHwdec; }
+
     
     bool init();
 
@@ -72,6 +76,7 @@ private:
     mpv_node_list *createList(mpv_node *dst, bool is_map, int num);
 
     mpv_handle *m_mpv;
+    QString m_effectiveHwdec;
 
     
     
