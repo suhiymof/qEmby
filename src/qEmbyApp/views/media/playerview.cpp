@@ -1129,6 +1129,17 @@ void PlayerView::pausePlayback()
         m_mpvWidget->pause();
 }
 
+// 统一的软解决策入口：有 MediaStreams 数据时更新 sticky 状态，无数据时
+// 沿用当前媒体的既有决策（否则列表路径的窗口恢复会把 DV 软解重置回硬解）。
+void PlayerView::applyDecodeDecision(const MediaSourceInfo &source)
+{
+    const bool hasData = hasVideoStreamData(source);
+    const bool need = hasData ? sourceNeedsForcedSoftwareDecode(source)
+                              : m_swDecodeForCurrentMedia;
+    m_swDecodeForCurrentMedia = need;
+    m_mpvWidget->setForceSoftwareDecode(need);
+}
+
 
 
 
@@ -1163,8 +1174,7 @@ void PlayerView::restoreAfterWindowShow(bool shouldResumePlaying)
             sourceInfo = m_currentSourceInfoVar.value<MediaSourceInfo>();
 
         // 纯 DV (profile 5) 片源覆盖 hwdec，防止硬解发绿（同主播放入口）。
-        m_mpvWidget->setForceSoftwareDecode(
-            sourceNeedsForcedSoftwareDecode(sourceInfo));
+        applyDecodeDecision(sourceInfo);
 
         // 跨服路由：恢复播放按当前 item 所属服务器重算 URL。
         const QString refreshedUrl = m_core->mediaService()->getStreamUrl(
@@ -5318,13 +5328,14 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     // Strict-UA servers reject the default libmpv UA on stream requests;
     // push the resolved UA (per-server > global > none) before loading.
     m_mpvWidget->setCustomUserAgent(activeProfile.effectiveUserAgent());
-    const bool forceSwDecode = sourceNeedsForcedSoftwareDecode(resolvedSourceInfo);
-    m_mpvWidget->setForceSoftwareDecode(forceSwDecode);
+    // 新媒体起播时重置 sticky 软解状态，再按本片数据重新决策。
+    m_swDecodeForCurrentMedia = false;
+    applyDecodeDecision(resolvedSourceInfo);
     m_dvRecheckPending.remove(mediaId);
     // 列表/继续观看路径的 sourceInfo 不带 MediaStreams，初始判定无数据。
     // 先正常硬解起播，异步拉 detail 复查；确认为纯 DV 后软解重载当前进度
     //（detail 的 MediaStreams 完整，qemby.log 已证实此类路径判定恒 false）。
-    if (!forceSwDecode && !hasVideoStreamData(resolvedSourceInfo)
+    if (!m_swDecodeForCurrentMedia && !hasVideoStreamData(resolvedSourceInfo)
         && !mediaId.isEmpty() && m_core)
     {
         m_dvRecheckPending.insert(mediaId);
@@ -5352,6 +5363,7 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
                 qInfo().noquote() << "[PlayerView] DV recheck confirmed pure DV, reloading"
                                   << "| mediaId:" << mediaId
                                   << "| position:" << safeThis->m_currentPosition;
+                safeThis->m_swDecodeForCurrentMedia = true;
                 safeThis->m_mpvWidget->setForceSoftwareDecode(true);
                 safeThis->m_pendingSeekSeconds = qMax(0.0, safeThis->m_currentPosition);
                 safeThis->m_windowRestorePending = true;

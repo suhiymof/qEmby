@@ -53,6 +53,7 @@ public:
     void pausePlayback();
     void resumePlayback();
     void restoreAfterWindowShow(bool shouldResumePlaying);
+    void applyDecodeDecision(const MediaSourceInfo &source);
     void stopAndReport(); 
 
 signals:
@@ -381,6 +382,11 @@ private:
     // playMedia so switching back retries; reload path does not re-enter
     // playMedia, preventing loops).
     QSet<QString> m_dvRecheckPending;
+    // Sticky software-decode decision for the current media. Sources without
+    // MediaStreams (list/resume paths) can't be re-judged on later reloads
+    // (window restore); without this sticky flag they would reset hwdec back
+    // to hardware decoding and DV profile 5 would render green again.
+    bool m_swDecodeForCurrentMedia = false;
 
     QString m_fullTitle;
     
