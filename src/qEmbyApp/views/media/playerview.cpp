@@ -74,23 +74,44 @@ constexpr int kHudAutoHideDelayMs = 1800;
 //（误伤 hybrid 只多耗 CPU，漏判则发绿不可看）。
 bool sourceNeedsForcedSoftwareDecode(const MediaSourceInfo &source)
 {
+    int videoStreams = 0;
+    QString rangeType, range, codecProfile;
+    bool result = false;
     for (const MediaStreamInfo &stream : source.mediaStreams)
     {
         if (stream.type != QStringLiteral("Video"))
             continue;
-        const QString rangeType = stream.videoRangeType.trimmed();
-        if (rangeType.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0)
-            return true;
-        if (rangeType.compare(QStringLiteral("DOVIWithHDR10"), Qt::CaseInsensitive) == 0
-            || rangeType.compare(QStringLiteral("DOVIWithSDR"), Qt::CaseInsensitive) == 0
-            || rangeType.compare(QStringLiteral("DOVIWithHLG"), Qt::CaseInsensitive) == 0)
-            return false;
+        if (videoStreams == 0)
+        {
+            rangeType = stream.videoRangeType.trimmed();
+            range = stream.videoRange.trimmed();
+            codecProfile = stream.profile.trimmed();
+        }
+        videoStreams++;
+        const QString type = stream.videoRangeType.trimmed();
+        if (type.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0)
+        {
+            result = true;
+            break;
+        }
+        if (type.compare(QStringLiteral("DOVIWithHDR10"), Qt::CaseInsensitive) == 0
+            || type.compare(QStringLiteral("DOVIWithSDR"), Qt::CaseInsensitive) == 0
+            || type.compare(QStringLiteral("DOVIWithHLG"), Qt::CaseInsensitive) == 0)
+        {
+            result = false;
+            break;
+        }
         const QString range = stream.videoRange.trimmed();
-        if (range.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0)
-            return true;
-        return false;
+        result = range.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0;
+        break;
     }
-    return false;
+    qInfo().noquote() << "[PlayerView] DV decode check"
+                      << "| videoStreams:" << videoStreams
+                      << "| videoRangeType:" << (rangeType.isEmpty() ? QStringLiteral("-") : rangeType)
+                      << "| videoRange:" << (range.isEmpty() ? QStringLiteral("-") : range)
+                      << "| profile:" << (codecProfile.isEmpty() ? QStringLiteral("-") : codecProfile)
+                      << "| forceSwDecode:" << result;
+    return result;
 }
 
 
