@@ -70,8 +70,8 @@ constexpr int kHudAutoHideDelayMs = 1800;
 // 这类片源必须软解（mpv 0.40+ 的 vo_gpu fallback colorspace 修复生效）。
 // Emby 字段语义：VideoRangeType "DOVI" = 纯 DV；"DOVIWithHDR10/WithSDR/
 // WithHLG" = 有兼容层的 hybrid，硬解颜色正常，不做覆盖。
-// 旧版 Emby 只有 VideoRange=DOVI 时无法区分 profile，保守按纯 DV 处理
-//（误伤 hybrid 只多耗 CPU，漏判则发绿不可看）。
+// 旧版 Emby 只有 VideoRange（值 "DOVI"/"DolbyVision"，无法区分 profile）时，
+// 保守按纯 DV 处理（误伤 hybrid 只多耗 CPU，漏判则发绿不可看）。
 bool sourceNeedsForcedSoftwareDecode(const MediaSourceInfo &source)
 {
     int videoStreams = 0;
@@ -102,7 +102,9 @@ bool sourceNeedsForcedSoftwareDecode(const MediaSourceInfo &source)
             break;
         }
         const QString range = stream.videoRange.trimmed();
-        result = range.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0;
+        // Emby 旧字段值是 "DolbyVision"（4.8 实测），新字段才是 "DOVI"。
+        result = range.compare(QStringLiteral("DOVI"), Qt::CaseInsensitive) == 0
+                 || range.compare(QStringLiteral("DolbyVision"), Qt::CaseInsensitive) == 0;
         break;
     }
     qInfo().noquote() << "[PlayerView] DV decode check"
