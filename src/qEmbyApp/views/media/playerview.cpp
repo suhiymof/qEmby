@@ -114,6 +114,18 @@ bool sourceNeedsForcedSoftwareDecode(const MediaSourceInfo &source)
     return result;
 }
 
+// 判定数据是否可用：没有任何 Video 流说明 sourceInfo 来自列表 API
+//（不带 MediaStreams），初始 hwdec 决策没有依据，需要拉 detail 复查。
+bool hasVideoStreamData(const MediaSourceInfo &source)
+{
+    for (const MediaStreamInfo &stream : source.mediaStreams)
+    {
+        if (stream.type == QStringLiteral("Video"))
+            return true;
+    }
+    return false;
+}
+
 
 bool isDanmakuEnabledConfigKey(const QString &key)
 {
@@ -5306,8 +5318,57 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     // Strict-UA servers reject the default libmpv UA on stream requests;
     // push the resolved UA (per-server > global > none) before loading.
     m_mpvWidget->setCustomUserAgent(activeProfile.effectiveUserAgent());
-    m_mpvWidget->setForceSoftwareDecode(
-        sourceNeedsForcedSoftwareDecode(resolvedSourceInfo));
+    const bool forceSwDecode = sourceNeedsForcedSoftwareDecode(resolvedSourceInfo);
+    m_mpvWidget->setForceSoftwareDecode(forceSwDecode);
+    m_dvRecheckPending.remove(mediaId);
+    // 列表/继续观看路径的 sourceInfo 不带 MediaStreams，初始判定无数据。
+    // 先正常硬解起播，异步拉 detail 复查；确认为纯 DV 后软解重载当前进度
+    //（detail 的 MediaStreams 完整，qemby.log 已证实此类路径判定恒 false）。
+    if (!forceSwDecode && !hasVideoStreamData(resolvedSourceInfo)
+        && !mediaId.isEmpty() && m_core)
+    {
+        m_dvRecheckPending.insert(mediaId);
+        const QString serverId = resolvedItem.serverId;
+        auto dvRecheck = [](QPointer<PlayerView> safeThis, QEmbyCore *core,
+                            QString mediaId, QString streamUrl,
+                            QString serverId) -> QCoro::Task<void>
+        {
+            try
+            {
+                MediaItem detail = co_await core->mediaService()->getItemDetail(mediaId, serverId);
+                if (!safeThis || safeThis->m_currentMediaId != mediaId)
+                    co_return;
+                MediaSourceInfo source;
+                for (const MediaSourceInfo &s : detail.mediaSources)
+                {
+                    if (s.id == mediaId || source.id.isEmpty())
+                        source = s;
+                    if (s.id == mediaId)
+                        break;
+                }
+                const bool rechecked = sourceNeedsForcedSoftwareDecode(source);
+                if (!rechecked)
+                    co_return;
+                qInfo().noquote() << "[PlayerView] DV recheck confirmed pure DV, reloading"
+                                  << "| mediaId:" << mediaId
+                                  << "| position:" << safeThis->m_currentPosition;
+                safeThis->m_mpvWidget->setForceSoftwareDecode(true);
+                safeThis->m_pendingSeekSeconds = qMax(0.0, safeThis->m_currentPosition);
+                safeThis->m_windowRestorePending = true;
+                safeThis->m_windowRestoreShouldPlay = safeThis->m_isPlaying;
+                safeThis->m_isBuffering = true;
+                safeThis->updateLoadingState();
+                if (safeThis->m_danmakuController)
+                    safeThis->m_danmakuController->prepareForMediaReload();
+                safeThis->m_mpvWidget->loadMedia(streamUrl, serverId);
+            }
+            catch (...)
+            {
+            }
+        };
+        launchTask(dvRecheck(QPointer<PlayerView>(this), m_core, mediaId,
+                             actualStreamUrl, serverId), this);
+    }
     m_mpvWidget->loadMedia(actualStreamUrl, activeServerId);
 
     const bool hasCompleteDanmakuContext =

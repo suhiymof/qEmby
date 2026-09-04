@@ -28,6 +28,7 @@
 #include <QProgressBar>
 #include <QHash>
 #include <QPointer>
+#include <QSet>
 
 class QEmbyCore;
 class PlayerOverlayDialog;
@@ -373,6 +374,13 @@ private:
     // Guards the progress-threshold prefetch trigger (one shot per media).
     bool m_prefetchTriggered = false;
     int m_prefetchThreshold = 90;
+
+    // Pure-DV recheck after playback starts: list-style items arrive without
+    // MediaStreams, so the initial hwdec decision has no data. Rechecked once
+    // per media per playMedia invocation via item detail (reset on each
+    // playMedia so switching back retries; reload path does not re-enter
+    // playMedia, preventing loops).
+    QSet<QString> m_dvRecheckPending;
 
     QString m_fullTitle;
     
